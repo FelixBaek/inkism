@@ -1,0 +1,35 @@
+[package]
+name = "inkism-reminders"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "MIT"
+publish = false
+description = "Inkism reminder scheduling: opaque background cache, foreground poller, vault app-lock."
+
+[lib]
+name = "inkism_reminders"
+path = "src/lib.rs"
+
+[dependencies]
+getrandom = "0.2"
+quick-xml = "0.42"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tempfile = "3"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "=0.61.3", features = [
+    "Data_Xml_Dom",
+    "UI_Notifications",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Com",
+    "Win32_System_Ole",
+    "Win32_System_Registry",
+    "Win32_System_TaskScheduler",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+] }

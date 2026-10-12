@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+const result=await build({stdin:{contents:"export {reorderMarkdownHeading} from './lib/writing-tools';",resolveDir:new URL('../src/',import.meta.url).pathname,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'node',logLevel:'error'});
+const m={exports:{} as any};new Function('module','exports',result.outputFiles[0].text)(m,m.exports);const move=m.exports.reorderMarkdownHeading;
+const nested='# Parent A\n## Child A\nbody\n# Parent B\n## Child B\nbody\n';
+assert.equal(move(nested,1,'down'),null);assert.equal(move(nested,3,'up'),null);
+const siblings='# Parent\n## A\n### Nested\na\n## B\nb\n';
+assert.equal(move(siblings,1,'down'),'# Parent\n## B\nb\n## A\n### Nested\na\n');
+assert.equal(move('# A\none\n# B\ntwo',1,'up'),'# B\ntwo\n# A\none\n');
+assert.equal(move('\ufeff# A\r\none\r\n# B\r\ntwo',1,'up'),'\ufeff# B\r\ntwo\r\n# A\r\none\r\n');
+assert.equal(move('A\n===\none\n\nB\n===\ntwo',1,'up'),'B\n===\ntwo\n\nA\n===\none\n\n');
+assert.equal(move('# A\none\n# B\n```\nunclosed',1,'up'),null);
+console.log('PASS Markdown outline: sibling-only moves, nested children, EOF newline, BOM/CRLF, Setext separation, unclosed fence rejection');

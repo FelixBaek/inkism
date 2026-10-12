@@ -1,0 +1,56 @@
+[package]
+name = "inkism-desktop"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "Inkism Windows shell: one frameless window, the renderer served and /api answered in-process"
+
+[lib]
+name = "inkism_mobile"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "inkism"
+path = "src/main.rs"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde_json = "1"
+inkism-local-api = { path = "../../core/local-api" }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+rfd = "0.16"
+tempfile = "3"
+time = { version = "0.3", features = ["formatting", "local-offset", "macros"] }
+inkism-reminders = { path = "../../core/reminders" }
+inkism-google-auth = { path = "../../core/google-auth" }
+inkism-app-update = { path = "../../core/app-update" }
+inkism-pdf-export = { path = "../../core/pdf-export" }
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+inkism-native-host = { path = "../../core/native-host", features = ["encrypted-storage"] }
+tauri-plugin-deep-link = "2"
+serde = { version = "1", features = ["derive"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+
+[dev-dependencies]
+url = "2"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = "symbols"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2-foundation = { version = "0.3", features = ["NSURL", "NSString", "NSValue", "NSError"] }

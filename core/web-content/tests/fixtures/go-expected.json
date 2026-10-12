@@ -1,0 +1,1525 @@
+{
+  "html": [
+    {
+      "name": "empty",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": ""
+      }
+    },
+    {
+      "name": "plain text",
+      "clean": {
+        "html": "hello world",
+        "text": "hello world",
+        "error": ""
+      },
+      "export": {
+        "html": "hello world",
+        "text": "hello world",
+        "error": ""
+      }
+    },
+    {
+      "name": "whitespace only",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": ""
+      }
+    },
+    {
+      "name": "go spec import",
+      "clean": {
+        "html": "\u003ch1\u003eHello\u003c/h1\u003elink\u003cp\u003e한글 \u0026amp; ok\u003c/p\u003efile",
+        "text": "Hello\nlink한글 \u0026 ok\nfile",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "image has no description; add alternative text before export"
+      }
+    },
+    {
+      "name": "go spec export alternatives",
+      "clean": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ekeep\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "keep",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd colspan=\"2\"\u003ekeep\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e[이미지: plot \u0026amp; labels][x] ",
+        "text": "keep\n[이미지: plot \u0026 labels][x]",
+        "error": ""
+      }
+    },
+    {
+      "name": "go spec formatting",
+      "clean": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003e\u003cp\u003ecell\u003c/p\u003e\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e\u003col\u003e\u003cli\u003eitem\u003c/li\u003e\u003c/ol\u003e\u003cpre\u003ecode\u003c/pre\u003e\u003chr\u003e",
+        "text": "cell\n\nitem\ncode",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003ctable data-table-style=\"striped\"\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd data-cell-tone=\"success\" style=\"vertical-align:middle\"\u003e\u003cp dir=\"rtl\" style=\"text-align:right\"\u003ecell\u003c/p\u003e\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e\u003col start=\"8\" style=\"list-style-type:lower-roman\"\u003e\u003cli\u003eitem\u003c/li\u003e\u003c/ol\u003e\u003cpre data-wrap=\"true\"\u003ecode\u003c/pre\u003e\u003chr style=\"border-top-style:dotted\"\u003e",
+        "text": "cell\n\nitem\ncode",
+        "error": ""
+      }
+    },
+    {
+      "name": "go spec rejected formatting",
+      "clean": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ex\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e\u003cpre\u003ex\u003c/pre\u003e",
+        "text": "x\nx",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ex\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e\u003cpre\u003ex\u003c/pre\u003e",
+        "text": "x\nx",
+        "error": ""
+      }
+    },
+    {
+      "name": "all allowed tags",
+      "clean": {
+        "html": "\u003cp\u003ep\u003c/p\u003ea\u003cbr\u003eb\u003ch1\u003e1\u003c/h1\u003e\u003ch2\u003e2\u003c/h2\u003e\u003ch3\u003e3\u003c/h3\u003e\u003ch4\u003e4\u003c/h4\u003e\u003ch5\u003e5\u003c/h5\u003e\u003ch6\u003e6\u003c/h6\u003e\u003cstrong\u003es\u003c/strong\u003e\u003cb\u003eb\u003c/b\u003e\u003cem\u003ee\u003c/em\u003e\u003ci\u003ei\u003c/i\u003e\u003cu\u003eu\u003c/u\u003e\u003cs\u003es\u003c/s\u003e\u003cblockquote\u003eq\u003c/blockquote\u003e\u003cpre\u003epre\u003c/pre\u003e\u003ccode\u003ec\u003c/code\u003e\u003cul\u003e\u003cli\u003eu\u003c/li\u003e\u003c/ul\u003e\u003col\u003e\u003cli\u003eo\u003c/li\u003e\u003c/ol\u003e\u003ctable\u003e\u003cthead\u003e\u003ctr\u003e\u003cth\u003eh\u003c/th\u003e\u003c/tr\u003e\u003c/thead\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ed\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e\u003chr\u003e",
+        "text": "p\na\nb1\n2\n3\n4\n5\n6\nsbeiusqprecu\no\nh\nd",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003ep\u003c/p\u003ea\u003cbr\u003eb\u003ch1\u003e1\u003c/h1\u003e\u003ch2\u003e2\u003c/h2\u003e\u003ch3\u003e3\u003c/h3\u003e\u003ch4\u003e4\u003c/h4\u003e\u003ch5\u003e5\u003c/h5\u003e\u003ch6\u003e6\u003c/h6\u003e\u003cstrong\u003es\u003c/strong\u003e\u003cb\u003eb\u003c/b\u003e\u003cem\u003ee\u003c/em\u003e\u003ci\u003ei\u003c/i\u003e\u003cu\u003eu\u003c/u\u003e\u003cs\u003es\u003c/s\u003e\u003cblockquote\u003eq\u003c/blockquote\u003e\u003cpre\u003epre\u003c/pre\u003e\u003ccode\u003ec\u003c/code\u003e\u003cul\u003e\u003cli\u003eu\u003c/li\u003e\u003c/ul\u003e\u003col\u003e\u003cli\u003eo\u003c/li\u003e\u003c/ol\u003e\u003ctable\u003e\u003cthead\u003e\u003ctr\u003e\u003cth\u003eh\u003c/th\u003e\u003c/tr\u003e\u003c/thead\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ed\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e\u003chr\u003e",
+        "text": "p\na\nb1\n2\n3\n4\n5\n6\nsbeiusqprecu\no\nh\nd",
+        "error": ""
+      }
+    },
+    {
+      "name": "blocked tags",
+      "clean": {
+        "html": "after",
+        "text": "after",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "svg visual content cannot be exported without a text alternative"
+      }
+    },
+    {
+      "name": "head title dropped",
+      "clean": {
+        "html": "\u003cp\u003ebody\u003c/p\u003e",
+        "text": "body",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003ebody\u003c/p\u003e",
+        "text": "body",
+        "error": ""
+      }
+    },
+    {
+      "name": "unknown tags unwrap",
+      "clean": {
+        "html": "abcde",
+        "text": "abcde",
+        "error": ""
+      },
+      "export": {
+        "html": "abcde",
+        "text": "abcde",
+        "error": ""
+      }
+    },
+    {
+      "name": "mixed case tags attrs",
+      "clean": {
+        "html": "\u003cp\u003ex\u003c/p\u003ey\u003col\u003e\u003cli\u003ez\u003c/li\u003e\u003c/ol\u003e",
+        "text": "x\nyz",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp style=\"text-align:center\" dir=\"rtl\"\u003ex\u003c/p\u003ey\u003col start=\"3\"\u003e\u003cli\u003ez\u003c/li\u003e\u003c/ol\u003e",
+        "text": "x\nyz",
+        "error": ""
+      }
+    },
+    {
+      "name": "implicit tbody fostered",
+      "clean": {
+        "html": "fostered\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ea\u003c/td\u003e\u003c/tr\u003e\u003ctr\u003e\u003cth\u003eb\u003c/th\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "fostereda\nb",
+        "error": ""
+      },
+      "export": {
+        "html": "fostered\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ea\u003c/td\u003e\u003c/tr\u003e\u003ctr\u003e\u003cth\u003eb\u003c/th\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "fostereda\nb",
+        "error": ""
+      }
+    },
+    {
+      "name": "misnested formatting",
+      "clean": {
+        "html": "\u003cb\u003e\u003c/b\u003e\u003cp\u003e\u003cb\u003eone\u003c/b\u003etwo\u003c/p\u003e\u003ci\u003ex\u003cs\u003ey\u003c/s\u003e\u003c/i\u003e\u003cs\u003ez\u003c/s\u003e",
+        "text": "onetwo\nxyz",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cb\u003e\u003c/b\u003e\u003cp\u003e\u003cb\u003eone\u003c/b\u003etwo\u003c/p\u003e\u003ci\u003ex\u003cs\u003ey\u003c/s\u003e\u003c/i\u003e\u003cs\u003ez\u003c/s\u003e",
+        "text": "onetwo\nxyz",
+        "error": ""
+      }
+    },
+    {
+      "name": "plaintext",
+      "clean": {
+        "html": "\u003cp\u003ea\u003c/p\u003e\u0026lt;b\u0026gt;not a tag\u0026lt;/b\u0026gt;",
+        "text": "a\n\u003cb\u003enot a tag\u003c/b\u003e",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003ea\u003c/p\u003e\u0026lt;b\u0026gt;not a tag\u0026lt;/b\u0026gt;",
+        "text": "a\n\u003cb\u003enot a tag\u003c/b\u003e",
+        "error": ""
+      }
+    },
+    {
+      "name": "entities",
+      "clean": {
+        "html": "\u0026lt;tag\u0026gt; \u0026amp;amp; \u0026#34;q\u0026#34; \u0026#39;s\u0026#39; ©   😀 ¬anentity; \u0026amp;",
+        "text": "\u003ctag\u003e \u0026amp; \"q\" 's' ©   😀 ¬anentity; \u0026",
+        "error": ""
+      },
+      "export": {
+        "html": "\u0026lt;tag\u0026gt; \u0026amp;amp; \u0026#34;q\u0026#34; \u0026#39;s\u0026#39; ©   😀 ¬anentity; \u0026amp;",
+        "text": "\u003ctag\u003e \u0026amp; \"q\" 's' ©   😀 ¬anentity; \u0026",
+        "error": ""
+      }
+    },
+    {
+      "name": "quotes and specials",
+      "clean": {
+        "html": "He said \u0026#34;hi\u0026#34; \u0026amp; \u0026#39;bye\u0026#39; \u0026lt;3 \u0026gt;_\u0026lt;",
+        "text": "He said \"hi\" \u0026 'bye' \u003c3 \u003e_\u003c",
+        "error": ""
+      },
+      "export": {
+        "html": "He said \u0026#34;hi\u0026#34; \u0026amp; \u0026#39;bye\u0026#39; \u0026lt;3 \u0026gt;_\u0026lt;",
+        "text": "He said \"hi\" \u0026 'bye' \u003c3 \u003e_\u003c",
+        "error": ""
+      }
+    },
+    {
+      "name": "nul crlf",
+      "clean": {
+        "html": "ab\nc\nd\n",
+        "text": "ab\nc\nd",
+        "error": ""
+      },
+      "export": {
+        "html": "ab\nc\nd\n",
+        "text": "ab\nc\nd",
+        "error": ""
+      }
+    },
+    {
+      "name": "korean",
+      "clean": {
+        "html": "\u003ch2\u003e제목\u003c/h2\u003e\u003cp\u003e본문 한글 테스트\u003c/p\u003e\u003cul\u003e\u003cli\u003e항목 하나\u003c/li\u003e\u003cli\u003e항목 둘\u003c/li\u003e\u003c/ul\u003e",
+        "text": "제목\n본문 한글 테스트\n항목 하나\n항목 둘",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003ch2\u003e제목\u003c/h2\u003e\u003cp\u003e본문 한글 테스트\u003c/p\u003e\u003cul\u003e\u003cli\u003e항목 하나\u003c/li\u003e\u003cli\u003e항목 둘\u003c/li\u003e\u003c/ul\u003e",
+        "text": "제목\n본문 한글 테스트\n항목 하나\n항목 둘",
+        "error": ""
+      }
+    },
+    {
+      "name": "pre leading newline",
+      "clean": {
+        "html": "\u003cpre\u003efirst\n  second\u003c/pre\u003e\u003cpre\u003e\nkeep\u003c/pre\u003e",
+        "text": "first\n  second\nkeep",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cpre\u003efirst\n  second\u003c/pre\u003e\u003cpre\u003e\nkeep\u003c/pre\u003e",
+        "text": "first\n  second\nkeep",
+        "error": ""
+      }
+    },
+    {
+      "name": "comments doctype",
+      "clean": {
+        "html": "\u003cp\u003evis ible\u003c/p\u003e",
+        "text": "vis ible",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003evis ible\u003c/p\u003e",
+        "text": "vis ible",
+        "error": ""
+      }
+    },
+    {
+      "name": "cdata in svg",
+      "clean": {
+        "html": "\u003cp\u003e\u003c/p\u003e",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "svg visual content cannot be exported without a text alternative"
+      }
+    },
+    {
+      "name": "colspan variants",
+      "clean": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ea\u003c/td\u003e\u003ctd\u003eb\u003c/td\u003e\u003cth\u003ec\u003c/th\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "abc",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd colspan=\"2\"\u003ea\u003c/td\u003e\u003ctd rowspan=\"8\"\u003eb\u003c/td\u003e\u003cth colspan=\"1000\" rowspan=\"1\"\u003ec\u003c/th\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "abc",
+        "error": ""
+      }
+    },
+    {
+      "name": "colspan zero",
+      "clean": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ea\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "a",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "invalid table span"
+      }
+    },
+    {
+      "name": "colspan 1001",
+      "clean": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ea\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "a",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "invalid table span"
+      }
+    },
+    {
+      "name": "colspan space",
+      "clean": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ea\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "a",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "invalid table span"
+      }
+    },
+    {
+      "name": "colspan negative",
+      "clean": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ea\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "a",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "invalid table span"
+      }
+    },
+    {
+      "name": "colspan huge",
+      "clean": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ea\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "a",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "invalid table span"
+      }
+    },
+    {
+      "name": "duplicate colspan",
+      "clean": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd\u003ea\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "a",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003ctd colspan=\"2\"\u003ea\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "a",
+        "error": ""
+      }
+    },
+    {
+      "name": "duplicate style hide second",
+      "clean": {
+        "html": "\u003cp\u003ex\u003c/p\u003e",
+        "text": "x",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003ex\u003c/p\u003e",
+        "text": "x",
+        "error": ""
+      }
+    },
+    {
+      "name": "duplicate style hide first",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": ""
+      }
+    },
+    {
+      "name": "start variants",
+      "clean": {
+        "html": "\u003col\u003ea\u003c/ol\u003e\u003col\u003eb\u003c/ol\u003e\u003col\u003ec\u003c/ol\u003e\u003col\u003ed\u003c/ol\u003e\u003cul\u003ee\u003c/ul\u003e\u003col\u003ef\u003c/ol\u003e",
+        "text": "abcdef",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003col start=\"8\"\u003ea\u003c/ol\u003e\u003col start=\"7\"\u003eb\u003c/ol\u003e\u003col\u003ec\u003c/ol\u003e\u003col\u003ed\u003c/ol\u003e\u003cul\u003ee\u003c/ul\u003e\u003col start=\"4\"\u003ef\u003c/ol\u003e",
+        "text": "abcdef",
+        "error": ""
+      }
+    },
+    {
+      "name": "style case",
+      "clean": {
+        "html": "\u003cp\u003ea\u003c/p\u003e\u003cp\u003eb\u003c/p\u003e\u003cp\u003ec\u003c/p\u003e",
+        "text": "a\nb\nc",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp style=\"text-align:center\"\u003ea\u003c/p\u003e\u003cp style=\"text-align:right\"\u003eb\u003c/p\u003e\u003cp style=\"text-align:left;text-align:justify\"\u003ec\u003c/p\u003e",
+        "text": "a\nb\nc",
+        "error": ""
+      }
+    },
+    {
+      "name": "dotless capital I",
+      "clean": {
+        "html": "\u003cp\u003ea\u003c/p\u003e",
+        "text": "a",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp style=\"text-align:right\"\u003ea\u003c/p\u003e",
+        "text": "a",
+        "error": ""
+      }
+    },
+    {
+      "name": "kelvin checkbox",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "[x] [ ] ",
+        "text": "[x] [ ]",
+        "error": ""
+      }
+    },
+    {
+      "name": "long s visibility",
+      "clean": {
+        "html": "\u003cp\u003ekept\u003c/p\u003e",
+        "text": "kept",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003ekept\u003c/p\u003e",
+        "text": "kept",
+        "error": ""
+      }
+    },
+    {
+      "name": "hidden style variants",
+      "clean": {
+        "html": "\u003cp\u003ec\u003c/p\u003e\u003cp\u003ed\u003c/p\u003e\u003cp\u003ee\u003c/p\u003e",
+        "text": "c\nd\ne",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003ec\u003c/p\u003e\u003cp\u003ed\u003c/p\u003e\u003cp\u003ee\u003c/p\u003e",
+        "text": "c\nd\ne",
+        "error": ""
+      }
+    },
+    {
+      "name": "nbsp in display none",
+      "clean": {
+        "html": "\u003cp\u003enbsp\u003c/p\u003e",
+        "text": "nbsp",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003enbsp\u003c/p\u003e",
+        "text": "nbsp",
+        "error": ""
+      }
+    },
+    {
+      "name": "vtab in display none",
+      "clean": {
+        "html": "\u003cp\u003evt\u003c/p\u003e",
+        "text": "vt",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003evt\u003c/p\u003e",
+        "text": "vt",
+        "error": ""
+      }
+    },
+    {
+      "name": "formfeed in display none",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": ""
+      }
+    },
+    {
+      "name": "hidden attr variants",
+      "clean": {
+        "html": "kept",
+        "text": "kept",
+        "error": ""
+      },
+      "export": {
+        "html": "kept",
+        "text": "kept",
+        "error": ""
+      }
+    },
+    {
+      "name": "attachments",
+      "clean": {
+        "html": "emptycase",
+        "text": "emptycase",
+        "error": ""
+      },
+      "export": {
+        "html": "atturlemptycase",
+        "text": "atturlemptycase",
+        "error": ""
+      }
+    },
+    {
+      "name": "img alt variants",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "[이미지: spaced][이미지: \u0026lt;b\u0026gt;\u0026#34;x\u0026#34;\u0026lt;/b\u0026gt;]",
+        "text": "[이미지: spaced][이미지: \u003cb\u003e\"x\"\u003c/b\u003e]",
+        "error": ""
+      }
+    },
+    {
+      "name": "img empty alt",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "image has no description; add alternative text before export"
+      }
+    },
+    {
+      "name": "img no alt",
+      "clean": {
+        "html": "\u003cp\u003ebeforeafter\u003c/p\u003e",
+        "text": "beforeafter",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "image has no description; add alternative text before export"
+      }
+    },
+    {
+      "name": "video",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "video visual content cannot be exported without a text alternative"
+      }
+    },
+    {
+      "name": "audio",
+      "clean": {
+        "html": "\u003cp\u003ex\u003c/p\u003e",
+        "text": "x",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "audio visual content cannot be exported without a text alternative"
+      }
+    },
+    {
+      "name": "canvas",
+      "clean": {
+        "html": "fallback",
+        "text": "fallback",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "canvas visual content cannot be exported without a text alternative"
+      }
+    },
+    {
+      "name": "hidden svg is fine",
+      "clean": {
+        "html": "ok",
+        "text": "ok",
+        "error": ""
+      },
+      "export": {
+        "html": "ok",
+        "text": "ok",
+        "error": ""
+      }
+    },
+    {
+      "name": "checkbox unchecked",
+      "clean": {
+        "html": "\u003cul\u003e\u003cli\u003etodo\u003c/li\u003e\u003cli\u003edone\u003c/li\u003e\u003c/ul\u003e",
+        "text": "todo\ndone",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cul\u003e\u003cli\u003e[ ] todo\u003c/li\u003e\u003cli\u003e[x] done\u003c/li\u003e\u003c/ul\u003e",
+        "text": "[ ] todo\n[x] done",
+        "error": ""
+      }
+    },
+    {
+      "name": "data attrs wrong tag",
+      "clean": {
+        "html": "\u003cp\u003ex\u003c/p\u003ey",
+        "text": "x\ny",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003ex\u003c/p\u003ey",
+        "text": "x\ny",
+        "error": ""
+      }
+    },
+    {
+      "name": "dir values",
+      "clean": {
+        "html": "\u003cp\u003ea\u003c/p\u003e\u003cp\u003eb\u003c/p\u003e\u003ch1\u003ec\u003c/h1\u003e",
+        "text": "a\nb\nc",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp dir=\"ltr\"\u003ea\u003c/p\u003e\u003cp\u003eb\u003c/p\u003e\u003ch1 dir=\"rtl\"\u003ec\u003c/h1\u003e",
+        "text": "a\nb\nc",
+        "error": ""
+      }
+    },
+    {
+      "name": "style wrong tag",
+      "clean": {
+        "html": "\u003cp\u003ea\u003c/p\u003e\u003cul\u003e\u003cli\u003eb\u003c/li\u003e\u003c/ul\u003e\u003chr\u003e",
+        "text": "a\nb",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003ea\u003c/p\u003e\u003cul style=\"list-style-type:square\"\u003e\u003cli\u003eb\u003c/li\u003e\u003c/ul\u003e\u003chr style=\"border-top-style:dashed;text-align:center\"\u003e",
+        "text": "a\nb",
+        "error": ""
+      }
+    },
+    {
+      "name": "style junk",
+      "clean": {
+        "html": "\u003cp\u003ea\u003c/p\u003e",
+        "text": "a",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp style=\"text-align:center\"\u003ea\u003c/p\u003e",
+        "text": "a",
+        "error": ""
+      }
+    },
+    {
+      "name": "event and url attrs",
+      "clean": {
+        "html": "\u003cp\u003ea\u003c/p\u003el",
+        "text": "a\nl",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003ea\u003c/p\u003el",
+        "text": "a\nl",
+        "error": ""
+      }
+    },
+    {
+      "name": "table cell tone variants",
+      "clean": {
+        "html": "\u003ctable\u003e\u003ctbody\u003e\u003ctr\u003e\u003cth\u003eh\u003c/th\u003e\u003ctd\u003ed\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "hd",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003ctable data-table-style=\"plain\"\u003e\u003ctbody\u003e\u003ctr\u003e\u003cth data-cell-tone=\"warning\" style=\"vertical-align:bottom\"\u003eh\u003c/th\u003e\u003ctd data-cell-tone=\"soft\" style=\"text-align:right\" colspan=\"3\"\u003ed\u003c/td\u003e\u003c/tr\u003e\u003c/tbody\u003e\u003c/table\u003e",
+        "text": "hd",
+        "error": ""
+      }
+    },
+    {
+      "name": "br hr text newlines",
+      "clean": {
+        "html": "a\u003cbr\u003eb\u003chr\u003ec\u003cp\u003ed\u003c/p\u003e\u003cli\u003ee\u003c/li\u003e",
+        "text": "a\nb\ncd\ne",
+        "error": ""
+      },
+      "export": {
+        "html": "a\u003cbr\u003eb\u003chr\u003ec\u003cp\u003ed\u003c/p\u003e\u003cli\u003ee\u003c/li\u003e",
+        "text": "a\nb\ncd\ne",
+        "error": ""
+      }
+    },
+    {
+      "name": "nested lists",
+      "clean": {
+        "html": "\u003cul\u003e\u003cli\u003ea\u003col\u003e\u003cli\u003eb\u003c/li\u003e\u003c/ol\u003e\u003c/li\u003e\u003c/ul\u003e",
+        "text": "ab",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cul\u003e\u003cli\u003ea\u003col\u003e\u003cli\u003eb\u003c/li\u003e\u003c/ol\u003e\u003c/li\u003e\u003c/ul\u003e",
+        "text": "ab",
+        "error": ""
+      }
+    },
+    {
+      "name": "select new parsing",
+      "clean": {
+        "html": "after",
+        "text": "after",
+        "error": ""
+      },
+      "export": {
+        "html": "after",
+        "text": "after",
+        "error": ""
+      }
+    },
+    {
+      "name": "image element alias",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "[이미지: alias]",
+        "text": "[이미지: alias]",
+        "error": ""
+      }
+    },
+    {
+      "name": "foreign object",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "svg visual content cannot be exported without a text alternative"
+      }
+    },
+    {
+      "name": "breakout from svg",
+      "clean": {
+        "html": "\u003cp\u003ebreaks out\u003c/p\u003e",
+        "text": "breaks out",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "svg visual content cannot be exported without a text alternative"
+      }
+    },
+    {
+      "name": "math breakout",
+      "clean": {
+        "html": "\u003cp\u003eout\u003c/p\u003e",
+        "text": "out",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "math visual content cannot be exported without a text alternative"
+      }
+    },
+    {
+      "name": "textarea raw",
+      "clean": {
+        "html": "after",
+        "text": "after",
+        "error": ""
+      },
+      "export": {
+        "html": "after",
+        "text": "after",
+        "error": ""
+      }
+    },
+    {
+      "name": "script in body",
+      "clean": {
+        "html": "\u003cp\u003eab\u003c/p\u003e",
+        "text": "ab",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003eab\u003c/p\u003e",
+        "text": "ab",
+        "error": ""
+      }
+    },
+    {
+      "name": "noscript in head",
+      "clean": {
+        "html": "\u003cp\u003ebody\u003c/p\u003e",
+        "text": "body",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003ebody\u003c/p\u003e",
+        "text": "body",
+        "error": ""
+      }
+    },
+    {
+      "name": "frameset",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": ""
+      }
+    },
+    {
+      "name": "depth 126 ok",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": "HTML nesting exceeds 128 levels"
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "HTML nesting exceeds 128 levels"
+      }
+    },
+    {
+      "name": "depth 127 ok",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": "HTML nesting exceeds 128 levels"
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "HTML nesting exceeds 128 levels"
+      }
+    },
+    {
+      "name": "depth 128",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": "HTML nesting exceeds 128 levels"
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "HTML nesting exceeds 128 levels"
+      }
+    },
+    {
+      "name": "depth 129",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": "HTML nesting exceeds 128 levels"
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "HTML nesting exceeds 128 levels"
+      }
+    },
+    {
+      "name": "deep formatting",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": "HTML nesting exceeds 128 levels"
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "HTML nesting exceeds 128 levels"
+      }
+    },
+    {
+      "name": "size at limit",
+      "clean": {
+        "html": "\u003cp\u003eabcdefghij\u003c/p\u003e",
+        "text": "abcdefghij",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003eabcdefghij\u003c/p\u003e",
+        "text": "abcdefghij",
+        "error": ""
+      }
+    },
+    {
+      "name": "size over limit input",
+      "clean": {
+        "html": "\u003cp\u003eabcdefghij\u003c/p\u003e",
+        "text": "abcdefghij",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "HTML exceeds 16 byte limit"
+      }
+    },
+    {
+      "name": "output over limit",
+      "clean": {
+        "html": "\u003cp\u003e\u0026lt;\u0026lt;\u0026lt;\u003c/p\u003e",
+        "text": "\u003c\u003c\u003c",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003e\u0026lt;\u0026lt;\u0026lt;\u003c/p\u003e",
+        "text": "\u003c\u003c\u003c",
+        "error": ""
+      }
+    },
+    {
+      "name": "output exactly limit",
+      "clean": {
+        "html": "\u003cp\u003e\u0026lt;\u0026lt;\u0026lt;\u003c/p\u003e",
+        "text": "\u003c\u003c\u003c",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003e\u0026lt;\u0026lt;\u0026lt;\u003c/p\u003e",
+        "text": "\u003c\u003c\u003c",
+        "error": ""
+      }
+    },
+    {
+      "name": "output over limit text",
+      "clean": {
+        "html": "\u003cp\u003eabc\u003c/p\u003e",
+        "text": "abc",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003eabc\u003c/p\u003e",
+        "text": "abc",
+        "error": ""
+      }
+    },
+    {
+      "name": "placeholder over limit",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "[이미지: aaaaaaaaaaaaaaaaaaaa]",
+        "text": "[이미지: aaaaaaaaaaaaaaaaaaaa]",
+        "error": ""
+      }
+    },
+    {
+      "name": "quotes in attribute output",
+      "clean": {
+        "html": "\u003col\u003ex\u003c/ol\u003e",
+        "text": "x",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003col start=\"5\" dir=\"rtl\" style=\"text-align:center;list-style-type:decimal\"\u003ex\u003c/ol\u003e",
+        "text": "x",
+        "error": ""
+      }
+    },
+    {
+      "name": "attr order",
+      "clean": {
+        "html": "x",
+        "text": "x",
+        "error": ""
+      },
+      "export": {
+        "html": "x",
+        "text": "x",
+        "error": ""
+      }
+    },
+    {
+      "name": "unclosed tags",
+      "clean": {
+        "html": "\u003cp\u003eone\u003c/p\u003e\u003cp\u003etwo\u003c/p\u003e\u003cli\u003ethree\u003c/li\u003e\u003cli\u003efour\u003ch1\u003efive\u003c/h1\u003e\u003c/li\u003e",
+        "text": "one\ntwo\nthree\nfourfive",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003eone\u003c/p\u003e\u003cp\u003etwo\u003c/p\u003e\u003cli\u003ethree\u003c/li\u003e\u003cli\u003efour\u003ch1\u003efive\u003c/h1\u003e\u003c/li\u003e",
+        "text": "one\ntwo\nthree\nfourfive",
+        "error": ""
+      }
+    },
+    {
+      "name": "whitespace text trim",
+      "clean": {
+        "html": "\u003cp\u003e  a  \u003c/p\u003e   ",
+        "text": "a",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003e  a  \u003c/p\u003e   ",
+        "text": "a",
+        "error": ""
+      }
+    },
+    {
+      "name": "unicode whitespace trim",
+      "clean": {
+        "html": "　 \u003cp\u003ex\u003c/p\u003e ",
+        "text": "x",
+        "error": ""
+      },
+      "export": {
+        "html": "　 \u003cp\u003ex\u003c/p\u003e ",
+        "text": "x",
+        "error": ""
+      }
+    },
+    {
+      "name": "li text newline",
+      "clean": {
+        "html": "\u003col\u003e\u003cli\u003ea\u003c/li\u003e\u003cli\u003eb\u003c/li\u003e\u003c/ol\u003e",
+        "text": "a\nb",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003col\u003e\u003cli\u003ea\u003c/li\u003e\u003cli\u003eb\u003c/li\u003e\u003c/ol\u003e",
+        "text": "a\nb",
+        "error": ""
+      }
+    },
+    {
+      "name": "raw lt in text",
+      "clean": {
+        "html": "a \u0026lt; b \u0026gt; c",
+        "text": "a \u003c b \u003e c",
+        "error": ""
+      },
+      "export": {
+        "html": "a \u0026lt; b \u0026gt; c",
+        "text": "a \u003c b \u003e c",
+        "error": ""
+      }
+    },
+    {
+      "name": "svg uppercase attrs",
+      "clean": {
+        "html": "shown",
+        "text": "shown",
+        "error": ""
+      },
+      "export": {
+        "html": "shown",
+        "text": "shown",
+        "error": ""
+      }
+    },
+    {
+      "name": "xlink attr",
+      "clean": {
+        "html": "\u003cp\u003ep\u003c/p\u003e",
+        "text": "p",
+        "error": ""
+      },
+      "export": {
+        "html": "",
+        "text": "",
+        "error": "svg visual content cannot be exported without a text alternative"
+      }
+    },
+    {
+      "name": "data-type in export",
+      "clean": {
+        "html": "",
+        "text": "",
+        "error": ""
+      },
+      "export": {
+        "html": "attu",
+        "text": "attu",
+        "error": ""
+      }
+    },
+    {
+      "name": "ruby and others",
+      "clean": {
+        "html": "漢kan12mk",
+        "text": "漢kan12mk",
+        "error": ""
+      },
+      "export": {
+        "html": "漢kan12mk",
+        "text": "漢kan12mk",
+        "error": ""
+      }
+    },
+    {
+      "name": "code in pre",
+      "clean": {
+        "html": "\u003cpre\u003e\u003ccode\u003efmt.Println(\u0026#34;x\u0026#34;)\u003c/code\u003e\u003c/pre\u003e",
+        "text": "fmt.Println(\"x\")",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cpre data-wrap=\"true\"\u003e\u003ccode\u003efmt.Println(\u0026#34;x\u0026#34;)\u003c/code\u003e\u003c/pre\u003e",
+        "text": "fmt.Println(\"x\")",
+        "error": ""
+      }
+    },
+    {
+      "name": "text with emoji",
+      "clean": {
+        "html": "\u003cp\u003e👍🏽 é é\u003c/p\u003e",
+        "text": "👍🏽 é é",
+        "error": ""
+      },
+      "export": {
+        "html": "\u003cp\u003e👍🏽 é é\u003c/p\u003e",
+        "text": "👍🏽 é é",
+        "error": ""
+      }
+    },
+    {
+      "name": "broken entity numeric",
+      "clean": {
+        "html": "� � � €",
+        "text": "� � � €",
+        "error": ""
+      },
+      "export": {
+        "html": "� � � €",
+        "text": "� � � €",
+        "error": ""
+      }
+    },
+    {
+      "name": "bom",
+      "clean": {
+        "html": "﻿\u003cp\u003ex\u003c/p\u003e",
+        "text": "﻿x",
+        "error": ""
+      },
+      "export": {
+        "html": "﻿\u003cp\u003ex\u003c/p\u003e",
+        "text": "﻿x",
+        "error": ""
+      }
+    }
+  ],
+  "urls": [
+    {
+      "url": "https://example.com/page#secret",
+      "result": "https://example.com/page",
+      "error": ""
+    },
+    {
+      "url": "HTTPS://Example.COM/A?b=c#d",
+      "result": "https://Example.COM/A?b=c",
+      "error": ""
+    },
+    {
+      "url": "http://example.com",
+      "result": "http://example.com",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/",
+      "result": "https://example.com/",
+      "error": ""
+    },
+    {
+      "url": "https://example.com:8080/x",
+      "result": "https://example.com:8080/x",
+      "error": ""
+    },
+    {
+      "url": "https://example.com:/x",
+      "result": "https://example.com:/x",
+      "error": ""
+    },
+    {
+      "url": "https://example.com:abc/x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://user:pass@host/x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://@host/x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://user@host",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "file:///c:/secret",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "javascript:alert(1)",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "//host/x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "ftp://host/x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https:host/x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https:/host/x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https:///x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://:80/x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://[::1]:8080/x",
+      "result": "https://[::1]:8080/x",
+      "error": ""
+    },
+    {
+      "url": "https://[::1]/x",
+      "result": "https://[::1]/x",
+      "error": ""
+    },
+    {
+      "url": "https://[fe80::1%25en0]/x",
+      "result": "https://[fe80::1%25en0]/x",
+      "error": ""
+    },
+    {
+      "url": "https://[1.2.3.4]/x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://[::1",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://a[::1]/x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://exa mple.com/",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://exa%41mple.com/",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://%ED%95%9C.kr/",
+      "result": "https://%ED%95%9C.kr/",
+      "error": ""
+    },
+    {
+      "url": "https://한국.kr/경로?q=값#f",
+      "result": "https://%ED%95%9C%EA%B5%AD.kr/%EA%B2%BD%EB%A1%9C?q=값",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/a b",
+      "result": "https://example.com/a%20b",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/a%20b",
+      "result": "https://example.com/a%20b",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/a%2fb",
+      "result": "https://example.com/a%2fb",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/%zz",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://example.com/x?%zz",
+      "result": "https://example.com/x?%zz",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/x#%zz",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://example.com/x?",
+      "result": "https://example.com/x?",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/x??",
+      "result": "https://example.com/x??",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/x?a?b",
+      "result": "https://example.com/x?a?b",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/x#",
+      "result": "https://example.com/x",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/x\n",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://example.com/x#a\u0001",
+      "result": "https://example.com/x",
+      "error": ""
+    },
+    {
+      "url": "https://ex_ample.com/",
+      "result": "https://ex_ample.com/",
+      "error": ""
+    },
+    {
+      "url": "https://a:1:2/x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://example.com/[x]",
+      "result": "https://example.com/[x]",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/a'b(c)*!",
+      "result": "https://example.com/a'b(c)*!",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/%7Euser",
+      "result": "https://example.com/%7Euser",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/~user",
+      "result": "https://example.com/~user",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/a|b",
+      "result": "https://example.com/a%7Cb",
+      "error": ""
+    },
+    {
+      "url": "https://example.com/é",
+      "result": "https://example.com/%C3%A9",
+      "error": ""
+    },
+    {
+      "url": "HtTp://h/",
+      "result": "http://h/",
+      "error": ""
+    },
+    {
+      "url": "h ttp://x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "1http://x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": ":http://x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://x/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "result": "https://x/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "error": ""
+    },
+    {
+      "url": "https://x/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://example.com\\x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://\u003cx\u003e/",
+      "result": "https://\u003cx\u003e/",
+      "error": ""
+    },
+    {
+      "url": "https://ex\"ample/",
+      "result": "https://ex\"ample/",
+      "error": ""
+    },
+    {
+      "url": "https://ex!$\u0026'()*+,;=ample/",
+      "result": "https://ex!$\u0026'()*+,;=ample/",
+      "error": ""
+    },
+    {
+      "url": "https://example.com:080/",
+      "result": "https://example.com:080/",
+      "error": ""
+    },
+    {
+      "url": "https://[fe80::1%25]/x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    },
+    {
+      "url": "https://[fe80::1%en0]/x",
+      "result": "",
+      "error": "HTTP(S) source URL required"
+    }
+  ]
+}

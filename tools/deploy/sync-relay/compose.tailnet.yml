@@ -1,0 +1,6 @@
+# Tailscale Serve terminates HTTPS; the host backend stays on loopback.
+# Use with compose.yml. Keep the existing proxy network and data volume.
+services:
+  inkism-sync:
+    ports:
+      - "127.0.0.1:47834:47832"

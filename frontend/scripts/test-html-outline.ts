@@ -1,0 +1,6 @@
+import assert from 'node:assert/strict';import {build} from 'esbuild';
+const b=await build({stdin:{contents:"export {reorderHTMLHeading} from './lib/writing-tools';",resolveDir:new URL('../src/',import.meta.url).pathname,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'node',logLevel:'error'});const m={exports:{} as any};new Function('module','exports',b.outputFiles[0].text)(m,m.exports);const move=m.exports.reorderHTMLHeading;
+const prefix='\ufeff<!-- <h2>ignore</h2> -->\r\n',a='<h1 id="a" data-x="1 > 0">가</h1>\r\n<p style="color:RED">A &amp; B</p><h2>Child</h2><p>child</p>',b2='<h1 id=\'b\'>나</h1><script>"<h1>fake</h1>"</script><img src="a"><p>last</p>';
+assert.equal(move(prefix+a+b2,2,'up'),prefix+b2+a);assert.equal(move(prefix+a+b2,0,'down'),prefix+b2+a);assert.equal(move(prefix+b2+a,1,'up'),prefix+a+b2,'reverse restores exact original bytes');
+assert.equal(move('<h1>A</h1><h2>a</h2><h1>B</h1><h2>b</h2>',1,'down'),null,'does not cross parent boundary');
+assert.throws(()=>move('<div><h1>A</h1></div><h1>B</h1>',1,'up'));assert.throws(()=>move('<h1>A</h1><p>unclosed<h1>B</h1>',1,'up'));assert.throws(()=>move('<h1>A</h1><div/><h1>B</h1>',1,'up'));console.log('HTML outline: exact slices, hierarchy boundaries, nested/malformed rejection and reversal passed');

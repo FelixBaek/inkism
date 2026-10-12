@@ -1,0 +1,20 @@
+[package]
+name = "inkism-web-content"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "Trusted boundary for imported, published and exported HTML (port of desktop/internal/webcontent)."
+
+[lib]
+name = "inkism_web_content"
+
+[dependencies]
+# `deterministic` keeps attributes in source order; the export policy writes them in that order.
+scraper = { version = "=0.27.0", default-features = false, features = ["deterministic"] }
+ego-tree = "0.11"
+html5ever = "=0.39.0"
+regex = { version = "1", default-features = false, features = ["std", "unicode-case"] }
+
+[dev-dependencies]
+serde_json = "1"

@@ -1,0 +1,4 @@
+import {useEffect,useState} from 'react';
+import {appCommands,commandShortcut,saveBinding,COMMANDS_CHANGED} from '../lib/app-commands';
+import {t} from '../i18n';
+export function CommandSettings(){const [tick,setTick]=useState(0),[error,setError]=useState('');useEffect(()=>{const update=()=>setTick(x=>x+1);window.addEventListener(COMMANDS_CHANGED,update);return()=>window.removeEventListener(COMMANDS_CHANGED,update);},[]);return <section key={tick}><h3>{t('사용자 단축키')}</h3><p>{t('Mod는 Windows의 Ctrl, Mac의 Command입니다. 빈 값은 단축키를 해제합니다.')}</p>{appCommands().map(c=><div className="settings-card" key={c.id}><label>{c.label}<input aria-label={t('{name} 단축키',{name:c.label})} defaultValue={commandShortcut(c)} onBlur={e=>{try{saveBinding(c.id,e.target.value);setError('');}catch(e){setError(String(e));}}}/></label></div>)}{error&&<p role="alert">{error}</p>}</section>;}

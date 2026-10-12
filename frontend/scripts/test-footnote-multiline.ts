@@ -1,0 +1,60 @@
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+import {chromium} from 'playwright-core';
+import {fileURLToPath} from 'node:url';
+const bundle=await build({stdin:{contents:`export * from './lib/pdf-references'; import React from 'react'; import {createRoot} from 'react-dom/client'; import {PdfReferences} from './components/PdfReferences'; export function mount(source,format='markdown'){const node=document.createElement('div');document.body.append(node);createRoot(node).render(React.createElement(PdfReferences,{source,format,onSourceChange:next=>{window.changed=next},onNavigate:(offset,text)=>{window.navigation={offset,text}}}));}`,resolveDir:fileURLToPath(new URL('../src/',import.meta.url)),loader:'ts'},bundle:true,external:['./PdfViewer'],write:false,outdir:'/tmp/inkism-footnote-bundle',format:'iife',globalName:'footnotes',platform:'browser',logLevel:'error'});
+const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
+try {
+ const page=await browser.newPage();await page.goto('about:blank');await page.addScriptTag({content:bundle.outputFiles.find(f=>f.path.endsWith('.js'))!.text});
+ const result=await page.evaluate(()=>{
+  const f=(window as any).footnotes;
+  const source='Keep & exact\r\n\r\n[^one]: First\r\n    Second\r\n\r\n\tThird\r\n\r\nAfter\r\n';
+  const parsed=f.extractFootnotes(source);
+  const edited=f.setFootnote(source,'markdown','one','Replacement\nnext\n\nlast',true);
+  const html=f.setFootnote('<p>Original &amp; intact</p>','html','h','A\n<img src=x>');
+  const fenced=f.extractFootnotes('```md\n[^ignored]: no\n``` extra\n[^alsoignored]: no\n```\n[^yes]: shown\n    continued\n');
+  const navigation='Text [^b] and [^a]. `[^fake]` \\[^escaped]\r\n```\r\n[^fake]: no\r\n```\r\n<script>\n[^raw]: no\n</script>\r\n[^a]: Alpha\r\n\r\n[^b]: Beta\r\n';
+  const common='<script><li id="fn-bad">bad</li></script><ol><li id="fn:good"><p>Good <em>note</em> <a href="#fnref:good" class="footnote-backref">↩</a></p></li></ol><sup><a href="#fn:good">1</a></sup>';
+  const refs=f.footnoteReferences(navigation,'markdown');
+  const numbered=f.renumberFootnotes(navigation),reordered=f.reorderFootnotes(navigation);
+  const commonParsed=f.extractFootnotes(common,'html');
+  const htmlSource='<p>Keep &amp; exact <sup id="fnref:b"><a href="#fn:b">B</a></sup> <a href="#fn:a">A</a></p>\r\n<ol><li id="fn:a"><p>Alpha <a href="#fnref:a">↩</a></p></li>\r\n<li id="fn:b"><p>Beta <a href="#fnref:b">↩</a></p></li></ol>';
+  const htmlNumbered=f.renumberHtmlFootnotes(htmlSource),htmlOrdered=f.reorderHtmlFootnotes(htmlSource);
+  let ambiguousRejected=false;try{f.reorderHtmlFootnotes(htmlSource.replace('\r\n<li','<p>Keep</p><li'));}catch{ambiguousRejected=true;}
+  let nestedRejected=false;try{f.renumberHtmlFootnotes(htmlSource.replace('>B</a>','><em>B</em></a>'));}catch{nestedRejected=true;}
+  const paragraph=f.setFootnote('<p>Keep</p>','html','z','Before');
+  const paragraphEdited=f.setFootnote(paragraph,'html','z','After',true);
+  const paragraphNumbered=f.renumberHtmlFootnotes(paragraphEdited);
+  return {paragraphNumbered,htmlSource,htmlNumbered,htmlOrdered,ambiguousRejected,nestedRejected,refs,numbered,reordered,commonParsed,htmlRefs:f.footnoteReferences(common,'html'),citation:f.appendPdfCitation("Keep\r\n", "markdown", "https://files.test/a(b).pdf", 7),parsed,edited,roundtrip:f.extractFootnotes(edited),html,htmlParsed:f.extractFootnotes(html,'html'),fenced};
+ });
+ assert(result.paragraphNumbered.includes('<p id="fn-z"><sup>1</sup>After</p>'));
+ assert(result.htmlNumbered.includes('<a href="#fn:b">1</a>'));
+ assert(result.htmlNumbered.includes('<li id="fn:a" value="2"><p>Alpha <a href="#fnref:a">↩</a></p></li>'));
+ assert(result.htmlOrdered.includes('<ol><li id="fn:b"><p>Beta <a href="#fnref:b">↩</a></p></li>\r\n<li id="fn:a">'));
+ assert(result.ambiguousRejected&&result.nestedRejected);
+ assert.deepEqual(result.refs.map((r:any)=>r.id),['b','a']);
+ assert(result.numbered.startsWith('Text [^1] and [^2]. `[^fake]`'));
+ assert(result.numbered.includes('[^2]: Alpha\r\n\r\n[^1]: Beta\r\n'));
+ assert(result.reordered.includes('[^b]: Beta\r\n\r\n[^a]: Alpha\r\n'));
+ assert.deepEqual(result.commonParsed.map((f:any)=>[f.id,f.text]),[['good','Good note']]);
+ assert.deepEqual(result.htmlRefs.map((r:any)=>r.id),['good']);
+ assert.equal(result.citation,'Keep\r\n\r\n\r\n[PDF · 7](https://files.test/a%28b%29.pdf#page=7)');
+ assert.equal(result.parsed[0].text,'First\nSecond\n\nThird');
+ assert.equal(result.parsed[0].line,3);
+ assert.equal(result.edited,'Keep & exact\r\n\r\n[^one]: Replacement\r\n    next\r\n    \r\n    last\r\n\r\nAfter\r\n');
+ assert.equal(result.roundtrip[0].text,'Replacement\nnext\n\nlast');
+ assert.equal(result.htmlParsed[0].text,'A\n<img src=x>');assert(!result.html.includes('<img'));
+ assert.deepEqual(result.fenced.map((x:any)=>x.id),['yes']);
+ await page.evaluate(()=>{(window as any).footnotes.mount('Text [^b] [^a]\n\n[^a]: Alpha\n\n[^b]: Beta');});
+ await page.getByText('[^b] · 5',{exact:true}).click();
+ await page.getByRole('button',{name:'본문 참조로 이동 1',exact:true}).click();
+ assert.equal(await page.evaluate(()=>(window as any).navigation.offset),5);
+ await page.getByRole('button',{name:'참조 순서로 각주 번호 정리',exact:true}).click();
+ await page.waitForFunction(()=>typeof (window as any).changed==='string');
+ assert((await page.evaluate(()=>(window as any).changed)).startsWith('Text [^1] [^2]'));
+ await page.evaluate(source=>{document.body.innerHTML='';(window as any).footnotes.mount(source,'html');(window as any).changed=null;},result.htmlSource);
+ await page.getByRole('button',{name:'참조 순서로 각주 번호 정리',exact:true}).click();
+ await page.waitForFunction(()=>typeof (window as any).changed==='string');
+ assert.equal(await page.evaluate(()=>(window as any).changed),result.htmlNumbered);
+ console.log('PASS multiline footnotes: CRLF source boundaries, indentation, blank paragraphs, fences and safe HTML line breaks');
+}finally{await browser.close();}

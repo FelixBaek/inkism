@@ -1,0 +1,36 @@
+/* 태그 제안 목록 (feat/fix-missing). 선택 = bg-selected 채움 + 강조 글자, 줄 표시 없음. */
+.tag-input-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.tag-suggest {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 45;
+  min-width: 180px;
+  max-width: 280px;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.tag-suggest li {
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-suggest li.is-active {
+  background: var(--hover);
+  color: var(--text);
+}

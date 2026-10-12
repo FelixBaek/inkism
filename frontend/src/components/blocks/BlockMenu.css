@@ -1,0 +1,362 @@
+/* 블록 넣기·블록 메뉴 (Figma 27:3903, 49:6961). 색은 Felix DS 변수, 아이콘 색은 Content 변수. */
+:root {
+  /* Figma "Content" 컬렉션 (단일 모드라 밝은·어두운 화면 같은 값) */
+  --text-color-pink: #e91e63;
+  --text-color-purple: #9c27b0;
+  --text-color-deep-purple: #673ab7;
+  --text-color-indigo: #3f51b5;
+  --text-color-blue: #2196f3;
+  --text-color-light-blue: #03a9f4;
+  --text-color-cyan: #00bcd4;
+  --text-color-teal: #009688;
+  --text-color-green: #4caf50;
+  --text-color-light-green: #8bc34a;
+  --text-color-lime: #cddc39;
+  --text-color-amber: #ffc107;
+  --text-color-red: #f44336;
+  --highlight-grey: #b0bec5;
+  --highlight-brown: #a1887f;
+  --highlight-purple: #9575cd;
+  --highlight-indigo: #7986cb;
+  --highlight-blue: #64b5f6;
+  --highlight-light-blue: #4fc3f7;
+  --highlight-cyan: #4dd0e1;
+  --highlight-teal: #4db6ac;
+  --highlight-green: #81c784;
+  --highlight-light-green: #aed581;
+  --highlight-lime: #dce775;
+  --highlight-yellow: #fff176;
+  --highlight-amber: #ffd54f;
+  --highlight-red: #e57373;
+  /* bg/tile: 밝은 화면 neutral/0, 어두운 화면 neutral/750(= --hover) */
+  --block-menu-bg: #ffffff;
+}
+:root[data-theme="dark"] {
+  --block-menu-bg: var(--hover);
+}
+
+.block-menu-wrap {
+  position: relative;
+  z-index: 1000;
+  font-family: var(--font-sans);
+}
+.block-menu {
+  box-sizing: border-box;
+  width: 280px;
+  max-height: var(--block-menu-max, min(881px, 70vh));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  background: var(--block-menu-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  outline: none;
+}
+.block-menu__section {
+  padding: 4px 0 4px 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--faint);
+  user-select: none;
+}
+.block-menu__sep {
+  height: 1px;
+  margin: 6px 0;
+  border: 0;
+  background: var(--border);
+}
+.block-menu__rule {
+  height: 1px;
+  background: var(--border);
+  flex: none;
+}
+.block-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+}
+.block-menu__item.is-active {
+  background: var(--active);
+}
+.block-menu__item[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.45;
+}
+.block-menu__item[aria-disabled="true"].is-active {
+  background: transparent;
+}
+.block-menu__icon {
+  flex: none;
+  color: var(--muted);
+}
+.block-menu__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.block-menu__hint {
+  flex: none;
+  font-family: "Geist Mono", var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--faint);
+}
+.block-menu__chevron {
+  flex: none;
+  color: var(--faint);
+}
+.block-menu__item.is-danger,
+.block-menu__item.is-danger .block-menu__label {
+  color: var(--danger);
+}
+.block-menu__shortcut {
+  flex: none;
+  font-family: "Geist Mono", var(--font-mono);
+  font-size: 11px;
+  color: var(--faint);
+}
+.block-menu__empty {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  color: var(--faint);
+  font-size: 13px;
+}
+
+/* 하위 메뉴: 줄 오른쪽에 붙고, 화면 밖이면 왼쪽으로 */
+.block-menu__sub {
+  position: absolute;
+  left: calc(100% + 4px);
+  width: 200px;
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.block-menu__sub.is-flipped {
+  left: auto;
+  right: calc(100% + 4px);
+}
+.block-menu__sub:has(.block-table-grid) {
+  width: 278px;
+  gap: 6px;
+}
+
+.block-table-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 4px 0;
+}
+.block-table-grid__row {
+  display: flex;
+  gap: 4px;
+}
+.block-table-grid button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--raised);
+  cursor: pointer;
+}
+.block-table-grid button[data-on] {
+  background: var(--active);
+  border-color: var(--border-strong);
+}
+.block-table-grid__size {
+  padding: 2px 0 4px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 블록 메뉴 (손잡이 아이콘 누름, 49:6961) */
+.block-action-menu {
+  width: 240px;
+}
+.block-turn-into {
+  display: grid;
+  grid-template-columns: repeat(6, 32px);
+  gap: 4px;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+  padding: 0 6px 2px;
+}
+.block-turn-into button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.block-turn-into button:hover,
+.block-turn-into button:focus-visible {
+  background: var(--hover);
+  outline: none;
+}
+.block-turn-into button[aria-pressed="true"] {
+  background: var(--active);
+  color: var(--green);
+}
+.block-color-panel {
+  width: 236px;
+  padding: 8px;
+  gap: 6px;
+}
+.block-color-panel .block-menu__section {
+  padding: 2px 0 2px 2px;
+}
+.block-swatches {
+  display: grid;
+  grid-template-columns: repeat(7, 26px);
+  gap: 6px;
+}
+.block-swatches button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--raised);
+  color: var(--muted);
+  cursor: pointer;
+}
+.block-swatches button:hover,
+.block-swatches button:focus-visible {
+  border-color: var(--border-strong);
+  outline: none;
+}
+.block-swatches button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.slash-menu-root {
+  z-index: 1000;
+}
+
+.block-image-preview {
+  padding: 12px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+.block-image-preview::backdrop {
+  background: rgb(0 0 0 / 0.65);
+}
+.block-image-preview header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.block-image-preview header span {
+  max-width: 70vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.block-image-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100dvh - 100px);
+  object-fit: contain;
+  margin: auto;
+}
+.block-action-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.block-action-options > span {
+  flex: 1;
+  color: var(--muted);
+}
+.block-action-options button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.block-action-options button[aria-pressed="true"],
+.block-action-options button:hover {
+  background: var(--active);
+}
+
+.block-image-preview img[hidden] {
+  display: none;
+}
+
+.block-action-section {
+  padding-left: 12px;
+  background: var(--surface);
+  border-radius: 6px;
+}
+.block-menu__item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.block-selection-info {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.block-style-presets input { box-sizing:border-box; width:100%; color:var(--text); background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:6px; }
+.block-style-presets__row { display:flex; align-items:center; }
+.block-style-presets__row > button:first-child { flex:1; min-width:0; }
+.block-style-presets__row > button:last-child { color:var(--text); background:transparent; border:0; padding:6px; }
+.block-style-presets [role=alert] { font-size:12px; overflow-wrap:anywhere; }

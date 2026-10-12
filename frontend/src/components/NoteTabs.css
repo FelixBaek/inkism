@@ -1,0 +1,84 @@
+.note-tabs {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  overflow-x: auto;
+  background: var(--surface);
+  scrollbar-width: thin;
+}
+.note-tab {
+  display: flex;
+  flex: 0 0 auto;
+  max-width: 176px;
+  align-items: center;
+  border-right: 1px solid var(--border);
+  color: var(--muted);
+}
+.note-tab.is-selected {
+  background: var(--canvas);
+  color: var(--text);
+}
+.note-tab > [role="tab"] {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 35px;
+  padding: 7px 5px 7px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.note-tab > [role="tab"] svg {
+  flex-shrink: 0;
+}
+.note-tab.is-selected > [role="tab"] svg {
+  color: var(--green);
+}
+.note-tab > [role="tab"] span {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.note-tab > [role="tab"]:hover {
+  color: var(--text);
+}
+.note-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 24px;
+  margin-right: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+}
+.note-tab:is(.is-selected, :hover, :focus-within) .note-tab-close {
+  opacity: 1;
+}
+.note-tab-close:hover:not(:disabled) {
+  background: var(--border);
+  color: var(--text);
+}
+.note-tab-close:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+.note-tab > button:focus-visible {
+  outline-offset: -3px;
+}
+.note-tab.is-preview > [role="tab"] span {
+  font-style: italic;
+}

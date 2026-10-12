@@ -1,0 +1,49 @@
+.source-attachments {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.source-attachments output {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.source-attachments .attachment-progress-name {
+  min-width: 0;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.source-attachments section {
+  min-width: 0;
+  max-height: 180px;
+  overflow: auto;
+  margin: 6px 12px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 12px;
+}
+.source-attachments section p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.source-attachments section > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+.source-attachments section a {
+  color: var(--green);
+}

@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+relay-data/
+relay-export
+*.jsonl

@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {importTestModule} from './import-test-module.ts';
+const {projectWindowSource}=await importTestModule(new URL('../src/lib/window-source.ts',import.meta.url));
+const raw='<p><b>앞 &amp; 😀</b></p>\r\n<p><i>대상</i></p><p>뒤 &#xAC00;</p>';
+const canonical='<p><strong>앞 &amp; 😀</strong></p><p><em>대상</em></p><p>뒤 가</p>';
+const changed='<p><strong>앞 &amp; 😀</strong></p><p><em>입력 대상</em></p><p>뒤 가</p>';
+assert.equal(projectWindowSource(raw,canonical,canonical),raw);
+assert.equal(projectWindowSource(raw,canonical,changed),'<p><b>앞 &amp; 😀</b></p><p><em>입력 대상</em></p><p>뒤 &#xAC00;</p>');
+assert.equal(projectWindowSource(raw,canonical,'<p><strong>앞 &amp; 😀</strong></p><p>뒤 가</p>'),'<p><b>앞 &amp; 😀</b></p><p>뒤 &#xAC00;</p>');
+const table='<table><tbody><tr><td><p title="greater > less">셀 &lt;x&gt;</p></td></tr></tbody></table>';
+assert.equal(projectWindowSource('<p><b>앞</b></p>'+table,'<p><strong>앞</strong></p>'+table,'<p>수정</p>'+table),'<p>수정</p>'+table);
+const long='<blockquote><p>'+('한글😀'.repeat(12000))+'</p></blockquote>';
+assert.equal(projectWindowSource('<p><b>앞</b></p>'+long,'<p><strong>앞</strong></p>'+long,'<p>수정</p>'+long),'<p>수정</p>'+long);
+assert.throws(()=>projectWindowSource('<p>원문</p>','<p>하나</p><p>둘</p>','<p>변경</p>'));
+console.log('PASS window source preservation: untouched aliases/entities, deletion, nested/quoted table and split giant block; boundary mismatch rejected');

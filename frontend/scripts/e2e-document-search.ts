@@ -1,0 +1,34 @@
+import {chromium} from 'playwright-core';
+import assert from 'node:assert/strict';
+const base=process.env.INKISM_URL||'http://127.0.0.1:47914';
+const rpc=async(op,args={})=>{const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const value=await response.json();assert.equal(value.ok,true,JSON.stringify(value));return value.data;};
+const title='문서전체검색 '+Date.now();const blocks=Array.from({length:10000},(_,i)=>`<p><strong>한글😀 ${i}</strong> 본문</p>`);
+blocks[9000]='<p>앞 <strong>먼구간</strong>검색 &amp; 한글😀</p>';
+blocks[9500]='<details><summary>접힌 제목</summary><div data-type="detailsContent"><p>숨겨진검색결과</p></div></details>';
+blocks[9600]='<p>ÄBC 대문자</p>';blocks[9700]='<p>äbc 소문자</p>';
+const note=await rpc('save',{note:{title,content:blocks.join(''),text:'한글'}});await rpc('wait_index');
+const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
+const page=await browser.newPage({viewport:{width:1440,height:960}});const errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().endsWith('/api/rpc')) requests.push(r.postDataJSON());});
+const root=page.locator('.tiptap-prose');
+const panel=page.locator('.document-search');const input=page.getByLabel('문서 전체에서 찾을 내용');
+const find=async text=>{await input.fill(text);await input.press('Enter');};
+const at=n=>page.waitForFunction(n=>document.querySelector('[data-window-start]')?.getAttribute('data-window-start')===String(n),n);
+try {
+ await page.goto(base+'/?virtual=1');await page.getByRole('button',{name:'노트 열기: '+title,exact:true}).click();await root.waitFor();
+ const fullGets=requests.filter(r=>r.op==='get').length;
+ await page.getByRole('button',{name:'문서 전체 찾기',exact:true}).click();
+ await find('먼구간검색 & 한글😀');await page.getByRole('button',{name:'검색 결과: 블록 9001',exact:true}).click();await at(9000);
+ assert.ok((await root.locator('p').first().textContent()).includes('먼구간검색 & 한글😀'));assert.equal(await root.locator(':scope > *').count(),32);
+ await find('숨겨진검색결과');await page.getByRole('button',{name:'검색 결과: 블록 9501',exact:true}).click();await at(9500);
+ await page.waitForFunction(()=>document.querySelector('.tiptap-prose [data-type="detailsContent"]')?.hasAttribute('hidden')===false);
+ await find('äbc');await page.waitForFunction(()=>document.querySelectorAll('.document-search-results li').length===2);
+ await panel.getByLabel('대소문자 구분',{exact:true}).check();await page.waitForFunction(()=>document.querySelectorAll('.document-search-results li').length===1);
+ assert.ok(await page.getByRole('button',{name:'검색 결과: 블록 9701',exact:true}).count());
+ await find('본문');await page.waitForFunction(()=>document.querySelectorAll('.document-search-results li').length===32);
+ await panel.getByRole('button',{name:'다음 결과',exact:true}).click();await page.getByRole('button',{name:'검색 결과: 블록 33',exact:true}).waitFor();assert.equal(await panel.locator('li').count(),32);
+ assert.equal(requests.filter(r=>r.op==='get').length,fullGets,'search must not fetch canonical body');
+ const current=await rpc('get',{id:note.id});await rpc('save',{note:{id:note.id,revision:current.revision,title:title+' 원격'}});
+ const offset=await page.locator('[data-window-start]').getAttribute('data-window-start');await page.getByRole('button',{name:'검색 결과: 블록 33',exact:true}).click();
+ await page.getByRole('alert').filter({hasText:'문서가 변경되었습니다'}).waitFor();assert.equal(await page.locator('[data-window-start]').getAttribute('data-window-start'),offset);
+ assert.deepEqual(errors,[]);console.log('PASS: full-document cached search, inline formatting/entities, hidden details reveal, Unicode case option, bounded pages and stale-result guard without extra full-body gets');
+} catch(e) {console.error(errors);console.error(await page.getByRole('alert').allTextContents());throw e;} finally {await browser.close();}

@@ -1,0 +1,60 @@
+name: Windows storage performance
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: Synthetic note count per storage mode
+        type: choice
+        default: '100000'
+        options:
+          - '10000'
+          - '100000'
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      RUSTFLAGS: '-C target-feature=+crt-static'
+      BENCH_NOTES: ${{ inputs.notes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Record measurement environment
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force performance | Out-Null
+          $cpu = Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors
+          $metadata = @{
+            commit = $env:GITHUB_SHA
+            runner = $env:RUNNER_OS
+            os = [System.Environment]::OSVersion.VersionString
+            cpu = $cpu
+            rust = (rustc --version)
+            notes = [int]$env:BENCH_NOTES
+            repetitions = 1
+            scope = 'Synthetic native storage; warm list/search after insert and index. Not WebView2 or IME input latency.'
+          }
+          $metadata | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 performance/environment.json
+      - name: Build encrypted-capable native benchmark
+        run: cargo build --locked --release --manifest-path core/engine/Cargo.toml --example benchmark --features encrypted-storage
+      - name: Measure plain and encrypted storage sequentially
+        shell: pwsh
+        run: |
+          if ($env:BENCH_NOTES -notin @('10000', '100000')) { throw 'Unsupported benchmark size' }
+          $fixture = Join-Path $env:RUNNER_TEMP ('inkism-performance-' + [guid]::NewGuid().ToString())
+          New-Item -ItemType Directory $fixture | Out-Null
+          $benchmark = Resolve-Path core/engine/target/release/examples/benchmark.exe
+          foreach ($mode in @('plain', 'encrypted')) {
+            $arguments = @('--notes', $env:BENCH_NOTES, '--db', (Join-Path $fixture ($mode + '.db')))
+            if ($mode -eq 'encrypted') { $arguments += '--encrypted' }
+            & $benchmark @arguments 2>&1 | Tee-Object -FilePath (Join-Path performance ($mode + '.txt'))
+            if ($LASTEXITCODE -ne 0) { throw "Benchmark failed: $mode ($LASTEXITCODE)" }
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-storage-performance-${{ inputs.notes }}
+          path: performance/
+          if-no-files-found: error

@@ -1,0 +1,78 @@
+name: Editor lifecycle regression
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/editor.yml'
+      - 'frontend/**'
+      - 'core/**'
+permissions:
+  contents: read
+concurrency:
+  group: editor-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build production frontend and native runtime
+        run: |
+          npm --prefix frontend ci --no-audit --no-fund
+          npm --prefix frontend run build
+          cargo build --locked --manifest-path core/runtime-core/Cargo.toml
+          cargo build --locked --manifest-path core/local-api/Cargo.toml
+      - name: Install the locked browser version
+        working-directory: frontend
+        run: |
+          node node_modules/playwright-core/cli.js install --with-deps chromium
+          node --input-type=module -e 'import {chromium} from "playwright-core"; import {appendFileSync} from "node:fs"; appendFileSync(process.env.GITHUB_ENV, `CHROMIUM_PATH=${chromium.executablePath()}\n`);'
+      - name: Verify model and browser DOM contracts
+        run: npm --prefix frontend run test:unit
+      - name: Verify production and StrictMode editor lifecycles
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .test-data/editor-ci
+          ./core/local-api/target/debug/inkism-local-api --engine "$PWD/core/runtime-core/target/debug/inkism-engine" --db "$PWD/.test-data/editor-ci/notes.db" --listen 127.0.0.1:47831 > .test-data/editor-ci/app.log 2>&1 &
+          app_pid=$!
+          vite_pid=''
+          trap 'kill "$app_pid" ${vite_pid:+"$vite_pid"} 2>/dev/null || true' EXIT
+          ready() {
+            for ((attempt=0; attempt<60; attempt++)); do
+              if curl -fsS "$1/" >/dev/null; then return 0; fi
+              sleep 0.2
+            done
+            return 1
+          }
+          export INKISM_URL=http://127.0.0.1:47831
+          ready "$INKISM_URL"
+          npm --prefix frontend run test:components
+          npm --prefix frontend run test:rich:flush 2>&1 | tee .test-data/editor-ci/rich-flush.log
+          INKISM_TEST_PREVIEW="$PWD/core/local-api/target/debug/inkism-local-api" INKISM_TEST_ENGINE="$PWD/core/runtime-core/target/debug/inkism-engine" npm --prefix frontend run test:browser 2>&1 | tee .test-data/editor-ci/source-browser.log
+          INKISM_LAZY=1 node frontend/scripts/e2e-reminder-actions.ts 2>&1 | tee .test-data/editor-ci/lazy-reminder.log
+          node frontend/scripts/e2e-recovery-import.ts 2>&1 | tee .test-data/editor-ci/draft-recovery.log
+          INKISM_TEST_ENGINE="$PWD/core/runtime-core/target/debug/inkism-engine" cargo test --locked --manifest-path core/local-api/Cargo.toml --bin inkism-local-api tests::crash_draft_application -- --exact --nocapture 2>&1 | tee .test-data/editor-ci/crash-journal.log
+          npm --prefix frontend run dev -- --host 127.0.0.1 > .test-data/editor-ci/vite.log 2>&1 &
+          vite_pid=$!
+          export INKISM_URL=http://127.0.0.1:5173
+          ready "$INKISM_URL"
+          node frontend/scripts/test-dev-proxy.ts
+          node frontend/scripts/e2e-source-first.ts
+          node frontend/scripts/e2e-format-race.ts
+          node frontend/scripts/e2e-sync-pause.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: editor-regression-logs
+          path: .test-data/editor-ci/*.log
+          include-hidden-files: true
+          if-no-files-found: ignore

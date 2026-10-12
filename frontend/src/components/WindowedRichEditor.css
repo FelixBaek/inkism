@@ -1,0 +1,97 @@
+.windowed-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.window-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 12px;
+}
+.window-controls input {
+  width: 80px;
+  margin-left: 6px;
+  padding: 4px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.window-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overflow-anchor: none;
+}
+.rich-window-content {
+  overflow: visible;
+}
+.window-error {
+  padding: 8px 16px;
+  color: var(--text-secondary);
+}
+.document-search {
+  padding: 4px 16px;
+  font-size: 12px;
+}
+.document-search-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.document-search-form > input {
+  flex: 1;
+  min-width: 140px;
+  padding: 6px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.document-search-results {
+  max-height: 140px;
+  overflow: auto;
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+}
+.document-search-results button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  gap: 12px;
+  padding: 6px;
+  color: inherit;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.document-search-results button:hover {
+  background: var(--surface);
+}
+.document-search-results strong {
+  flex: none;
+}
+.document-search-results span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-copy {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 16px;
+  font-size: 12px;
+}
+/* Empty viewport padding belongs to the scroll host, not a block measurement. */
+.rich-window-content .tiptap-prose {
+  min-height: 0;
+}

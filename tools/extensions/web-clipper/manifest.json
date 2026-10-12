@@ -1,0 +1,10 @@
+{
+  "manifest_version":3,
+  "name":"Inkism Web Clipper",
+  "version":"0.1.0",
+  "description":"Send the selected text or current page to your explicitly paired local Inkism for review.",
+  "permissions":["activeTab","scripting"],
+  "host_permissions":["http://127.0.0.1/*"],
+  "action":{"default_popup":"popup.html"},
+  "content_security_policy":{"extension_pages":"script-src 'self'; object-src 'none'; connect-src http://127.0.0.1:*"}
+}

@@ -1,0 +1,39 @@
+/* The same editor on touch devices: preserve navigation, text scale and safe
+   areas without caching document bodies or introducing a separate data store. */
+@media (max-width: 760px) {
+  .app { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; }
+  .mobile-header { flex-shrink: 0; padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+  .mobile-header button, .workspace-topbar .icon-btn { min-height: 44px; min-width: 44px; }
+  .workspace-column, .editor-pane { min-height: 0; min-width: 0; }
+  .workspace-topbar { min-height: 44px; }
+  .workspace-topbar-actions { gap: 0; }
+  .window-controls { display: none; }
+  .editor-toolbar { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; max-width: 100%; }
+  .editor-toolbar > * { flex-shrink: 0; }
+  .editor-title-row { flex-wrap: wrap; }
+  .editor-title-row input { min-width: 0; }
+  .settings-dialog { width: calc(100vw - 16px); height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); max-height: none; margin: auto; }
+  .settings-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .settings-nav { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 8px; gap: 4px; }
+  .settings-nav h2 { display: none; }
+  .settings-nav__item { flex-shrink: 0; min-height: 44px; }
+  .settings-body { min-width: 0; padding: 16px; overscroll-behavior-y: contain; }
+  .settings-card { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .settings-card__action { max-width: 100%; flex-wrap: wrap; }
+  .settings-card .btn, .settings-select, .portable-library-settings .btn { min-height: 44px; }
+  .settings-editor-form input:not([type="color"]), .settings-body select, .settings-body input[type="text"] { font-size: 16px; }
+  .portable-library-settings { min-width: 0; overflow-wrap: anywhere; }
+  .portable-library-settings > [role="status"] { padding: 12px 0; }
+  .dialog-layer { height: 100dvh; }
+}
+@media (pointer: coarse) {
+  .rich-toolbar .icon-btn, .markdown-toolbar .icon-btn, .editor-toolbar .icon-btn { min-width: 44px; min-height: 44px; }
+  .note-tabs { touch-action: pan-x; }
+}
+
+@media(max-width:600px){
+  .editor-pane .note-classification .meta-right {flex:1 0 100%;margin-left:0;justify-content:flex-end}
+  .editor-pane .note-classification .tag-editor {min-width:100px}
+  .note-classification .tag-input-wrap {max-width:100%}
+  .note-classification .tag-input {min-width:0;max-width:100%}
+}

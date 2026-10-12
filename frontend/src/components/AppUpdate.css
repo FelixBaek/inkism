@@ -1,0 +1,14 @@
+/* 앱 업데이트: 사이드바 설정 버튼 점 + 정보 카드 상태 글자 */
+.side-item .update-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  flex: none;
+}
+.update-text--error {
+  color: var(--danger);
+}
+.update-text--new {
+  color: var(--text);
+}

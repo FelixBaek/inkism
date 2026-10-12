@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>inkism</title>
+    <script>
+      // 테마 깜빡임 방지: localStorage에는 노트 본문을 저장하지 않고 테마 값만 둔다.
+      try {
+        var t = localStorage.getItem("inkism-theme");
+        if (t !== "dark" && t !== "light") {
+          t = "dark"; // Felix DS: 저장한 선택이 없으면 다크가 기본이다.
+        }
+        document.documentElement.dataset.theme = t;
+      } catch {
+        // 저장소를 못 읽으면(사생활 보호 모드 등) 기본 테마로 둔다.
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

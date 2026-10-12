@@ -1,0 +1,8 @@
+<!-- Merge this fragment into the application bundle Info.plist. -->
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLName</key><string>Inkism note links</string>
+    <key>CFBundleURLSchemes</key><array><string>note</string></array>
+  </dict>
+</array>

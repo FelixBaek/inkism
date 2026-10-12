@@ -1,0 +1,85 @@
+.mindbox-attachment {
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.tiptap-prose .mindbox-attachment a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  color: inherit;
+  text-decoration: none;
+}
+.tiptap-prose .mindbox-attachment a:hover {
+  background: var(--hover);
+}
+.tiptap-prose .mindbox-attachment a:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.attachment-symbol {
+  font-size: 20px;
+  flex: none;
+}
+.attachment-name {
+  overflow-wrap: anywhere;
+  flex: 1;
+}
+.attachment-size {
+  color: var(--muted);
+  font-size: 12px;
+  flex: none;
+}
+.mindbox-attachment.ProseMirror-selectednode {
+  outline: 2px solid var(--green);
+}
+.attachment-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mindbox-attachment > img {
+  display: block;
+  max-width: 100%;
+  max-height: 480px;
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: 6px 6px 0 0;
+}
+
+.attachment-preview-unavailable {
+  display: block;
+  padding: 12px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tiptap-prose [data-image-align="left"] {
+  display: block;
+  margin-left: 0;
+  margin-right: auto;
+}
+.tiptap-prose [data-image-align="center"] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+.tiptap-prose [data-image-align="right"] {
+  display: block;
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.mindbox-attachment[data-image-width] {
+  min-width: min(180px, 100%);
+}
+.mindbox-attachment[data-image-width] .attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

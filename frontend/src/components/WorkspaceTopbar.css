@@ -1,0 +1,80 @@
+.workspace-topbar {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 0;
+  height: 36px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  user-select: none;
+}
+.workspace-topbar-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 2px;
+  margin-left: auto;
+  padding: 0 8px;
+}
+.workspace-topbar-actions .icon-btn {
+  width: 28px;
+  height: 28px;
+}
+.workspace-topbar .topbar-new-note {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin: 0 4px;
+}
+.workspace-topbar .preview-export {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+.workspace-topbar .preview-export-error {
+  position: absolute;
+  right: 0;
+  top: 32px;
+  z-index: 50;
+  min-width: 240px;
+  background: var(--raised);
+  padding: 8px;
+  border: 1px solid var(--border);
+}
+.native-window-controls {
+  display: flex;
+  align-self: stretch;
+  flex-shrink: 0;
+}
+.native-window-controls button {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.native-window-controls button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.native-window-controls .native-window-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+.security-window {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.security-window .security-screen {
+  flex: 1;
+  min-height: 0;
+}
+.security-titlebar strong {
+  margin: 0 auto 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}

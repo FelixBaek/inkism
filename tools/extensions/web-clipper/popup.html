@@ -1,0 +1,7 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Inkism Web Clipper</title><link rel="stylesheet" href="popup.css"><body>
+<h1>Inkism 웹 클리퍼</h1><p>앱에서 아래 확장 ID로 15분 연결을 시작하세요.</p><input id="extension" readonly aria-label="확장 ID">
+<label>앱의 수신 주소<input id="address" type="url" placeholder="http://127.0.0.1:포트/capture"></label>
+<label>연결 토큰<input id="token" type="password" autocomplete="off"></label>
+<label>가져올 내용<select id="mode"><option value="selection">선택 영역</option><option value="page">현재 페이지 본문</option></select></label>
+<p>열린 페이지를 앱으로 보냅니다. 앱에서 확인 전에는 저장되지 않습니다. 이미지·첨부는 제외됩니다.</p>
+<button id="capture">앱으로 보내기</button><output id="status"></output><script type="module" src="popup.js"></script></body></html>

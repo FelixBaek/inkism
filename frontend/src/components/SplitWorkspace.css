@@ -1,0 +1,113 @@
+.split-workspace {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+}
+.split-primary {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.split-primary > .editor-pane,
+.split-primary > .editor-workspace {
+  min-height: 0;
+}
+.split-controls {
+  display: flex;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.split-controls select {
+  min-width: 0;
+  flex: 1;
+}
+.split-secondary {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+}
+.split-secondary h2 {
+  font-size: 16px;
+  margin: 10px 16px;
+}
+.split-secondary .source-editor {
+  min-height: 0;
+  flex: 1;
+}
+.split-secondary [role="alert"] {
+  padding: 8px;
+  color: var(--danger);
+}
+@media (max-width: 900px) {
+  .split-workspace.is-split {
+    flex-direction: column;
+  }
+  .split-secondary {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+.split-tabs {
+  display: flex;
+  flex-shrink: 0;
+  overflow-x: auto;
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+}
+.split-tabs > div {
+  display: flex;
+  flex-shrink: 0;
+  max-width: 220px;
+}
+.split-tabs button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 7px 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.split-tabs [aria-selected="true"] {
+  background: var(--active);
+  color: var(--green);
+}
+
+.history-limit-notice {
+  padding: 8px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  line-height: 1.5;
+}
+.history-limit-notice button {
+  margin-left: 8px;
+}
+.split-top-row {
+  align-items: center;
+  min-height: 41px;
+}
+.split-top-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.split-top-row .btn {
+  min-height: 28px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.split-top-row .inspector-toggle-button {
+  padding: 0 10px;
+}

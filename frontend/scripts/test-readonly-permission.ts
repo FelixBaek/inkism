@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {importTestModule} from './import-test-module.ts';
+const {withReadonly}=await importTestModule(new URL('../src/lib/readonly-permission.ts',import.meta.url));
+
+const body={id:'one',revision:4,content:'미저장 입력',tags:['local'],paged:{version:3},readonly:false};
+const frozen=withReadonly(body,{id:'one',revision:8,readonly:true});
+assert.equal(frozen.readonly,true);
+assert.equal(frozen.revision,4,'permission cannot rebase an unsaved body');
+assert.equal(frozen.content,body.content);assert.equal(frozen.paged,body.paged);assert.equal(frozen.tags,body.tags);
+assert.equal(withReadonly(frozen,{id:'one',revision:5,readonly:false}),frozen,'late save cannot unfreeze newer remote permission');
+assert.equal(withReadonly(frozen,{id:'other',revision:100,readonly:false}),frozen,'late response from a different tab is ignored');
+assert.equal(withReadonly(frozen,{id:'one',revision:10,readonly:true}),frozen,'unchanged permission must keep async draft identity');
+assert.equal(frozen.readonlyRevision,10);
+assert.equal(withReadonly(frozen,{id:'one',revision:10}),frozen,'missing legacy flag must not silently reopen a protected note');
+assert.equal(withReadonly(frozen,{id:'one',revision:9,readonly:false}),frozen,'unchanged receipt still prevents an older unlock');
+const unlocked=withReadonly(frozen,{id:'one',revision:11,readonly:false});
+assert.equal(unlocked.readonly,false);assert.equal(unlocked.readonlyRevision,11);assert.equal(unlocked.revision,4);
+assert.equal(unlocked.content,body.content);
+const saved={...unlocked,revision:13};
+assert.equal(withReadonly(saved,{id:'one',revision:12,readonly:true}),saved,'receipt must also respect a newer saved body');
+assert.equal(withReadonly({id:'legacy',revision:1},{id:'legacy',revision:1}).readonly??false,false);
+console.log('PASS: readonly receipt order, dirty body/queue preservation, stable snapshot identity, tab isolation and legacy fallback');

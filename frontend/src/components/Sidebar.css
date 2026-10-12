@@ -1,0 +1,24 @@
+/* 노트북 트리: 하위 노트북 접기 단추. 줄 높이는 side-item을 따른다. */
+.side-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  height: 24px;
+  margin-right: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+.side-caret:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.side-caret:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
