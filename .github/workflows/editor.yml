@@ -36,7 +36,7 @@ jobs:
           node node_modules/playwright-core/cli.js install --with-deps chromium
           node --input-type=module -e 'import {chromium} from "playwright-core"; import {appendFileSync} from "node:fs"; appendFileSync(process.env.GITHUB_ENV, `CHROMIUM_PATH=${chromium.executablePath()}\n`);'
       - name: Verify model and browser DOM contracts
-        run: npm --prefix frontend run test:unit
+        run: npm --prefix frontend run test:unit:coverage:core
       - name: Verify production and StrictMode editor lifecycles
         shell: bash
         run: |
