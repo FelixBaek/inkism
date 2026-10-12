@@ -69,6 +69,12 @@ jobs:
           node frontend/scripts/e2e-source-first.ts
           node frontend/scripts/e2e-format-race.ts
           node frontend/scripts/e2e-sync-pause.ts
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          
       - uses: actions/upload-artifact@v4
         if: always()
         with:
