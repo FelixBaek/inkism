@@ -56,7 +56,7 @@ try{
  await cursor(1);await page.keyboard.press('ArrowLeft');await segment(2);await ready();
  // Saving fails before navigation: the live input and original range remain.
  // Routes run newest first, so the rejecting route records its own save attempts.
- const offline=route=>{if(route.request().postDataJSON().op!=='document_splice_html')return route.fallback();saves.push('rejected');return route.fulfill({status:503,json:{ok:false,error:'synthetic offline'}});};
+ const offline=route=>{if(route.request().postDataJSON().op!=='document_splice_html'){return route.fallback();}saves.push('rejected');return route.fulfill({status:503,json:{ok:false,error:'synthetic offline'}});};
  await page.route('**/api/rpc',offline);
  await cursor(1);await page.keyboard.insertText('실패보존 ');await page.getByRole('button',{name:'다음 구간',exact:true}).click();
  await page.locator('.window-error').filter({hasText:'현재 구간을 유지'}).waitFor();await segment(2);assert.ok((await editor.textContent()).includes('실패보존 '));assert.equal(await body(),expected);
