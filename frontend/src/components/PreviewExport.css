@@ -1,0 +1,64 @@
+.preview-export {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.preview-export .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.preview-export-error {
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  color: var(--danger);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.preview-dialog {
+  width: min(1040px, 94vw);
+  max-width: 94vw;
+  height: 90vh;
+  max-height: 90vh;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--canvas);
+  color: var(--text);
+  overflow: auto;
+}
+.preview-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+.preview-dialog header,
+.preview-dialog footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.preview-dialog header {
+  justify-content: space-between;
+}
+.preview-dialog h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.preview-dialog p {
+  font-size: 13px;
+  color: var(--muted);
+}
+.preview-dialog iframe {
+  width: 100%;
+  height: calc(100% - 190px);
+  min-height: 240px;
+  border: 1px solid var(--border);
+  background: white;
+}
+.preview-dialog footer {
+  justify-content: flex-end;
+  margin-top: 12px;
+}

@@ -1,0 +1,24 @@
+.inkism-math {
+  cursor: pointer;
+  border-radius: 4px;
+}
+.inkism-math:hover {
+  background: var(--hover);
+}
+.inkism-math:focus-visible,
+.inkism-math.ProseMirror-selectednode {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.inkism-math[data-type="block-math"] {
+  padding: 12px;
+  margin: 12px 0;
+  overflow-x: auto;
+}
+.inkism-math[data-type="inline-math"] {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+  overflow-x: auto;
+  padding: 0 3px;
+}

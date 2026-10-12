@@ -1,0 +1,446 @@
+{
+ "html": [
+  {
+   "name": "empty",
+   "html": ""
+  },
+  {
+   "name": "plain text",
+   "html": "hello world"
+  },
+  {
+   "name": "whitespace only",
+   "html": "  \n\t "
+  },
+  {
+   "name": "go spec import",
+   "html": "<h1 onclick=\"x()\">Hello</h1><script>secret()</script><img src=\"http://private/x\"><a href=\"javascript:x()\">link</a><iframe>hidden</iframe><p style=\"background:url(x)\">한글 &amp; ok</p><span data-attachment=\"vault\">file</span>"
+  },
+  {
+   "name": "go spec export alternatives",
+   "html": "<p hidden>private</p><p style=\"display: none !important\">secret</p><table><tr><td colspan=\"2\">keep</td></tr></table><img alt=\"plot &amp; labels\" src=\"https://secret\"><input type=\"checkbox\" checked>"
+  },
+  {
+   "name": "go spec formatting",
+   "html": "<table data-table-style=\"striped\" onclick=\"evil()\"><tr><td data-cell-tone=\"success\" style=\"vertical-align:middle;background:url(https://secret);position:fixed\"><p dir=\"rtl\" style=\"text-align:right;color:expression(evil())\">cell</p></td></tr></table><ol start=\"8\" style=\"list-style-type:lower-roman\"><li>item</li></ol><pre data-wrap=\"true\">code</pre><hr style=\"border-top-style:dotted\">"
+  },
+  {
+   "name": "go spec rejected formatting",
+   "html": "<table data-table-style='url(evil)'><tr><td data-cell-tone='red' style='text-align:center!important;vertical-align:url(evil)'>x</td></tr></table><pre data-wrap='false'>x</pre>"
+  },
+  {
+   "name": "all allowed tags",
+   "html": "<p>p</p>a<br>b<h1>1</h1><h2>2</h2><h3>3</h3><h4>4</h4><h5>5</h5><h6>6</h6><strong>s</strong><b>b</b><em>e</em><i>i</i><u>u</u><s>s</s><blockquote>q</blockquote><pre>pre</pre><code>c</code><ul><li>u</li></ul><ol><li>o</li></ol><table><thead><tr><th>h</th></tr></thead><tbody><tr><td>d</td></tr></tbody></table><hr>"
+  },
+  {
+   "name": "blocked tags",
+   "html": "<style>p{}</style><iframe src=x>i</iframe><object>o</object><embed><svg><text>s</text></svg><math><mi>m</mi></math><form>f<input value=v><textarea>t</textarea><button>b</button><select><option>o</option></select></form><template>tp</template><noscript>ns</noscript>after"
+  },
+  {
+   "name": "head title dropped",
+   "html": "<html><head><title>Title</title><meta charset=utf-8></head><body><p>body</p></body></html>"
+  },
+  {
+   "name": "unknown tags unwrap",
+   "html": "<div><span>a</span><section>b<article>c</article></section><a href=x>d</a><custom-el>e</custom-el></div>"
+  },
+  {
+   "name": "mixed case tags attrs",
+   "html": "<P STYLE=\"TEXT-ALIGN:Center\" DIR=\"RTL\">x</P><TD>y</TD><OL START=\"3\"><LI>z</LI></OL>"
+  },
+  {
+   "name": "implicit tbody fostered",
+   "html": "<table><tr><td>a</td></tr>fostered<tr><th>b</th></tr></table>"
+  },
+  {
+   "name": "misnested formatting",
+   "html": "<b><p>one</b>two</p><i>x<s>y</i>z</s>"
+  },
+  {
+   "name": "plaintext",
+   "html": "<p>a<plaintext><b>not a tag</b>"
+  },
+  {
+   "name": "entities",
+   "html": "&lt;tag&gt; &amp;amp; &quot;q&quot; &#39;s&#39; &copy; &nbsp; &#x1F600; &notanentity; &amp"
+  },
+  {
+   "name": "quotes and specials",
+   "html": "He said \"hi\" & 'bye' <3 >_<"
+  },
+  {
+   "name": "nul crlf",
+   "html": "a\u0000b\r\nc\rd\n"
+  },
+  {
+   "name": "korean",
+   "html": "<h2>제목</h2><p>본문 한글 테스트</p><ul><li>항목 하나</li><li>항목 둘</li></ul>"
+  },
+  {
+   "name": "pre leading newline",
+   "html": "<pre>\nfirst\n  second</pre><pre>\n\nkeep</pre>"
+  },
+  {
+   "name": "comments doctype",
+   "html": "<!doctype html><!-- secret comment --><p>vis<!-- in --> ible</p>"
+  },
+  {
+   "name": "cdata in svg",
+   "html": "<svg><![CDATA[secret]]></svg><p><![CDATA[x]]></p>"
+  },
+  {
+   "name": "colspan variants",
+   "html": "<table><tr><td colspan=\"+2\">a</td><td rowspan=\"08\">b</td><th colspan=\"1000\" rowspan=\"1\">c</th></tr></table>"
+  },
+  {
+   "name": "colspan zero",
+   "html": "<table><tr><td colspan=\"0\">a</td></tr></table>"
+  },
+  {
+   "name": "colspan 1001",
+   "html": "<table><tr><td rowspan=\"1001\">a</td></tr></table>"
+  },
+  {
+   "name": "colspan space",
+   "html": "<table><tr><td colspan=\" 2\">a</td></tr></table>"
+  },
+  {
+   "name": "colspan negative",
+   "html": "<table><tr><td colspan=\"-1\">a</td></tr></table>"
+  },
+  {
+   "name": "colspan huge",
+   "html": "<table><tr><td colspan=\"99999999999999999999\">a</td></tr></table>"
+  },
+  {
+   "name": "duplicate colspan",
+   "html": "<table><tr><td colspan=2 colspan=3>a</td></tr></table>"
+  },
+  {
+   "name": "duplicate style hide second",
+   "html": "<p style=\"color:red\" style=\"display:none\">x</p>"
+  },
+  {
+   "name": "duplicate style hide first",
+   "html": "<p style=\"display:none\" style=\"color:red\">x</p>"
+  },
+  {
+   "name": "start variants",
+   "html": "<ol start=\"08\">a</ol><ol start=\" 7 \">b</ol><ol start=\"0\">c</ol><ol start=\"1000000\">d</ol><ul start=\"3\">e</ul><ol start=\"+4\">f</ol>"
+  },
+  {
+   "name": "style case",
+   "html": "<p style=\"TEXT-ALIGN:Center\">a</p><p style=\"text-align : right ; \">b</p><p style=\"text-align:left;text-align:justify\">c</p>"
+  },
+  {
+   "name": "dotless capital I",
+   "html": "<p style=\"text-align:rİght\" dir=\"İ\">a</p>"
+  },
+  {
+   "name": "kelvin checkbox",
+   "html": "<input type=\"checKbox\" checked><input type=\"CHECKBOX\"><input type=\"text\">"
+  },
+  {
+   "name": "long s visibility",
+   "html": "<p style=\"viſibility:hidden\">gone?</p><p aria-hidden=\"TRUE\">gone</p><p aria-hidden=\"false\">kept</p>"
+  },
+  {
+   "name": "hidden style variants",
+   "html": "<p style=\"display:none\">a</p><p style=\"color:red;display:none\">b</p><p style=\"display:nonex\">c</p><p style=\"xdisplay:none\">d</p><p style=\"DISPLAY : NONE ! important\">e</p><p style=\"display:none !IMPORTANT;\">f</p>"
+  },
+  {
+   "name": "nbsp in display none",
+   "html": "<p style=\"display: none\">nbsp</p>"
+  },
+  {
+   "name": "vtab in display none",
+   "html": "<p style=\"display:\u000bnone\">vt</p>"
+  },
+  {
+   "name": "formfeed in display none",
+   "html": "<p style=\"display:\fnone\">ff</p>"
+  },
+  {
+   "name": "hidden attr variants",
+   "html": "<p hidden=\"false\">a</p><p HIDDEN>b</p><p hidden=\"\">c</p>kept"
+  },
+  {
+   "name": "attachments",
+   "html": "<div data-type=\"mindbox-attachment\">att</div><div data-attachment-url=\"x\">url</div><div data-attachment-url=\"\">empty</div><div data-type=\"MINDBOX-ATTACHMENT\">case</div>"
+  },
+  {
+   "name": "img alt variants",
+   "html": "<img alt=\"  spaced  \"><img alt=\"<b>&quot;x&quot;</b>\">"
+  },
+  {
+   "name": "img empty alt",
+   "html": "<img alt=\"   \">"
+  },
+  {
+   "name": "img no alt",
+   "html": "<p>before<img src=x>after</p>"
+  },
+  {
+   "name": "video",
+   "html": "<video><source src=x></video>"
+  },
+  {
+   "name": "audio",
+   "html": "<p>x<audio></audio></p>"
+  },
+  {
+   "name": "canvas",
+   "html": "<canvas>fallback</canvas>"
+  },
+  {
+   "name": "hidden svg is fine",
+   "html": "<svg hidden><text>x</text></svg><math aria-hidden=\"true\"></math>ok"
+  },
+  {
+   "name": "checkbox unchecked",
+   "html": "<ul><li><input type=\"checkbox\">todo</li><li><input type=checkbox checked=\"false\">done</li></ul>"
+  },
+  {
+   "name": "data attrs wrong tag",
+   "html": "<p data-table-style=\"striped\" data-cell-tone=\"soft\" data-wrap=\"true\">x</p><td data-wrap=\"true\">y</td>"
+  },
+  {
+   "name": "dir values",
+   "html": "<p dir=\"LTR\">a</p><p dir=\"auto\">b</p><h1 dir=\" rtl \">c</h1>"
+  },
+  {
+   "name": "style wrong tag",
+   "html": "<p style=\"vertical-align:top;border-top-style:solid;list-style-type:disc\">a</p><ul style=\"list-style-type:square\"><li>b</li></ul><hr style=\"border-top-style:dashed;text-align:center\">"
+  },
+  {
+   "name": "style junk",
+   "html": "<p style=\";;:;text-align:;:center;text-align:center:x;text-align:center\">a</p>"
+  },
+  {
+   "name": "event and url attrs",
+   "html": "<p onclick=\"x()\" onmouseover=y class=\"c\" id=\"i\" title=\"t\" lang=\"ko\">a</p><a href=\"javascript:alert(1)\" target=_blank>l</a>"
+  },
+  {
+   "name": "table cell tone variants",
+   "html": "<table data-table-style=\" PLAIN \"><tr><th data-cell-tone=\"Warning\" style=\"vertical-align:bottom\">h</th><td data-cell-tone=\"soft\" colspan=\"3\" style=\"text-align:right\">d</td></tr></table>"
+  },
+  {
+   "name": "br hr text newlines",
+   "html": "a<br>b<hr>c<p>d</p><li>e</li>"
+  },
+  {
+   "name": "nested lists",
+   "html": "<ul><li>a<ol><li>b</li></ol></li></ul>"
+  },
+  {
+   "name": "select new parsing",
+   "html": "<select><option>a</option><div>b</div></select>after"
+  },
+  {
+   "name": "image element alias",
+   "html": "<image alt=\"alias\" src=x>"
+  },
+  {
+   "name": "foreign object",
+   "html": "<svg><foreignObject><p>inside</p></foreignObject></svg>"
+  },
+  {
+   "name": "breakout from svg",
+   "html": "<svg><p>breaks out</p></svg>"
+  },
+  {
+   "name": "math breakout",
+   "html": "<math><mi>x</mi><p>out</p></math>"
+  },
+  {
+   "name": "textarea raw",
+   "html": "<textarea><p>not parsed</p></textarea>after"
+  },
+  {
+   "name": "script in body",
+   "html": "<p>a<script>document.write(\"x\")</script>b</p>"
+  },
+  {
+   "name": "noscript in head",
+   "html": "<head><noscript><p>ns</p></noscript></head><p>body</p>"
+  },
+  {
+   "name": "frameset",
+   "html": "<frameset><frame src=x></frameset>"
+  },
+  {
+   "name": "depth 126 ok",
+   "html": "<div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div>ok</div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div>"
+  },
+  {
+   "name": "depth 127 ok",
+   "html": "<div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div>ok</div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div>"
+  },
+  {
+   "name": "depth 128",
+   "html": "<div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div>x</div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div>"
+  },
+  {
+   "name": "depth 129",
+   "html": "<div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div><div>x</div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div></div>"
+  },
+  {
+   "name": "deep formatting",
+   "html": "<b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b><b>x"
+  },
+  {
+   "name": "size at limit",
+   "html": "<p>abcdefghij</p>",
+   "limit": 17
+  },
+  {
+   "name": "size over limit input",
+   "html": "<p>abcdefghij</p>",
+   "limit": 16
+  },
+  {
+   "name": "output over limit",
+   "html": "<p>&lt;&lt;&lt;</p>",
+   "limit": 19
+  },
+  {
+   "name": "output exactly limit",
+   "html": "<p>&lt;&lt;&lt;</p>",
+   "limit": 21
+  },
+  {
+   "name": "output over limit text",
+   "html": "<p>abc</p>",
+   "limit": 10
+  },
+  {
+   "name": "placeholder over limit",
+   "html": "<img alt=\"aaaaaaaaaaaaaaaaaaaa\">",
+   "limit": 40
+  },
+  {
+   "name": "quotes in attribute output",
+   "html": "<ol start=\"5\" dir=\"rtl\" style=\"text-align:center;list-style-type:decimal\">x</ol>"
+  },
+  {
+   "name": "attr order",
+   "html": "<td style=\"text-align:left\" data-cell-tone=\"soft\" rowspan=\"2\" dir=\"ltr\" colspan=\"3\">x</td>"
+  },
+  {
+   "name": "unclosed tags",
+   "html": "<p>one<p>two<li>three<li>four<h1>five"
+  },
+  {
+   "name": "whitespace text trim",
+   "html": "   <p>  a  </p>   "
+  },
+  {
+   "name": "unicode whitespace trim",
+   "html": "　 <p>x</p> "
+  },
+  {
+   "name": "li text newline",
+   "html": "<ol><li>a</li><li>b</li></ol>"
+  },
+  {
+   "name": "raw lt in text",
+   "html": "a < b > c"
+  },
+  {
+   "name": "svg uppercase attrs",
+   "html": "<svg viewBox=\"0 0 1 1\" HIDDEN></svg>shown"
+  },
+  {
+   "name": "xlink attr",
+   "html": "<svg><a xlink:href=\"x\" hidden>a</a></svg><p xml:lang=\"ko\">p</p>"
+  },
+  {
+   "name": "data-type in export",
+   "html": "<div data-type=\"mindbox-attachment\">att</div><div data-attachment-url=\"https://x\">u</div>"
+  },
+  {
+   "name": "ruby and others",
+   "html": "<ruby>漢<rt>kan</rt></ruby><sup>1</sup><sub>2</sub><mark>m</mark><kbd>k</kbd>"
+  },
+  {
+   "name": "code in pre",
+   "html": "<pre data-wrap=\"TRUE\"><code class=\"lang-go\">fmt.Println(\"x\")</code></pre>"
+  },
+  {
+   "name": "text with emoji",
+   "html": "<p>👍🏽 é é</p>"
+  },
+  {
+   "name": "broken entity numeric",
+   "html": "&#0; &#xD800; &#x110000; &#128;"
+  },
+  {
+   "name": "bom",
+   "html": "﻿<p>x</p>"
+  }
+ ],
+ "urls": [
+  "https://example.com/page#secret",
+  "HTTPS://Example.COM/A?b=c#d",
+  "http://example.com",
+  "https://example.com/",
+  "https://example.com:8080/x",
+  "https://example.com:/x",
+  "https://example.com:abc/x",
+  "https://user:pass@host/x",
+  "https://@host/x",
+  "https://user@host",
+  "file:///c:/secret",
+  "javascript:alert(1)",
+  "//host/x",
+  "ftp://host/x",
+  "https:host/x",
+  "https:/host/x",
+  "https:///x",
+  "https://",
+  "https://:80/x",
+  "https://[::1]:8080/x",
+  "https://[::1]/x",
+  "https://[fe80::1%25en0]/x",
+  "https://[1.2.3.4]/x",
+  "https://[::1",
+  "https://a[::1]/x",
+  "https://exa mple.com/",
+  "https://exa%41mple.com/",
+  "https://%ED%95%9C.kr/",
+  "https://한국.kr/경로?q=값#f",
+  "https://example.com/a b",
+  "https://example.com/a%20b",
+  "https://example.com/a%2fb",
+  "https://example.com/%zz",
+  "https://example.com/x?%zz",
+  "https://example.com/x#%zz",
+  "https://example.com/x?",
+  "https://example.com/x??",
+  "https://example.com/x?a?b",
+  "https://example.com/x#",
+  "https://example.com/x\n",
+  "https://example.com/x#a\u0001",
+  "https://ex_ample.com/",
+  "https://a:1:2/x",
+  "https://example.com/[x]",
+  "https://example.com/a'b(c)*!",
+  "https://example.com/%7Euser",
+  "https://example.com/~user",
+  "https://example.com/a|b",
+  "https://example.com/é",
+  "HtTp://h/",
+  "h ttp://x",
+  "1http://x",
+  ":http://x",
+  "https://x/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "https://x/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "https://example.com\\x",
+  "https://<x>/",
+  "https://ex\"ample/",
+  "https://ex!$&'()*+,;=ample/",
+  "https://example.com:080/",
+  "https://[fe80::1%25]/x",
+  "https://[fe80::1%en0]/x"
+ ]
+}

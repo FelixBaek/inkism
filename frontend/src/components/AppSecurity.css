@@ -1,0 +1,61 @@
+.security-screen {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--surface);
+  color: var(--text);
+}
+.security-card {
+  width: min(100%, 440px);
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--canvas);
+  text-align: center;
+}
+.security-card h1 {
+  font-size: 24px;
+  margin: 12px 0;
+}
+.security-card p {
+  line-height: 1.6;
+}
+.security-card [role="alert"] {
+  color: var(--danger);
+}
+
+.security-card > .btn {
+  margin: 4px;
+}
+.security-notice {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  text-align: left;
+}
+.security-notice p,
+.security-limit {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.security-setup-dialog {
+  width: min(520px, calc(100vw - 32px));
+}
+.security-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.6;
+  margin: 16px 0;
+}
+.security-consent input {
+  margin-top: 5px;
+  accent-color: var(--green);
+}
+.security-setup-dialog [role="alert"] {
+  color: var(--danger);
+}

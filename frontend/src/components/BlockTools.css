@@ -1,0 +1,113 @@
+/* 떠 있는 블록 손잡이 (Figma BlockHandle 48:6669). 본문 왼쪽 여백(72px) 안에 놓인다. */
+.inkism-drag-handle {
+  z-index: 20;
+  padding: 3px 5px 0 0;
+}
+.block-handle {
+  display: flex;
+  align-items: flex-start;
+  gap: 3px;
+}
+.block-handle button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.block-handle .block-handle__add,
+.block-handle__grip {
+  box-sizing: border-box;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--raised);
+}
+.block-handle .block-handle__add {
+  width: 22px;
+}
+.block-handle .block-handle__add:hover {
+  background: var(--hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.block-handle[data-open="insert"] .block-handle__add {
+  background: var(--active);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.block-handle__grip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 36px;
+  padding: 0 2px;
+  cursor: grab;
+}
+.block-handle__grip button {
+  width: 14px;
+  height: 20px;
+  cursor: grab;
+}
+.block-handle__grip button:last-child {
+  color: var(--faint);
+}
+.block-handle__grip:hover,
+.block-handle__grip[data-open] {
+  border-color: var(--border-strong);
+}
+.block-handle__grip:hover button,
+.block-handle__grip[data-open] button {
+  color: var(--text);
+}
+.block-handle button:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+.inkism-drag-handle[data-dragging="true"] .block-handle__grip,
+.inkism-drag-handle[data-dragging="true"] .block-handle__grip button {
+  cursor: grabbing;
+}
+.tiptap-prose > .ProseMirror-selectednode {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* 손잡이가 들어갈 왼쪽 여백. 읽기 폭(704px)은 그대로 두고 왼쪽 안쪽 여백만 72px로 넓힌다.
+   여백은 ProseMirror 안쪽에 두어 손잡이로 가는 동안에도 마우스가 편집기 위에 있게 한다. */
+.block-gutter .rich-editor {
+  position: relative;
+  max-width: 804px;
+  padding-left: 0;
+}
+.block-gutter .tiptap-prose {
+  padding-left: 72px;
+}
+.block-popover {
+  position: relative;
+  z-index: 1000;
+}
+
+/* 본문 기둥(804px, 글은 왼쪽 72px 안쪽에서 시작)에 맞춰 노트 머리(정보 줄·제목·태그)와 툴바를 가운데로 모은다.
+   서식 편집(리치) 화면일 때만: 원문(HTML·Markdown) 편집기는 전체 폭을 쓴다. */
+.editor-pane:has(.block-gutter) {
+  --col-l: max(18px, calc((100% - 804px) / 2 + 72px));
+  --col-r: max(18px, calc((100% - 804px) / 2 + 28px));
+}
+.editor-pane:has(.block-gutter) > .editor-meta-row {
+  padding-left: var(--col-l);
+  padding-right: var(--col-r);
+}
+.editor-pane:has(.block-gutter) > .title-input,
+.editor-pane:has(.block-gutter) > .tag-editor {
+  padding-left: var(--col-l);
+  padding-right: var(--col-r);
+}
+.editor-pane:has(.block-gutter) .editor-toolbar.tb-row {
+  justify-content: center;
+}

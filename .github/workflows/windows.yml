@@ -1,0 +1,399 @@
+name: Windows validation
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'full regression, editor/native IME, or internal rich-segment contracts'
+        type: choice
+        options: [full, editor, segments]
+        default: full
+      block_format_only:
+        description: 'segments scope: block worker and seven related application checks'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows.yml'
+      - 'core/**'
+      - 'desktop-tauri/**'
+      - 'frontend/**'
+      - 'tools/scripts/**'
+      - 'tools/build/windows/**'
+concurrency:
+  group: windows-${{ github.ref }}
+  # Finish the current Windows validation while newer commits queue.
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  windows:
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'segments'
+    permissions:
+      contents: read
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      # All crates share dependency artifacts, including the SQLCipher/OpenSSL build.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+      RUSTFLAGS: '-C target-feature=+crt-static'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        id: rust
+      - name: Restore Windows Rust build cache
+        id: rust-cache
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        with:
+          path: |
+            target
+            !target/**/incremental/**
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+          key: windows-2022-${{ runner.arch }}-rust-static-v1-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+      - name: Validate native clipboard test scripts
+        shell: powershell
+        run: |
+          foreach ($file in @('tools/scripts/windows-worker-paste.ps1', 'tools/scripts/windows-system-ime.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) {
+              $errors | ForEach-Object { Write-Output "$file`:$($_.Extent.StartLineNumber):$($_.Extent.StartColumnNumber) [$($_.ErrorId)] $($_.Message)" }
+              throw "Windows PowerShell parser rejected $file"
+            }
+          }
+          foreach ($file in @('tools/scripts/verify-windows-worker-paste.ts', 'tools/scripts/verify-windows-windowed-ime.ts')) {
+            node --no-warnings -e "require('node:module').stripTypeScriptTypes(require('node:fs').readFileSync(process.argv[1], 'utf8'))" $file
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+      - name: Build real frontend
+        run: |
+          npm --prefix frontend ci --no-audit --no-fund
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm --prefix frontend run build
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Windows Rust API and host tests
+        if: github.event_name != 'workflow_dispatch' || inputs.scope != 'editor'
+        run: |
+          foreach ($crate in @('local-api', 'app-update', 'google-auth', 'reminders', 'web-content', 'pdf-export', 'sync-relay')) {
+            cargo test --locked --manifest-path "core/$crate/Cargo.toml"
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          cargo test --locked --manifest-path desktop-tauri/src-tauri/Cargo.toml
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Windows Rust storage tests
+        if: github.event_name != 'workflow_dispatch' || inputs.scope != 'editor'
+        run: cargo test --locked --manifest-path core/engine/Cargo.toml
+      - name: Windows encrypted storage tests
+        if: github.event_name != 'workflow_dispatch' || inputs.scope != 'editor'
+        run: cargo test --locked --manifest-path core/engine/Cargo.toml --features encrypted-storage
+      - name: Windows Rust sync tests
+        if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.scope != 'editor') }}
+        run: cargo test --locked --manifest-path core/sync-core/Cargo.toml
+      - name: Windows encrypted sync tests
+        if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.scope != 'editor') }}
+        run: cargo test --locked --manifest-path core/sync-core/Cargo.toml --features encrypted-storage
+      - name: Windows Rust runtime tests
+        if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.scope != 'editor') }}
+        run: cargo test --locked --manifest-path core/runtime-core/Cargo.toml
+      - name: Windows encrypted runtime tests
+        if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.scope != 'editor') }}
+        run: cargo test --locked --manifest-path core/runtime-core/Cargo.toml --features encrypted-storage
+      - name: Build Windows application
+        run: |
+          cargo build --locked --features encrypted-storage --release --manifest-path core/runtime-core/Cargo.toml
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force dist/windows | Out-Null
+          $env:INKISM_APP_COMMIT = $env:GITHUB_SHA
+          cargo build --locked --release --manifest-path desktop-tauri/src-tauri/Cargo.toml
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item target/release/inkism.exe dist/windows/Inkism.exe
+          # MSVC links the loader statically; GNU builds ship the DLL.
+          if (Test-Path target/release/WebView2Loader.dll) { Copy-Item target/release/WebView2Loader.dll dist/windows/ }
+          Copy-Item target/release/inkism-engine.exe dist/windows/
+          Copy-Item README.md dist/windows/README.md
+          $env:GITHUB_SHA | Set-Content dist/windows/BUILD.txt
+      # Save after compilation, before UI checks: a UI failure must not throw
+      # away the costly SQLCipher/OpenSSL debug and release compilation.
+      # Cache hits never skip any build command or test.
+      - name: Save completed Windows Rust build cache
+        if: steps.rust-cache.outputs.cache-hit != 'true' && steps.rust-cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: |
+            target
+            !target/**/incremental/**
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+          key: ${{ steps.rust-cache.outputs.cache-primary-key }}
+      - name: Encrypted copy with original runtime recovery
+        run: |
+          $env:INKISM_TEST_ENGINE = (Resolve-Path dist/windows/inkism-engine.exe).Path
+          cargo test --locked --manifest-path core/local-api/Cargo.toml --lib engine::tests::packaged_encrypted_copy_while_app_open -- --exact --nocapture
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Never-saved draft recovery with plain and encrypted Rust libraries
+        run: |
+          $env:INKISM_TEST_ENGINE = (Resolve-Path dist/windows/inkism-engine.exe).Path
+          $env:INKISM_RECOVERY_ENCRYPTED = '1'
+          $browsers = @("$env:ProgramFiles/Google/Chrome/Application/chrome.exe", "${env:ProgramFiles(x86)}/Microsoft/Edge/Application/msedge.exe")
+          $env:CHROMIUM_PATH = $browsers | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (!$env:CHROMIUM_PATH) { throw 'No installed Chromium for isolated recovery fixture' }
+          node frontend/scripts/test-draft-recovery.ts 2>&1 | Tee-Object dist/windows-recovery-unit.log
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node frontend/scripts/test-draft-journal.ts 2>&1 | Tee-Object dist/windows-crash-journal-unit.log
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --locked --manifest-path core/local-api/Cargo.toml --bin inkism-local-api tests::draft_recovery_application -- --exact --nocapture 2>&1 | Tee-Object dist/windows-recovery-application.log
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --locked --manifest-path core/local-api/Cargo.toml --bin inkism-local-api tests::crash_draft_application -- --exact --nocapture 2>&1 | Tee-Object dist/windows-crash-journal-application.log
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Packaged engine persistence and backup
+        run: node tools/scripts/test-packaged-engine.ts dist/windows/inkism-engine.exe
+      - name: Packaged sync credential protection
+        run: node tools/scripts/test-packaged-sync-config.ts dist/windows/inkism-engine.exe
+      - name: Packaged attachment storage isolation
+        run: node tools/scripts/test-packaged-attachments.ts dist/windows/inkism-engine.exe
+      - name: Packaged encrypted library copy
+        run: node tools/scripts/test-packaged-encrypted-copy.ts dist/windows/Inkism.exe
+      - name: Ensure Microsoft WebView2 Runtime
+        run: ./tools/scripts/ensure-webview2.ps1
+      - name: Real WebView2 editor and close-save
+        run: node frontend/scripts/windows-ui-test.ts
+      - name: Encrypted WebView2 editor and close-save
+        env:
+          INKISM_TEST_ENCRYPTED: '1'
+          INKISM_TEST_SCREENSHOT_SUFFIX: '-encrypted'
+        run: node frontend/scripts/windows-ui-test.ts
+      - name: Register Korean input in disposable hosted runner
+        shell: powershell
+        run: |
+          $list = Get-WinUserLanguageList
+          if (-not ($list | Where-Object { $_.LanguageTag -eq 'ko-KR' })) {
+            $list.Add((New-WinUserLanguageList 'ko-KR')[0])
+            Set-WinUserLanguageList $list -Force
+          }
+          Get-WinUserLanguageList | Format-List LanguageTag, InputMethodTips
+          Get-ChildItem "$env:WINDIR/System32/IME/IMEKR" -ErrorAction SilentlyContinue | Select-Object Name
+      - name: Encrypted native windowed selection typing and system IME
+        env:
+          INKISM_TEST_ENCRYPTED: '1'
+          INKISM_TEST_SCREENSHOT_SUFFIX: '-windowed-ime'
+          INKISM_TEST_WINDOWED_ONLY: 'APPROVED_SYNTHETIC_PROFILE_ONLY'
+          INKISM_TEST_WINDOWED: 'APPROVED_SYNTHETIC_PROFILE_ONLY'
+          INKISM_TEST_SYSTEM_IME: 'APPROVED_SYNTHETIC_PROFILE_ONLY'
+          INKISM_TEST_REQUIRE_SYSTEM_IME: '1'
+          INKISM_TEST_WORKER_PASTE: 'APPROVED_SYNTHETIC_PROFILE_ONLY'
+        run: |
+          node frontend/scripts/windows-ui-test.ts 2>&1 | Tee-Object -FilePath dist/windows-native-windowed.log
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build and validate Windows installer
+        run: |
+          & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" tools/build/windows/installer.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" /DValidationBuild tools/build/windows/installer.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./tools/scripts/test-windows-installer.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          (Get-FileHash dist/Inkism-setup.exe -Algorithm SHA256).Hash | Set-Content dist/Inkism-setup.exe.sha256
+      - name: Package validated Windows files
+        run: |
+          Compress-Archive -Path dist/windows -DestinationPath dist/Inkism-windows-x64.zip
+          (Get-FileHash dist/Inkism-windows-x64.zip -Algorithm SHA256).Hash | Set-Content dist/Inkism-windows-x64.zip.sha256
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-validation
+          path: |
+            dist/windows/
+            dist/Inkism-windows-x64.zip*
+            dist/windows-ui-*.png
+            dist/windows-ui-clipboard.html
+            dist/Inkism-setup.exe*
+            dist/installer-*.log
+            dist/windows-native-windowed.log
+            dist/windows-recovery-*.log
+            dist/windows-crash-journal-*.log
+            dist/windows-ui-input-trace*.jsonl
+          if-no-files-found: warn
+  segments:
+    if: github.event_name == 'workflow_dispatch' && inputs.scope == 'segments'
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+      RUSTFLAGS: '-C target-feature=+crt-static'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        id: rust
+      - uses: actions/cache/restore@v4
+        continue-on-error: true
+        with:
+          path: |
+            target
+            !target/**/incremental/**
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+          key: windows-2022-${{ runner.arch }}-rust-static-v1-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+      - name: Native segment and cache contracts
+        if: ${{ !inputs.block_format_only }}
+        run: |
+          New-Item -ItemType Directory -Force segment-validation | Out-Null
+          cargo test --locked --manifest-path core/engine/Cargo.toml --lib --test document_blocks --test document_segments --test document_segment_location --test workspace -- --nocapture 2>&1 | Tee-Object segment-validation/plain.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --locked --manifest-path core/engine/Cargo.toml --features encrypted-storage --lib --test document_blocks --test document_segments --test document_segment_location --test workspace -- --nocapture 2>&1 | Tee-Object segment-validation/encrypted.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo build --locked --manifest-path core/engine/Cargo.toml --features encrypted-storage
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: HTTP and frontend contracts
+        run: |
+          New-Item -ItemType Directory -Force segment-validation | Out-Null
+          cargo test --locked --manifest-path core/local-api/Cargo.toml --lib 2>&1 | Tee-Object segment-validation/http.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm --prefix frontend ci --no-audit --no-fund
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm --prefix frontend run build
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Real rich model with native Rust spans
+        if: ${{ !inputs.block_format_only }}
+        run: |
+          $env:INKISM_SEGMENT_ENGINE = (Resolve-Path target/debug/inkism-engine.exe).Path
+          $browsers = @("$env:ProgramFiles/Google/Chrome/Application/chrome.exe", "${env:ProgramFiles(x86)}/Microsoft/Edge/Application/msedge.exe")
+          $env:CHROMIUM_PATH = $browsers | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (!$env:CHROMIUM_PATH) { throw 'No installed Chromium browser for isolated fixture' }
+          node frontend/scripts/e2e-rich-segments.ts 2>&1 | Tee-Object segment-validation/react.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node frontend/scripts/e2e-rich-flush.ts 2>&1 | Tee-Object segment-validation/default-editor.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node frontend/scripts/e2e-segment-selection.ts 2>&1 | Tee-Object segment-validation/selection.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node frontend/scripts/e2e-document-segment-model.ts 2>&1 | Tee-Object segment-validation/cross-selection-model.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node frontend/scripts/e2e-bounded-selection-model.ts 2>&1 | Tee-Object segment-validation/bounded-selection-model.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node frontend/scripts/e2e-block-format-model.ts 2>&1 | Tee-Object segment-validation/block-format-model.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node frontend/scripts/e2e-large-selection-model.ts 2>&1 | Tee-Object segment-validation/large-selection-model.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node frontend/scripts/e2e-pending-paste-model.ts 2>&1 | Tee-Object segment-validation/pending-paste-model.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node frontend/scripts/e2e-native-clipboard-model.ts 2>&1 | Tee-Object segment-validation/native-clipboard-model.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node frontend/scripts/e2e-selection-yield-model.ts 2>&1 | Tee-Object segment-validation/selection-yield-model.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node frontend/scripts/e2e-source-scan-worker.ts 2>&1 | Tee-Object segment-validation/source-scan-worker.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node frontend/scripts/e2e-boundary-model.ts 2>&1 | Tee-Object segment-validation/boundary-model.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo build --locked --manifest-path core/runtime-core/Cargo.toml --features encrypted-storage
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:INKISM_SEGMENT_ENGINE = (Resolve-Path target/debug/inkism-engine.exe).Path
+          cargo test --locked --manifest-path core/local-api/Cargo.toml --bin inkism-local-api tests::segment_application -- --exact --nocapture 2>&1 | Tee-Object segment-validation/application.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --locked --manifest-path core/local-api/Cargo.toml --bin inkism-local-api tests::block_format_application -- --exact --nocapture 2>&1 | Tee-Object segment-validation/block-format-application.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Native block transforms in a real worker
+        run: |
+          New-Item -ItemType Directory -Force segment-validation | Out-Null
+          $browsers = @("$env:ProgramFiles/Google/Chrome/Application/chrome.exe", "${env:ProgramFiles(x86)}/Microsoft/Edge/Application/msedge.exe")
+          $env:CHROMIUM_PATH = $browsers | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (!$env:CHROMIUM_PATH) { throw 'No installed Chromium browser for isolated worker fixture' }
+          node frontend/scripts/e2e-native-block-worker.ts 2>&1 | Tee-Object segment-validation/native-block-worker.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Finish block-format application checks
+        if: ${{ inputs.block_format_only }}
+        run: |
+          New-Item -ItemType Directory -Force segment-validation | Out-Null
+          cargo build --locked --manifest-path core/runtime-core/Cargo.toml --features encrypted-storage
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:INKISM_SEGMENT_ENGINE = (Resolve-Path target/debug/inkism-engine.exe).Path
+          $browsers = @("$env:ProgramFiles/Google/Chrome/Application/chrome.exe", "${env:ProgramFiles(x86)}/Microsoft/Edge/Application/msedge.exe")
+          $env:CHROMIUM_PATH = $browsers | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (!$env:CHROMIUM_PATH) { throw 'No installed Chromium browser for isolated fixture' }
+          cargo test --locked --manifest-path core/local-api/Cargo.toml --bin inkism-local-api tests::block_format_application -- --exact --nocapture 2>&1 | Tee-Object segment-validation/block-format-application.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Native vertical navigation across document windows
+        run: |
+          $env:INKISM_SEGMENT_ENGINE = (Resolve-Path target/debug/inkism-engine.exe).Path
+          $browsers = @("$env:ProgramFiles/Google/Chrome/Application/chrome.exe", "${env:ProgramFiles(x86)}/Microsoft/Edge/Application/msedge.exe")
+          $env:CHROMIUM_PATH = $browsers | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (!$env:CHROMIUM_PATH) { throw 'No installed Chromium browser for isolated fixture' }
+          foreach ($test in @('tests::vertical_navigation_application', 'tests::vertical_selection_application', 'tests::vertical_queue_application', 'tests::vertical_queue_selection_application', 'tests::vertical_composition_application', 'tests::internal_vertical_application')) {
+            cargo test --locked --manifest-path core/local-api/Cargo.toml --bin inkism-local-api $test -- --exact --nocapture 2>&1 | Tee-Object -Append segment-validation/vertical-navigation-application.txt
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+      - name: Native mouse selection across document windows and internal source pieces
+        run: |
+          $env:INKISM_SEGMENT_ENGINE = (Resolve-Path target/debug/inkism-engine.exe).Path
+          $browsers = @("$env:ProgramFiles/Google/Chrome/Application/chrome.exe", "${env:ProgramFiles(x86)}/Microsoft/Edge/Application/msedge.exe")
+          $env:CHROMIUM_PATH = $browsers | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (!$env:CHROMIUM_PATH) { throw 'No installed Chromium browser for isolated fixture' }
+          foreach ($test in @('tests::mouse_selection_application', 'tests::mouse_auto_scroll_application', 'tests::mouse_reselection_application', 'tests::internal_mouse_selection_application')) {
+            cargo test --locked --manifest-path core/local-api/Cargo.toml --bin inkism-local-api $test -- --exact --nocapture 2>&1 | Tee-Object -Append segment-validation/mouse-selection-application.txt
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+      - name: Native structural selection and input preservation
+        run: |
+          cargo test --locked --manifest-path core/engine/Cargo.toml --test document_segments --test document_segment_location
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --locked --manifest-path core/engine/Cargo.toml --features encrypted-storage --test document_segments --test document_segment_location
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:INKISM_SEGMENT_ENGINE = (Resolve-Path target/debug/inkism-engine.exe).Path
+          $browsers = @("$env:ProgramFiles/Google/Chrome/Application/chrome.exe", "${env:ProgramFiles(x86)}/Microsoft/Edge/Application/msedge.exe")
+          $env:CHROMIUM_PATH = $browsers | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (!$env:CHROMIUM_PATH) { throw 'No installed Chromium browser for isolated fixture' }
+          foreach ($test in @('tests::structure_format_application', 'tests::structure_range_application', 'tests::structure_input_application')) {
+            cargo test --locked --manifest-path core/local-api/Cargo.toml --bin inkism-local-api $test -- --exact --nocapture 2>&1 | Tee-Object -Append segment-validation/structural-application.txt
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+      - name: Package candidate with the checked block worker
+        if: ${{ inputs.block_format_only }}
+        run: |
+          cargo build --locked --features encrypted-storage --release --manifest-path core/runtime-core/Cargo.toml
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force dist/windows | Out-Null
+          $env:INKISM_APP_COMMIT = $env:GITHUB_SHA
+          cargo build --locked --release --manifest-path desktop-tauri/src-tauri/Cargo.toml
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item target/release/inkism.exe dist/windows/Inkism.exe
+          # MSVC links the loader statically; GNU builds ship the DLL.
+          if (Test-Path target/release/WebView2Loader.dll) { Copy-Item target/release/WebView2Loader.dll dist/windows/ }
+          Copy-Item target/release/inkism-engine.exe dist/windows/
+          Copy-Item README.md dist/windows/README.md
+          $env:GITHUB_SHA | Set-Content dist/windows/BUILD.txt
+          & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" tools/build/windows/installer.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Compress-Archive -Path dist/windows -DestinationPath dist/Inkism-windows-x64.zip
+          (Get-FileHash dist/Inkism-setup.exe -Algorithm SHA256).Hash | Set-Content dist/Inkism-setup.exe.sha256
+          (Get-FileHash dist/Inkism-windows-x64.zip -Algorithm SHA256).Hash | Set-Content dist/Inkism-windows-x64.zip.sha256
+          'UNVALIDATED: targeted Windows browser/Rust checks only; this candidate has not repeated native WebView2, installer or personal-PC acceptance.' | Set-Content dist/VALIDATION.txt
+      - uses: actions/upload-artifact@v4
+        if: ${{ success() && inputs.block_format_only }}
+        with:
+          name: windows-block-format-candidate
+          path: |
+            dist/Inkism-setup.exe*
+            dist/Inkism-windows-x64.zip*
+            dist/VALIDATION.txt
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-internal-segments
+          path: segment-validation/
+          if-no-files-found: warn

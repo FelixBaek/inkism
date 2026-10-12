@@ -1,0 +1,16 @@
+[package]
+name = "inkism-storage"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[features]
+encrypted-storage = ["rusqlite/bundled-sqlcipher-vendored-openssl", "dep:tempfile", "dep:url"]
+
+[dependencies]
+rusqlite = { version = "0.40", features = ["bundled"] }
+zeroize = "1"
+
+tempfile = { version = "3", optional = true }
+url = { version = "2", optional = true }

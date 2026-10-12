@@ -1,0 +1,52 @@
+import {waitForAsync} from './async-browser-condition.ts';
+import {chromium} from 'playwright-core';
+import assert from 'node:assert/strict';
+const base=process.env.INKISM_URL||'http://127.0.0.1:47982';
+const rpc=async(op,args={})=>{
+ const v=await (await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();
+ assert.equal(v.ok,true,JSON.stringify(v));return v.data;
+};
+const prefix='원문 위치 '+Date.now();
+const a=await rpc('save',{note:{title:prefix+' A',content:Array.from({length:10000},(_,i)=>'<p>원문 '+i+' 끝</p>').join('\n'),text:'원문'}});
+const b=await rpc('save',{note:{title:prefix+' B',content:'<p>작은 노트</p>',text:'작은 노트'}});
+await rpc('wait_index');
+const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
+const page=await browser.newPage({viewport:{width:1440,height:960}});
+const errors=[];page.on('pageerror',e=>errors.push(e.message));
+const cursor=()=>page.evaluate(()=>{const s=getSelection(),line=s.anchorNode?.parentElement?.closest('.cm-line');
+const range=document.createRange();range.selectNodeContents(line);range.setEnd(s.anchorNode,s.anchorOffset);
+return {text:line.textContent,offset:range.toString().length,scroll:document.querySelector('.cm-scroller')?.scrollTop};});
+const open=async note=>{await page.getByRole('button',{name:'노트 열기: '+note.title,exact:true}).click();await page.waitForFunction(t=>document.querySelector<any>('.title-input')?.value===t,note.title);};
+try{
+ await page.goto(base+'/?virtual=1&lazy=1');await open(a);
+ await page.getByRole('button',{name:'HTML',exact:true}).click();
+ await page.locator('.cm-content').click();await page.keyboard.press('Control+End');
+ await page.keyboard.insertText('\n<p>마지막 편집😀</p>');await page.keyboard.press('Control+s');
+ await page.waitForFunction(()=>Boolean(document.querySelector('.status-save.ok time')));
+ await page.keyboard.press('ArrowLeft');await page.keyboard.press('ArrowLeft');
+ const before=await cursor();assert.ok(before.scroll>1000);
+ await open(b);await page.locator('.tiptap-prose').waitFor();
+ await page.getByRole('tab',{name:'노트 탭: '+a.title,exact:true}).click();
+ await page.locator('.cm-content').waitFor();
+ await page.waitForFunction(()=>document.activeElement?.classList.contains('cm-content'));
+ await page.waitForFunction(y=>Math.abs(document.querySelector('.cm-scroller').scrollTop-y)<30,before.scroll);
+ const after=await cursor();assert.equal(after.text,before.text);assert.equal(after.offset,before.offset);
+ await waitForAsync(page,async id=>{
+  const r=await (await fetch('/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'workspace_get'})})).json();
+  return r.data?.active===id && r.data?.locations?.[id]?.kind==='source' && r.data?.locations?.[id]?.selection;
+ },a.id);
+ await page.reload();
+ await page.locator('.cm-content').waitFor();
+ await page.waitForFunction(()=>document.activeElement?.classList.contains('cm-content'));
+ await page.waitForFunction(y=>Math.abs(document.querySelector('.cm-scroller').scrollTop-y)<30,before.scroll);
+ const restarted=await cursor();assert.equal(restarted.text,before.text);assert.equal(restarted.offset,before.offset);
+ await page.getByRole('tab',{name:'노트 탭: '+b.title,exact:true}).click();
+ const current=await rpc('get',{id:a.id});
+ await rpc('save',{note:{id:a.id,revision:current.revision,content:'<p>원격 본문</p>',text:'원격 본문'}});
+ await page.getByRole('tab',{name:'노트 탭: '+a.title,exact:true}).click();
+ await page.locator('.cm-content').waitFor();
+ assert.ok((await page.locator('.cm-content').textContent()).includes('원격 본문'));
+ assert.equal(await page.locator('.cm-scroller').evaluate(e=>e.scrollTop),0);
+ assert.deepEqual(errors,[]);
+ console.log('PASS: source mode, cursor and scroll survive tab switches and page restart after save; changed remote revision resets stale position');
+}finally{await browser.close();}

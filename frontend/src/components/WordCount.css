@@ -1,0 +1,62 @@
+/* 상태줄 단어 수 + 글자 통계 창 */
+.status-words {
+  position: relative;
+}
+.word-count-button {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.word-count-button:hover,
+.word-count-button[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--text);
+}
+.word-count-pop {
+  position: absolute;
+  left: -6px;
+  bottom: calc(100% + 8px);
+  z-index: 50;
+  min-width: 180px;
+  padding: 12px 14px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface, var(--canvas));
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.35);
+  color: var(--text);
+}
+.word-count-pop dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 24px;
+  margin: 0;
+  font-size: 13px;
+}
+.word-count-pop dt {
+  color: var(--muted);
+}
+.word-count-pop dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.word-count-close {
+  display: block;
+  margin: 8px auto 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+}
+.word-count-close:hover {
+  color: var(--text);
+  background: var(--hover);
+}

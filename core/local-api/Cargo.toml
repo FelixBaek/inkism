@@ -1,0 +1,43 @@
+[package]
+name = "inkism-local-api"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Local API the renderer talks to (/api/*). One synchronous `Handler::handle`
+# serves both the Tauri custom protocol and the development HTTP server.
+
+[lib]
+name = "local_api"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+url = "2"
+inkism-reminders = { path = "../reminders" }
+inkism-app-update = { path = "../app-update" }
+inkism-web-content = { path = "../web-content" }
+inkism-google-auth = { path = "../google-auth" }
+percent-encoding = "2"
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+# loopback listeners (upload server, clipper), Unsplash and relay clients
+bytes = "1"
+getrandom = "0.2"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+subtle = "2"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "sync", "time", "macros"] }
+uuid = { version = "1", features = ["v4"] }
+# backups
+regex = { version = "1", default-features = false, features = ["std"] }
+sha2 = "0.10"
+tempfile = "3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[target.'cfg(windows)'.dev-dependencies]
+inkism-pdf-export = { path = "../pdf-export" }
+
+[dev-dependencies]
+inkism-engine = { path = "../engine" }

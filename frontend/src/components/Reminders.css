@@ -1,0 +1,69 @@
+.reminder-control {
+  position: relative;
+}
+.reminder-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 40;
+  width: min(340px, 85vw);
+  padding: 16px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.reminder-popover label {
+  display: grid;
+  gap: 8px;
+}
+.reminder-popover input {
+  padding: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.reminder-popover p {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 10px 0;
+}
+.reminder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.reminder-inbox {
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  max-height: 220px;
+  overflow: auto;
+  flex-shrink: 0;
+}
+.reminder-inbox ul {
+  padding: 0;
+  margin: 6px 0;
+  list-style: none;
+}
+.reminder-inbox li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.reminder-inbox li button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 65%;
+}
+.reminder-inbox .reminder-actions button {
+  max-width: none;
+}
+.reminder-inbox time {
+  font-size: 12px;
+}

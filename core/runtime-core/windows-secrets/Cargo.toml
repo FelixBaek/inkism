@@ -1,0 +1,9 @@
+[package]
+name = "inkism-windows-secrets"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }

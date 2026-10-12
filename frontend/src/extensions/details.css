@@ -1,0 +1,49 @@
+.tiptap-prose .inkism-details {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 12px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.tiptap-prose .inkism-details > button {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+}
+.tiptap-prose .inkism-details > button:hover {
+  background: var(--hover);
+}
+.tiptap-prose .inkism-details > button:focus-visible {
+  outline: 2px solid var(--green);
+}
+.tiptap-prose .inkism-details > div {
+  flex: 1;
+  min-width: 0;
+}
+.tiptap-prose .inkism-details summary {
+  display: block;
+  min-height: 28px;
+  font-weight: 600;
+  list-style: none;
+}
+.tiptap-prose .inkism-details summary::-webkit-details-marker {
+  display: none;
+}
+.tiptap-prose .inkism-details > div > [data-type="detailsContent"][hidden] {
+  display: none;
+}
+.tiptap-prose .inkism-details > div > [data-type="detailsContent"] > :last-child {
+  margin-bottom: 4px;
+}
+.tiptap-prose .inkism-details.ProseMirror-selectednode {
+  outline: 2px solid var(--green);
+}

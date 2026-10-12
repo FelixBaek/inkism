@@ -1,0 +1,106 @@
+/* 노트북 머리말과 노트 메뉴 보조 요소 */
+.notebook-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.notebook-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.notebook-crumbs button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notebook-crumbs button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.notebook-crumbs span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notebook-header-icon {
+  color: var(--muted);
+}
+.notebook-header-title {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.notebook-header-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.notebook-header-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+}
+.notebook-header-meta {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.notebook-header-actions {
+  display: flex;
+  gap: 6px;
+}
+.notebook-header .round-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--hover);
+  color: var(--muted);
+}
+.notebook-header .round-btn:hover:not(:disabled) {
+  background: var(--active);
+  color: var(--text);
+}
+.note-row-color {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.note-action-anchor {
+  position: fixed;
+  z-index: 60;
+}
+.note-action-anchor .reminder-popover {
+  left: 0;
+  right: auto;
+  top: 0;
+}
+.note-list > .list-search:first-child:not(.is-collapsed) {
+  padding-top: 12px;
+}
+.note-list > .list-search:first-child:not(.is-collapsed) .list-search-icon {
+  top: calc(50% + 2px);
+}
+.note-row-preview.is-empty {
+  color: var(--faint);
+}

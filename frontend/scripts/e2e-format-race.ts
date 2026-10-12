@@ -1,0 +1,11 @@
+import {waitForPredicate} from './wait-for-predicate.ts';
+import {chromium} from 'playwright-core';import assert from 'node:assert/strict';
+const base=process.env.INKISM_URL||'http://127.0.0.1:48177';
+const rpc=async(op,args={})=>{const v=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(v.ok,true,JSON.stringify(v));return v.data};
+// MARKDOWN on an HTML note is only a view now; a real format change (with its '원문 형식 변경' confirmation) is
+// Markdown note -> HTML. Markdown notes open in the source editor, so typing during the held conversion hits .cm-content.
+const n=await rpc('save',{note:{title:'Format delayed '+Date.now(),content:'原文',content_format:'markdown',tags:[]}});await rpc('workspace_set',{ids:[n.id],active:n.id,locations:{}});
+const b=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});const p=await b.newPage();let calls=0,release;const held=new Promise(r=>release=r);let started;const seen=new Promise(r=>started=r);
+try{await p.addInitScript(()=>{if(window.top!==window||!/^https?:$/.test(location.protocol))return;localStorage.setItem('inkism.lang','ko');if(localStorage.getItem('inkism.inspector')===null)localStorage.setItem('inkism.inspector','false');});await p.goto(base);await p.locator('.cm-content').waitFor();await p.route('**/api/rpc',async route=>{if(route.request().postDataJSON().op!=='convert_content')return route.continue();calls++;const response=await route.fetch();started();await held;await route.fulfill({response})});await p.getByRole('button',{name:'HTML',exact:true}).click();await p.getByRole('dialog',{name:'원문 형식 변경'}).getByRole('button',{name:'형식 변경',exact:true}).click();await seen;
+await p.locator('.cm-content').click();await p.keyboard.press('Control+End');await p.keyboard.insertText(' 새 입력');await p.getByRole('button',{name:'텍스트',exact:true}).click();release();
+await waitForPredicate(async()=>{const saved=await rpc('get',{id:n.id});return saved.content==='原文 새 입력'&&saved.content_format==='html';},'형식 전환 중 입력의 실제 저장을 기다리는 시간이 초과됐습니다.');assert.equal(calls,1);assert.match(await p.locator('.cm-content').innerText(),/새 입력/);console.log('PASS delayed format response preserves newer input and duplicate mode requests are ignored');}finally{release();await b.close()}

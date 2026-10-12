@@ -1,0 +1,554 @@
+import { lang, t } from "../i18n";
+import { useEffect, useReducer, useRef, useState } from "react";
+import { RefreshCw, X, CloudCheck, AlertTriangle } from "../icons";
+import { formatRelative } from "../lib/date";
+import { rpc } from "../api";
+import { useStore } from "../store";
+type Status = {
+  configured: boolean;
+  paused: boolean;
+  running: boolean;
+  pending: number;
+  last_sync: number | null;
+  error: string | null;
+  server_url?: string;
+  scope?: { notebook_ids?: string[]; tags?: string[] };
+};
+type Storage = { encrypted: boolean };
+
+/** POSTs to a native storage endpoint and returns its data, throwing the server error. */
+async function storageAction(path: string, failure: string) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  const result = await response.json();
+  if (!response.ok || !result.ok) throw new Error(result.error || failure);
+  return result.data;
+}
+
+function stateLabel(status: Status) {
+  if (status.paused) return t("일시중지됨");
+  if (status.running) return t("동기화 중…");
+  return status.error ? t("연결 오류") : t("켜짐");
+}
+
+function dotClass(status: Status) {
+  if (status.paused) return "connection-dot off";
+  return status.error ? "connection-dot bad" : "connection-dot";
+}
+
+function submitLabel(busy: boolean, editing: boolean) {
+  if (busy) return t("연결 중…");
+  return editing ? t("바꾸고 다시 연결") : t("동기화 연결");
+}
+
+function storageLine(storageError: boolean, storage: Storage | null) {
+  if (storageError) return t("저장 보호 상태를 확인하지 못했습니다. 창을 다시 열어 주세요.");
+  if (!storage) return t("저장 보호 상태 확인 중…");
+  return storage.encrypted ? t("로컬 저장소가 암호화되어 있습니다.") : t("로컬 저장소가 암호화되어 있지 않습니다.");
+}
+
+function StorageDetails({
+  storage,
+  canCopy,
+  disabled,
+  copying,
+  onCopy,
+}: Readonly<{ storage: Storage; canCopy: boolean; disabled: boolean; copying: boolean; onCopy: () => void }>) {
+  return (
+    <>
+      {storage.encrypted ? (
+        <p className="sync-hint">
+          {t("저장 키는 현재 Windows 계정으로 보호됩니다. 다른 PC로 옮길 때는 동기화나 내보내기를 쓰세요.")}
+        </p>
+      ) : (
+        <>
+          <p className="sync-hint">
+            {t(
+              "노트와 첨부파일을 새 암호화 폴더로 복사합니다. 원본은 그대로 유지되며, 복사 중에는 편집을 잠시 멈춥니다.",
+            )}
+          </p>
+          {canCopy ? (
+            <button type="button" className="btn btn-secondary" disabled={disabled} onClick={onCopy}>
+              {copying ? t("저장 후 암호화 복사 중…") : t("암호화 사본 만들기")}
+            </button>
+          ) : (
+            <p className="sync-hint">{t("Windows 앱에서 암호화 사본을 만들 수 있습니다.")}</p>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+export function SyncSettings() {
+  const store = useStore();
+  const [copying, setCopying] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const working = copying || opening;
+  const copyRunning = useRef(false);
+  const [copyMessage, setCopyMessage] = useState("");
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<Status | null>(null);
+  const [storage, setStorage] = useState<Storage | null>(null);
+  const [storageError, setStorageError] = useState(false);
+  const [url, setUrl] = useState("");
+  const [token, setToken] = useState("");
+  const [key, setKey] = useState("");
+  const [scopeNotebooks, setScopeNotebooks] = useState("");
+  const [scopeTags, setScopeTags] = useState("");
+  const scopeDirty = useRef(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const editingRef = useRef(false);
+  editingRef.current = editing;
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (!open || working) return;
+    const update = () =>
+      rpc<Status>("sync_status")
+        .then((v) => {
+          setStatus(v);
+          if (!editingRef.current && !scopeDirty.current && v.scope) {
+            setScopeNotebooks((v.scope.notebook_ids ?? []).join(", "));
+            setScopeTags((v.scope.tags ?? []).join(", "));
+          }
+          if (v.server_url && !editingRef.current) setUrl(v.server_url);
+        })
+        .catch((e) => setError(e.message));
+    void update();
+    const timer = setInterval(update, 3000);
+    return () => clearInterval(timer);
+  }, [open, working]);
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    setStorage(null);
+    setStorageError(false);
+    void rpc<Storage>("storage_status")
+      .then((value) => {
+        if (active) setStorage(value);
+      })
+      .catch(() => {
+        if (active) setStorageError(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open]);
+  useEffect(() => {
+    if (open) dialog.current?.showModal();
+    else dialog.current?.close();
+  }, [open]);
+  const copyEncrypted = async () => {
+    if (copyRunning.current) return;
+    copyRunning.current = true;
+    setCopying(true);
+    setError("");
+    setCopyMessage("");
+    try {
+      if (!(await store.flushNow()))
+        throw new Error(t("작성 내용을 저장하지 못했습니다. 저장 오류를 해결한 뒤 다시 시도해 주세요."));
+      const data = await storageAction("/api/storage/encrypted-copy", t("암호화 사본을 만들지 못했습니다."));
+      setCopyMessage(
+        data.cancelled
+          ? t("폴더 선택을 취소했습니다.")
+          : t("암호화 사본을 만들었습니다. 현재 앱은 원본을 계속 사용합니다. 사본 위치: {path}", { path: data.path }),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("암호화 복사 결과를 확인하지 못했습니다."));
+    } finally {
+      copyRunning.current = false;
+      setCopying(false);
+    }
+  };
+  const openLibrary = async () => {
+    if (copyRunning.current) return;
+    copyRunning.current = true;
+    setOpening(true);
+    setError("");
+    setCopyMessage("");
+    try {
+      if (!(await store.flushNow()))
+        throw new Error(t("작성 내용을 저장하지 못했습니다. 저장 오류를 해결한 뒤 다시 시도해 주세요."));
+      const data = await storageAction("/api/storage/open", t("저장소를 열지 못했습니다."));
+      if (data.cancelled) setCopyMessage(t("저장소 선택을 취소했습니다."));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("저장소를 열지 못했습니다."));
+    } finally {
+      copyRunning.current = false;
+      setOpening(false);
+    }
+  };
+  const configure = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      // 연결 정보 바꾸기: 서버나 키가 달라지면 엔진이 새 동기화 상태로 다시 시작한다.
+      await rpc("sync_config", { server_url: url.trim(), token: token.trim(), key: key.trim(), migration: editing });
+      setToken("");
+      setKey("");
+      setEditing(false);
+      await rpc("sync_now");
+      setStatus(await rpc<Status>("sync_status"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const setPaused = async (paused: boolean) => {
+    setBusy(true);
+    setError("");
+    try {
+      await rpc("sync_pause", { paused });
+      setStatus(await rpc<Status>("sync_status"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const saveScope = async () => {
+    setBusy(true); setError("");
+    try {
+      const split = (value: string) => [...new Set(value.split(",").map(item => item.trim()).filter(Boolean))];
+      await rpc("sync_scope", { scope: { notebook_ids: split(scopeNotebooks), tags: split(scopeTags) } });
+      scopeDirty.current = false;
+      setStatus(await rpc<Status>("sync_status"));
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <>
+      <button className="side-item" onClick={() => setOpen(true)}>
+        <RefreshCw size={15} aria-hidden />
+        <span>{t("기기 동기화")}</span>
+      </button>
+      <dialog
+        ref={dialog}
+        className="sync-dialog"
+        onCancel={(e) => {
+          if (copyRunning.current) e.preventDefault();
+          else {
+            setOpen(false);
+            setEditing(false);
+          }
+        }}
+        aria-labelledby="sync-title"
+      >
+        <header>
+          <h2 id="sync-title">{t("기기 동기화")}</h2>
+          <button
+            className="icon-btn"
+            aria-label={t("동기화 설정 닫기")}
+            disabled={working}
+            onClick={() => {
+              setOpen(false);
+              setEditing(false);
+            }}
+          >
+            <X size={20} />
+          </button>
+        </header>
+        <fieldset className="sync-fields" disabled={working}>
+          {status?.configured && !editing ? (
+            <section className="sync-card" aria-label={t("동기화 상태")}>
+              <p className="sync-state">
+                <span className={dotClass(status)} aria-hidden />
+                <output>{stateLabel(status)}</output>
+              </p>
+              <dl className="sync-rows">
+                <dt>{t("서버")}</dt>
+                <dd>{status.server_url}</dd>
+                <dt>{t("최근 동기화")}</dt>
+                <dd>{status.last_sync ? new Date(status.last_sync).toLocaleString(lang) : t("아직 없음")}</dd>
+                <dt>{t("전송 대기")}</dt>
+                <dd>{t("{n}개", { n: status.pending ?? 0 })}</dd>
+              </dl>
+              <div className="sync-actions">
+                <button
+                  className="btn btn-primary"
+                  disabled={busy || status.running || status.paused}
+                  onClick={() => void rpc("sync_now").catch((e) => setError(e.message))}
+                >
+                  {t("지금 동기화")}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  disabled={busy || status.running}
+                  onClick={() => void setPaused(!status.paused)}
+                >
+                  {status.paused ? t("동기화 다시 시작") : t("동기화 일시중지")}
+                </button>
+                <button className="btn" disabled={busy || status.running} onClick={() => setEditing(true)}>
+                  {t("연결 정보 바꾸기")}
+                </button>
+              </div>
+              <section className="sync-scope" aria-label={t("동기화 범위")}>
+                <strong>{t("동기화 범위")}</strong>
+                <p className="sync-hint">{t("비워 두면 전체 노트를 동기화합니다. 둘 다 입력하면 노트북과 태그를 모두 만족하는 노트만 선택합니다.")}</p>
+                <label>{t("노트북 ID")}
+                  <input value={scopeNotebooks} onChange={e => { scopeDirty.current = true; setScopeNotebooks(e.target.value); }} placeholder="id1, id2" />
+                </label>
+                <label>{t("태그")}
+                  <input value={scopeTags} onChange={e => { scopeDirty.current = true; setScopeTags(e.target.value); }} placeholder="work, urgent" />
+                </label>
+                <button type="button" className="btn" disabled={busy || status.running} onClick={() => void saveScope()}>{t("동기화 범위 저장")}</button>
+              </section>
+              {status.paused && (
+                <p className="sync-hint">{t("이 기기의 변경은 보관됩니다. 다시 시작하면 그때 보냅니다.")}</p>
+              )}
+            </section>
+          ) : (
+            <>
+              {!status?.configured && (
+                <section className="sync-card" aria-label={t("동기화 안내")}>
+                  <p className="sync-state">
+                    <span className="connection-dot off" aria-hidden />
+                    <output>{t("꺼져 있음 — 노트는 이 기기에만 저장됩니다.")}</output>
+                  </p>
+                  <ol className="sync-steps">
+                    <li>
+                      <b>{t("서버 준비")}</b>{" "}
+                      {t(
+                        "직접 운영하는 동기화 서버의 주소와 접속 토큰이 필요합니다. 만드는 방법은 README의 ‘동기화 중계 서버’에 있습니다.",
+                      )}
+                    </li>
+                    <li>
+                      <b>{t("첫 기기")}</b>{" "}
+                      {t("주소·토큰을 넣고 ‘첫 기기용 키 만들기’를 누른 뒤 키를 따로 보관하세요.")}
+                    </li>
+                    <li>
+                      <b>{t("다른 기기")}</b> {t("같은 주소·토큰·키를 넣으면 노트가 맞춰집니다.")}
+                    </li>
+                  </ol>
+                  <p className="sync-hint">{t("노트는 기기에서 암호화한 뒤 보내므로 서버는 내용을 볼 수 없습니다.")}</p>
+                </section>
+              )}
+              <form className="sync-card" onSubmit={configure}>
+                {editing && (
+                  <p className="sync-hint">
+                    {t(
+                      "서버나 키를 바꾸면 이 기기의 노트를 새 곳으로 처음부터 다시 보냅니다. 토큰만 바꿀 때는 기존 키를 그대로 넣으세요.",
+                    )}
+                  </p>
+                )}
+                <label>
+                  {t("서버 주소")}
+                  <input
+                    type="url"
+                    required
+                    placeholder="https://"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                  />
+                </label>
+                <label>
+                  {t("접속 토큰")}
+                  <input
+                    type="password"
+                    required
+                    autoComplete="off"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                  />
+                </label>
+                <label>
+                  {t("암호화 키")}
+                  <input
+                    type="password"
+                    required
+                    autoComplete="off"
+                    value={key}
+                    onChange={(e) => setKey(e.target.value)}
+                  />
+                </label>
+                <div className="sync-actions">
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() =>
+                      void rpc<{ key: string }>("sync_keygen")
+                        .then((v) => setKey(v.key))
+                        .catch((e) => setError(e.message))
+                    }
+                  >
+                    {t("첫 기기용 키 만들기")}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={!key}
+                    onClick={() =>
+                      void navigator.clipboard.writeText(key).catch(() => setError(t("키를 복사할 수 없습니다")))
+                    }
+                  >
+                    {t("키 복사")}
+                  </button>
+                </div>
+                <p className="sync-hint">
+                  {t("서버는 키를 보관하지 않습니다. 키를 잃으면 다른 기기를 연결할 수 없습니다.")}
+                </p>
+                <div className="sync-actions">
+                  <button type="submit" className="btn btn-primary" disabled={busy}>
+                    {submitLabel(busy, editing)}
+                  </button>
+                  {editing && (
+                    <button type="button" className="btn" disabled={busy} onClick={() => setEditing(false)}>
+                      {t("취소")}
+                    </button>
+                  )}
+                </div>
+              </form>
+            </>
+          )}
+          <section className="sync-card" aria-labelledby="storage-title">
+            <h3 id="storage-title">{t("이 기기의 저장 보호")}</h3>
+            <p>
+              <output>{storageLine(storageError, storage)}</output>
+            </p>
+            {storage && (
+              <StorageDetails
+                storage={storage}
+                canCopy={Boolean(store.info?.native_encrypted_copy)}
+                disabled={busy || working}
+                copying={copying}
+                onCopy={() => void copyEncrypted()}
+              />
+            )}
+            {store.info?.native_open_library && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy || working}
+                  onClick={() => void openLibrary()}
+                >
+                  {opening ? t("저장 후 저장소 여는 중…") : t("다른 저장소 열기")}
+                </button>
+                <p className="sync-hint">{t("고른 저장소로 앱을 다시 열고, 다음에도 그 저장소를 씁니다.")}</p>
+              </>
+            )}
+          </section>
+        </fieldset>
+        {opening && (
+          <p>
+            <output>{t("열 저장소 파일을 선택해 주세요.")}</output>
+          </p>
+        )}
+        {copying && (
+          <p>
+            <output>{t("폴더를 선택하면 복사를 시작합니다. 완료될 때까지 기다려 주세요.")}</output>
+          </p>
+        )}
+        {copyMessage && (
+          <p>
+            <output>{copyMessage}</output>
+          </p>
+        )}
+        {(error || status?.error) && (
+          <p role="alert" className="sync-error">
+            {error || status?.error}
+          </p>
+        )}
+      </dialog>
+    </>
+  );
+}
+
+function connectionLabel(failed: boolean, connected: boolean) {
+  if (failed) return t("연결 실패");
+  return connected ? t("연결됨") : t("연결 중…");
+}
+
+type SyncState = "error" | "paused" | "running" | "pending" | "ok";
+
+function syncState(status: Status): SyncState {
+  if (status.error) return "error";
+  if (status.paused) return "paused";
+  if (status.running) return "running";
+  return status.pending > 0 ? "pending" : "ok";
+}
+
+const STATE_ICONS = {
+  error: AlertTriangle,
+  paused: RefreshCw,
+  running: RefreshCw,
+  pending: RefreshCw,
+  ok: CloudCheck,
+};
+
+/** 하단 연결·동기화 상태. 동기화가 설정되어 있으면 눌러서 지금 동기화한다. */
+export function SyncIndicator() {
+  const store = useStore();
+  const [status, setStatus] = useState<Status | null>(null);
+  const [, tick] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    let alive = true;
+    const update = () => {
+      if (document.visibilityState === "visible")
+        rpc<Status>("sync_status")
+          .then((v) => {
+            if (alive) setStatus(v);
+          })
+          .catch(() => {
+            if (alive) setStatus(null);
+          });
+      tick();
+    };
+    update();
+    const timer = setInterval(update, 5000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, []);
+  if (store.connError || !status?.configured)
+    return (
+      <output className="status-connection">
+        <span className={store.connError ? "connection-dot bad" : "connection-dot"} />
+        {connectionLabel(Boolean(store.connError), Boolean(store.info))}
+      </output>
+    );
+  const state = syncState(status);
+  const text = {
+    error: t("동기화 오류"),
+    paused: t("동기화 일시중지됨"),
+    running: t("동기화 중…"),
+    pending: t("전송 대기 {n}개", { n: status.pending ?? 0 }),
+    ok: status.last_sync ? t("연결됨") : t("동기화 대기"),
+  }[state];
+  const Icon = STATE_ICONS[state];
+  return (
+    <button
+      type="button"
+      className={`status-connection sync-indicator sync-indicator--${state}`}
+      disabled={status.running || status.paused}
+      title={
+        status.error ??
+        (status.last_sync ? t("최근 동기화: {time}", { time: formatRelative(status.last_sync) }) : undefined)
+      }
+      aria-label={t("{status} — 지금 동기화", { status: text })}
+      onClick={() =>
+        void rpc("sync_now")
+          .then(() => rpc<Status>("sync_status"))
+          .then(setStatus)
+          .catch(() => {})
+      }
+    >
+      <span aria-hidden>
+        {state === "ok" ? (
+          <span className="connection-dot" />
+        ) : (
+          <Icon size={13} className={state === "running" ? "spin" : undefined} />
+        )}
+      </span>
+      <output className="side-label">{text}</output>
+    </button>
+  );
+}
