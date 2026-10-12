@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright-core';
 import {historyKey} from './history-keys.ts';
+import {waitSaved,waitSaveState} from './save-state.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47890';
 const rpc=async(op,args={})=>{
  const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});
@@ -10,10 +11,11 @@ const rpc=async(op,args={})=>{
 const source='<p><strong>'+'한글😀&amp; 경계 '.repeat(50000)+'</strong></p><p>마지막 문단</p>';
 const note=await rpc('save',{note:{title:'내부 이동 '+Date.now(),content:source,text:'한글'}});await rpc('wait_index');
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
-const page=await browser.newPage({viewport:{width:1440,height:960}}),errors=[],reads=[],edits=[];
+const page=await browser.newPage({viewport:{width:1440,height:960}}),errors=[],reads=[],edits=[],saves=[];
 page.on('pageerror',error=>errors.push(error.message));
 await page.route('**/api/rpc',async route=>{
  const request=route.request().postDataJSON();
+ if((request.id??request.note?.id)===note.id&&['save','document_splice_html'].includes(request.op))saves.push(request.op);
  if(request.id===note.id){
   reads.push(request.op);
   if(['get','revision_body','document_render'].includes(request.op))return route.fulfill({status:403,json:{ok:false,error:'unexpected whole-body renderer read'}});
@@ -25,7 +27,10 @@ await page.route('**/api/rpc',async route=>{
 const editor=page.locator('.tiptap-prose');
 const segment=n=>page.waitForFunction(n=>document.querySelector('[data-segment-start]')?.getAttribute('data-segment-start')===String(n),n);
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized);
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+// Settled "saved" indicator plus a save RPC sent after `since`: a stale indicator
+// from an earlier save cannot satisfy it, and a failed save fails with its reason.
+const saved=async(since:number)=>{await waitSaved(page);assert.ok(saves.length>since,'save RPC reached the backend');};
+const saveState=()=>page.locator('.status-save').getAttribute('data-save-state');
 const cursor=async position=>{await editor.evaluate((el: any,position)=>{el.editor.commands.setTextSelection(position==='end'?el.editor.state.doc.content.size-1:position);el.editor.view.focus();},position);};
 const body=async()=> (await rpc('get',{id:note.id})).content;
 try{
@@ -36,7 +41,7 @@ try{
  await page.getByRole('button',{name:'다음 구간',exact:true}).click();await segment(1);await ready();
  await page.getByRole('button',{name:'다음 구간',exact:true}).click();await segment(2);await ready();
  const initial=(await rpc('document_segments',{id:note.id,revision:1,ordinal:0,offset:2})).segments[0];
- await cursor(1);await page.keyboard.insertText('보존검사😀 ');await page.keyboard.press('Control+s');await saved();
+ let since=saves.length;await cursor(1);await page.keyboard.insertText('보존검사😀 ');await page.keyboard.press('Control+s');await saved(since);
  let expected=Buffer.concat([Buffer.from(source).subarray(0,initial.byte_offset),Buffer.from('보존검사😀 '),Buffer.from(source).subarray(initial.byte_offset)]).toString();
  assert.equal(await body(),expected,'one internal insertion leaves every outside byte unchanged');
  assert.ok(edits.length>=1);const edit=edits.at(-1).edits?.[0]??edits.at(-1).content;
@@ -45,16 +50,26 @@ try{
  const selection=await editor.evaluate((el: any)=>el.editor.state.selection.toJSON());
  await page.reload();await ready();await segment(2);
  assert.deepEqual(await editor.evaluate((el: any)=>el.editor.state.selection.toJSON()),selection,'byte cursor survives reindex and reload');
- await historyKey(page,'undo');await saved();assert.equal(await body(),source,'restart undo restores exact raw source');
- await historyKey(page,'redo');await saved();assert.equal(await body(),expected);
+ since=saves.length;await historyKey(page,'undo');await saved(since);assert.equal(await body(),source,'restart undo restores exact raw source');
+ since=saves.length;await historyKey(page,'redo');await saved(since);assert.equal(await body(),expected);
  await cursor('end');await page.keyboard.press('ArrowRight');await segment(3);await ready();
  await cursor(1);await page.keyboard.press('ArrowLeft');await segment(2);await ready();
  // Saving fails before navigation: the live input and original range remain.
- const offline=route=>route.request().postDataJSON().op==='document_splice_html'?route.fulfill({status:503,json:{ok:false,error:'synthetic offline'}}):route.fallback();
+ // Routes run newest first, so the rejecting route records its own save attempts.
+ const offline=route=>{if(route.request().postDataJSON().op!=='document_splice_html')return route.fallback();saves.push('rejected');return route.fulfill({status:503,json:{ok:false,error:'synthetic offline'}});};
  await page.route('**/api/rpc',offline);
  await cursor(1);await page.keyboard.insertText('실패보존 ');await page.getByRole('button',{name:'다음 구간',exact:true}).click();
  await page.locator('.window-error').filter({hasText:'현재 구간을 유지'}).waitFor();await segment(2);assert.ok((await editor.textContent()).includes('실패보존 '));assert.equal(await body(),expected);
- await page.unroute('**/api/rpc',offline);await page.keyboard.press('Control+s');await saved();assert.ok((await body()).includes('실패보존 '));
+ assert.notEqual(await saveState(),'saved','a failed save is never shown as saved');
+ // An explicit save that the backend rejects shows the error state, keeps the input and leaves storage untouched.
+ since=saves.length;await page.keyboard.press('Control+s');
+ for(const deadline=Date.now()+30000;saves.length===since;await new Promise(resolve=>setTimeout(resolve,50)))assert.ok(Date.now()<deadline,'explicit save sent a save RPC');
+ assert.equal(saves.at(-1),'rejected');const failed=await waitSaveState(page,'error');
+ assert.match(failed.text,/synthetic offline/);assert.ok((await editor.textContent()).includes('실패보존 보존검사😀 '));assert.equal(await body(),expected);
+ await page.unroute('**/api/rpc',offline);since=saves.length;await page.keyboard.press('Control+s');await saved(since);
+ const retried=Buffer.concat([Buffer.from(expected).subarray(0,initial.byte_offset),Buffer.from('실패보존 '),Buffer.from(expected).subarray(initial.byte_offset)]).toString();
+ assert.equal(await body(),retried,'retried save stores the kept input with every other byte unchanged');
+ await page.reload();await ready();await segment(2);assert.ok((await editor.textContent()).includes('실패보존 보존검사😀 '),'reload shows the stored input');
  await cursor('end');await page.keyboard.press('Control+End');await page.waitForFunction(()=>document.querySelector('[data-window-start]')?.getAttribute('data-window-start')==='1');await ready();
  assert.equal(await editor.textContent(),'마지막 문단');
  await page.keyboard.press('Control+Home');await segment(0);await ready();
