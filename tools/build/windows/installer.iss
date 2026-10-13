@@ -57,7 +57,7 @@ Name: "{autodesktop}\inkism"; Filename: "{app}\Inkism.exe"; Tasks: desktopicon
 
 [Registry]
 ; This optional task changes only the current user's selected note-link handler.
-; Cleanup is conditional in CurUninstallStepChanged; another later handler survives.
+; Cleanup on task opt-out and uninstall preserves another later handler.
 Root: HKCU; Subkey: "Software\Classes\{#NoteProtocol}"; ValueType: string; ValueName: ""; ValueData: "URL:Inkism Note"; Tasks: notelinks
 Root: HKCU; Subkey: "Software\Classes\{#NoteProtocol}"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Tasks: notelinks
 Root: HKCU; Subkey: "Software\Classes\{#NoteProtocol}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\Inkism.exe"",0"; Tasks: notelinks
@@ -86,12 +86,24 @@ begin
     Result := 'Microsoft WebView2 installation failed. Check your internet connection and retry.';
 end;
 
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+procedure RemoveOwnedNoteProtocol;
 var
   RegisteredCommand: String;
 begin
+  if RegQueryStringValue(HKCU, 'Software\Classes\{#NoteProtocol}\shell\open\command', '', RegisteredCommand) then
+    if CompareText(RegisteredCommand, ExpandConstant('"{app}\Inkism.exe" --open "%1"')) = 0 then
+      RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\{#NoteProtocol}');
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    if not WizardIsTaskSelected('notelinks') then
+      RemoveOwnedNoteProtocol;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
   if CurUninstallStep = usUninstall then
-    if RegQueryStringValue(HKCU, 'Software\Classes\{#NoteProtocol}\shell\open\command', '', RegisteredCommand) then
-      if CompareText(RegisteredCommand, ExpandConstant('"{app}\Inkism.exe" --open "%1"')) = 0 then
-        RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\{#NoteProtocol}');
+    RemoveOwnedNoteProtocol;
 end;

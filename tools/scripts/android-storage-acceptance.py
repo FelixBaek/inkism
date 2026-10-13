@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shlex
 import socket
 import subprocess
 import tempfile
@@ -117,6 +118,15 @@ def require_open_database(absolute, links):
         raise RuntimeError("Owned native app has no observable open database descriptor")
 
 
+def descriptor_command(pid):
+    if type(pid) is not int or pid <= 0:
+        raise RuntimeError("Invalid owned process PID")
+    loop = f'for fd in /proc/{pid}/fd/*; do readlink "$fd"; done'
+    # adb shell joins argv without escaping; preserve sh -c's script as one
+    # remote-shell argument, including its loop and literal $fd expansion.
+    return ["run-as", PACKAGE, "sh", "-c", shlex.quote(loop)]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sdk", type=Path)
@@ -214,8 +224,15 @@ def main():
             absolute = android("shell", "run-as", PACKAGE, "readlink", "-f", database).stdout.strip()
             if not absolute.startswith(root + "/"):
                 raise RuntimeError("Database resolved outside the app sandbox")
-            links = android("shell", "run-as", PACKAGE, "sh", "-c",
-                            f'for fd in /proc/{process["pid"]}/fd/*; do readlink "$fd"; done', check=False)
+            links = android("shell", *descriptor_command(process["pid"]), check=False)
+            report["lastStorageObservation"] = observed
+            diagnostics = (links.stdout + links.stderr).lower()
+            report["databaseDescriptorObservation"] = {
+                "process": process, "commandExitCode": links.returncode,
+                "observedLinkCount": len(links.stdout.splitlines()),
+                "matchedDatabase": absolute in links.stdout.splitlines(),
+                "permissionDenied": "permission denied" in diagnostics,
+                "shellSyntaxError": "syntax error" in diagnostics}
             # Unavailable proc-fd observations fail; process liveness alone is insufficient.
             require_open_database(absolute, links.stdout)
             failures = storage_failures(android("logcat", "--pid", str(process["pid"]), "-d", "-v", "brief").stdout)
@@ -373,7 +390,19 @@ def self_test():
         except RuntimeError:
             continue
         raise AssertionError("Unavailable native database descriptor passed")
+    # Exercise the actual two-shell boundary on a held disposable file, not
+    # an Android/product substitute. Missing quoting must fail before reading.
+    with tempfile.NamedTemporaryFile(prefix="inkism-fd-quote-") as held:
+        argv = descriptor_command(os.getpid())
+        prelude = 'run_as() { shift; "$@"; }; '
+        quoted = " ".join(["run_as", *argv[1:]])
+        unquoted = " ".join(["run_as", *argv[1:-1], shlex.split(argv[-1])[0]])
+        bad = command(["/bin/sh", "-c", prelude + unquoted], check=False)
+        good = command(["/bin/sh", "-c", prelude + quoted], check=False)
+        assert bad.returncode != 0 and "syntax error" in bad.stderr.lower()
+        require_open_database(held.name, good.stdout)
     print("PASS: storage oracle rejects plaintext, unsafe paths/markers/permissions/UIDs, replaced keys/inodes and truncated databases")
+    print("PASS: actual held-file descriptor survives correctly quoted remote sh -c; unquoted loop fails")
 
 
 if __name__ == "__main__":
