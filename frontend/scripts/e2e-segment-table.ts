@@ -1,7 +1,7 @@
 // Actual application table fragments, exact raw bytes and failed projection.
 import assert from 'node:assert/strict';
 import {assertBlockBytes} from './block-identity-bytes.ts';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {trackSaves} from './save-state.ts';
 import {historyKey} from './history-keys.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47890';

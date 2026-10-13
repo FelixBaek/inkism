@@ -8,7 +8,7 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import type {AddressInfo} from 'node:net';
 import {createServer} from 'vite';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 
 assert.ok(process.env.INKISM_SEGMENT_ENGINE,'current Rust executable required');
 const dir=await mkdtemp(join(tmpdir(),'inkism-selection-segments-'));

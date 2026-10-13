@@ -1,6 +1,6 @@
 // Native paste and follow-up transactions, actual React/Go/Rust, isolated profile.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {waitSaved} from './save-state.ts';
 import {historyKey} from './history-keys.ts';
 import {assertBlockBytes} from './block-identity-bytes.ts';

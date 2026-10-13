@@ -1,6 +1,6 @@
 // Actual isolated browser clipboard events, shipped React + Go + Rust.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {waitSaved} from './save-state.ts';
 import {historyKey} from './history-keys.ts';
 import {assertBlockBytes,withoutBlockIds} from './block-identity-bytes.ts';

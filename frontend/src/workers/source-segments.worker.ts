@@ -27,6 +27,6 @@ self.onmessage = (event: MessageEvent<SourceScanRequest>) => {
     }
     self.postMessage({ spans });
   } catch (error) {
-    self.postMessage({ error: error instanceof Error ? error.message : "문서 구간을 계산하지 못했습니다." });
+    self.postMessage({ error_code: "source_scan_failed", error: error instanceof Error ? error.message : String(error) });
   }
 };

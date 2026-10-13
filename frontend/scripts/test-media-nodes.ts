@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {fileURLToPath} from 'node:url';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 
 // The schema needs a real DOM: bundle rich-document + markdown for the browser and check
 // each media node survives sanitize -> parse -> serialize unchanged (editable admission).

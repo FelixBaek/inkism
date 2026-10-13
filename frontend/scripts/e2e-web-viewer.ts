@@ -1,4 +1,4 @@
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:https';
 import {execFileSync} from 'node:child_process';

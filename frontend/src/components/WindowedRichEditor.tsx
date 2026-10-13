@@ -16,6 +16,7 @@ import type { BodySplice } from "../lib/body-splice";
 import { scrollSpace } from "../lib/scroll-space";
 import { BlockHeights } from "../lib/block-heights";
 import { windowHistory, retainWindowHistory, nextHistorySession } from "../lib/window-history-cache";
+import type { WindowPreview } from "../lib/window-history";
 import { DocumentSearch } from "./DocumentSearch";
 import { DocumentCopy } from "./DocumentCopy";
 import { RichEditor, type RichChange } from "./RichEditor";
@@ -947,26 +948,38 @@ export function WindowedRichEditor({
         capture.editor.state === snapshot,
     };
   };
-  const commitSelection = (
+  const commitSelection = async (
     draft: Draft,
     range: { from: number; to: number },
     prepared: PreparedSelection,
     result: ReturnType<typeof changeSelection>,
     selection: DocumentSelection,
   ) => {
+    const tags = await boundaryTagEdits(draft, result.tags, prepared.check);
+    prepared.check();
+    const regionFrom = draft.paged ? result.start : range.from + tags.shift;
     const source = draft.paged
       ? ""
-      : draft.content.slice(0, range.from) + result.replacement + draft.content.slice(range.to);
-    applySourceChange(draft, result, source);
+      : tags.source.slice(0, regionFrom) + result.replacement + tags.source.slice(range.to + tags.shift);
+    const edits = tags.edits.length
+      ? [...tags.edits, { start: regionFrom, expected: result.expected, replacement: result.replacement }]
+      : undefined;
+    if (draft.paged && edits) for (const edit of edits) callbacks.current.changeRange(edit);
+    else applySourceChange(draft, result, source);
+    const relative = (preview: WindowPreview, at: number, text: string, byte: number) =>
+      edits && !draft.paged
+        ? { ...preview, relativeFrom: at + utf8PrefixLength(text, (preview.byteStart ?? byte) - byte) - edits[0].start }
+        : preview;
     history.current.record({
-      from: draft.paged ? result.start : range.from,
+      from: edits ? edits[0].start : draft.paged ? result.start : range.from,
       offset: prepared.blockOffset,
-      before: result.expected,
-      after: result.replacement,
+      before: edits ? "" : result.expected,
+      after: edits ? "" : result.replacement,
+      edits,
       beforeCount: prepared.blockCount,
       afterCount: result.count,
-      beforePreview: prepared.previewWindow,
-      afterPreview: result.previewWindow,
+      beforePreview: relative(prepared.previewWindow, range.from, result.expected, prepared.byteStart),
+      afterPreview: relative(result.previewWindow, regionFrom, result.replacement, result.start),
       beforeDocumentSelection: selection,
       afterDocumentSelection: result.documentSelection ?? undefined,
       beforeSelection: result.beforeSelection,
@@ -979,7 +992,7 @@ export function WindowedRichEditor({
     heights.current.resize(total.current, prepared.blockOffset);
     const committed = composition.current;
     const previewByte = result.previewWindow.byteStart ?? result.start;
-    const previewFrom = draft.paged ? 0 : range.from + utf8PrefixLength(result.replacement, previewByte - result.start);
+    const previewFrom = draft.paged ? 0 : regionFrom + utf8PrefixLength(result.replacement, previewByte - result.start);
     const next: WindowState = {
       offset: result.previewWindow.offset ?? prepared.blockOffset,
       count: result.previewCount,
@@ -1116,7 +1129,7 @@ export function WindowedRichEditor({
             : changeSelection(prepared, resolved);
       }
       prepared.check();
-      commitSelection(draft, range, prepared, result, selection);
+      await commitSelection(draft, range, prepared, result, selection);
       return true;
     } catch (e) {
       failSelectionRun(e);

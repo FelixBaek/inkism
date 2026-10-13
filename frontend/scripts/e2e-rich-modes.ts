@@ -1,6 +1,6 @@
 // Production React + actual Go/Rust runtime, using a dedicated synthetic DB.
 // Run against the current built preview; this does not verify native Windows IME.
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48285';
 const rpc=async(op,args={})=>{

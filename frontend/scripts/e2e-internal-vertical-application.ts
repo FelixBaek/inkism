@@ -2,7 +2,7 @@ import {waitForAsync} from './async-browser-condition.ts';
 // Oversized-paragraph navigation and range integrity. This does not claim that
 // arbitrary source splits have the same soft-wrap phase as a full paragraph.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {historyKey} from './history-keys.ts';
 import {assertBlockBytes} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL;assert.ok(base);

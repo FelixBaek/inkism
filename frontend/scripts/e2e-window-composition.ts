@@ -1,6 +1,6 @@
 // Chromium's actual composition events through CDP, with the real Go/Rust backend.
 // This is browser-engine coverage, not a physical Windows IME acceptance test.
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {trackSaves} from './save-state.ts';
 import assert from 'node:assert/strict';
 import {assertBlockBytes} from './block-identity-bytes.ts';

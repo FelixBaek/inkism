@@ -9,7 +9,7 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import type {AddressInfo} from 'node:net';
 import {createServer} from 'vite';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 
 const root=fileURLToPath(new URL('..',import.meta.url));
 const fixtureDir=await mkdtemp(join(tmpdir(),'inkism-rich-segments-'));

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {fileURLToPath} from 'node:url';
 const bundle=await build({stdin:{contents:`export * from './lib/pdf-references'; import React from 'react'; import {createRoot} from 'react-dom/client'; import {PdfReferences} from './components/PdfReferences'; export function mount(source,format='markdown'){const node=document.createElement('div');document.body.append(node);createRoot(node).render(React.createElement(PdfReferences,{source,format,onSourceChange:next=>{window.changed=next},onNavigate:(offset,text)=>{window.navigation={offset,text}}}));}`,resolveDir:fileURLToPath(new URL('../src/',import.meta.url)),loader:'ts'},bundle:true,external:['./PdfViewer'],write:false,outdir:'/tmp/inkism-footnote-bundle',format:'iife',globalName:'footnotes',platform:'browser',logLevel:'error'});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});

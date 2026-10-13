@@ -1,7 +1,7 @@
 import type {AddressInfo} from 'node:net';
 import assert from 'node:assert/strict';
 import {createServer} from 'vite';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {fileURLToPath} from 'node:url';
 const server=await createServer({root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0,strictPort:false},plugins:[{
  name:'segment-selection-check',configureServer(vite){vite.middlewares.use('/__selection',async(req,res,next)=>{

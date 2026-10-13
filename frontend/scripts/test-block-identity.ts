@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {fileURLToPath} from 'node:url';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 const src=fileURLToPath(new URL('../src/',import.meta.url));
 const bundle=await build({stdin:{contents:`export {Editor} from '@tiptap/core';export {NodeSelection} from '@tiptap/pm/state';export {contentExtensions} from './extensions/content-schema';export {cloneBlockIdentity,cloneHTMLIdentity,prepareHTMLBlockIdentity} from './lib/block-identity';export {inspectRichHTML} from './lib/rich-document';`,resolveDir:src,loader:'ts'},bundle:true,write:false,format:'iife',globalName:'fixture',platform:'browser',loader:{'.css':'empty'},external:['mermaid','@google/model-viewer'],define:{'process.env.NODE_ENV':'"production"'},logLevel:'error'});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});

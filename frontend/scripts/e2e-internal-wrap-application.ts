@@ -1,7 +1,7 @@
 // Compare source-piece movement with the complete native paragraph, rather
 // than treating each independently wrapped source piece as the oracle.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {waitSaved} from './save-state.ts';
 import {waitForPredicate} from './wait-for-predicate.ts';
 import {historyKey} from './history-keys.ts';

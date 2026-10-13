@@ -1,6 +1,6 @@
 // Actual React/Go/Rust: input arriving while a full-document block worker is busy.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {waitSaved} from './save-state.ts';
 import {waitForPredicate} from './wait-for-predicate.ts';
 import {historyKey} from './history-keys.ts';
@@ -47,6 +47,7 @@ try{
  assert.ok(commandName==='setHeading'||cases.every(kind=>!kind.startsWith('after-')),'heading-specific after-format fixtures require a heading');
  for(const kind of cases){
  const after=kind.startsWith('after-');
+ let formattedSaved:string|undefined,formatIds:string[]|undefined;
  const range=kind.startsWith('after-range-'),collapse=kind==='after-format-right'||kind==='after-range-left';
  const note=await rpc('save',{note:{title:'서식 중 입력 '+Date.now(),content:original,content_format:'html'}});
  await rpc('wait_index');await page.goto(base+'/?virtual=1'+(process.env.INKISM_LAZY==='0'?'':'&lazy=1'));
@@ -62,7 +63,8 @@ try{
  if(after){
   await page.evaluate(()=>{(window as any).__blockGate.released=true;for(const deliver of (window as any).__blockGate.deliveries.splice(0))deliver();});
   await ready();await saved();
-  assert.equal(((await body(note.id)).match(/<h2>/g)||[]).length,10000,'format completed before follow-up typing');
+  formattedSaved=await body(note.id);
+  formatIds=assertBlockBytes(formattedSaved,original.replaceAll('<p>','<h2>').replaceAll('</p>','</h2>'),{added:10000,message:'format completed with persistent block identities before follow-up typing'});
  }
  if(collapse){
   await page.keyboard.press(kind==='after-format-right'?'ArrowRight':'ArrowLeft');
@@ -123,8 +125,8 @@ try{
  // created or changed receive an identity (the pasted pair: two), committed
  // with it; the formatted blocks it replaced keep no trace. After the
  // selection collapsed (z typed at an edge) it is an ordinary edit of one block.
- const touched=kind==='paste-keys'?2:1;
- const inputIds=assertBlockBytes(actual,expected,{added:touched,message:'worker command then all-selection input; actual characters='+actual.length+', expected='+expected.length});
+ const touched=collapse?10000:kind==='paste-keys'?2:1;
+ const inputIds=assertBlockBytes(actual,expected,{added:touched,...(collapse?{ids:formatIds}:{}),message:'worker command then all-selection input; actual characters='+actual.length+', expected='+expected.length});
  const previewOracle=await editor.evaluate((el: any,oracle)=>{
   const e=el.editor,full=e.schema.nodeFromJSON(oracle.doc);
   const offset=Number(document.querySelector('[data-window-start]').getAttribute('data-window-start'));
@@ -142,7 +144,7 @@ try{
  await page.reload();await ready();
  await historyKey(page,'undo');await saved();
  if(after){
-  assert.equal(((await body(note.id)).match(/<h2>/g)||[]).length,10000,'first restart undo restores formatted source');
+  assert.equal(await body(note.id),formattedSaved,'first restart undo restores exact formatted source and identities');
   if(!collapse){
   await page.evaluate(()=>navigator.clipboard.writeText(''));
   await editor.evaluate((el: any)=>el.editor.view.focus());await page.keyboard.press('Control+c');
@@ -158,7 +160,7 @@ try{
  assert.equal(await body(note.id),original,'restart undo restores complete source');
  if(after){
   await historyKey(page,'redo');await saved();
-  assert.equal(((await body(note.id)).match(/<h2>/g)||[]).length,10000,'first restart redo restores format');
+  assert.equal(await body(note.id),formattedSaved,'first restart redo restores exact format and identities');
  }
  await historyKey(page,'redo');await saved();assertBlockBytes(await body(note.id),expected,{added:touched,ids:inputIds,message:'restart redo retains busy-worker input'});
  assert.deepEqual(errors,[]);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const bundle=await build({absWorkingDir:root,stdin:{contents:`export {Schema,DOMParser,DOMSerializer} from '@tiptap/pm/model';export {serializeModelMapped} from './src/lib/segment-model';`,resolveDir:root,loader:'ts'},bundle:true,write:false,format:'iife',globalName:'serializer',loader:{'.css':'empty'},logLevel:'error'});

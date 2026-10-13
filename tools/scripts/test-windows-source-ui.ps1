@@ -586,10 +586,34 @@ try {
     Wait-WindowText 'native_typed' $false
     [InkismInput]::Shortcut(0x59)
     Wait-WindowText 'native_typed' $true
-    $cases.Add([pscustomobject]@{title=$richTitle;format='html';content='<p>'+$richBody+'native_typed</p>'})
+    $cases.Add([pscustomobject]@{title=$richTitle;format='html';content='<p>'+$richBody+'native_typed</p>';block_ids=1})
     Close-Inkism
     Verify-SourceData
+    $noteLinkFixture = Join-Path $scratch 'note-link-fixture.json'
+    $noteLinkScript = Join-Path $PSScriptRoot 'test-windows-note-links.ts'
+    node $noteLinkScript seed (Join-Path (Split-Path $binary) 'inkism-engine.exe') $db $noteLinkFixture $richTitle
+    if ($LASTEXITCODE) { throw 'Note-link fixture preparation failed' }
+    $noteLinkData = Get-Content -Raw -Encoding UTF8 -LiteralPath $noteLinkFixture | ConvertFrom-Json
     Open-Inkism
+    foreach ($destination in @($noteLinkData.target, $noteLinkData.source)) {
+        $linkInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $linkInfo.FileName = $binary
+        $linkInfo.Arguments = '--db "' + $db + '" --open "note://' + $destination.id + '"'
+        $linkInfo.UseShellExecute = $false
+        $linkInfo.RedirectStandardOutput = $true
+        $linkInfo.RedirectStandardError = $true
+        $linkProcess = [System.Diagnostics.Process]::Start($linkInfo)
+        $linkOutput = $linkProcess.StandardOutput.ReadToEndAsync()
+        $linkError = $linkProcess.StandardError.ReadToEndAsync()
+        try {
+            if (-not $linkProcess.WaitForExit(7000)) { $linkProcess.Kill(); throw 'Warm note-link process did not return' }
+            if ($linkProcess.ExitCode -ne 0) { throw ('Warm note-link process failed: ' + $linkError.Result) }
+            if ($app.HasExited) { throw 'Warm note-link forwarding closed the original app' }
+            if (-not (Wait-TabActivated ('노트 탭: ' + $destination.title))) { throw 'Warm note-link did not select the target note in the existing window' }
+            if ([InkismInput]::GetForegroundWindow() -ne $app.MainWindowHandle) { throw 'Warm note-link did not activate the existing window' }
+        } finally { $linkProcess.Dispose() }
+    }
+    Write-Output 'PASS: two warm note:// launches exit without a second window, select each target in the original app and preserve its foreground'
     Wait-WindowText ($richBody+'native_typed') $true
     Invoke-Element (Find-Element 'HTML' ([System.Windows.Automation.ControlType]::Button))
     Wait-SourceMarker 'html' $richBody
@@ -598,6 +622,8 @@ try {
     Save-Screenshot 'windows-ui-rich-text'
     Close-Inkism
     Verify-SourceData
+    node $noteLinkScript verify (Join-Path (Split-Path $binary) 'inkism-engine.exe') $db $noteLinkFixture $richTitle
+    if ($LASTEXITCODE) { throw 'Note-link navigation changed the source notes' }
     Write-Output 'PASS: default rich paste/type/undo/redo, immediate close-save/restart and HTML/TEXT views preserve canonical HTML'
     if ($env:INKISM_TEST_RICH_ONLY -eq 'APPROVED_SYNTHETIC_PROFILE_ONLY') { return }
     foreach($format in @('html','markdown')) {

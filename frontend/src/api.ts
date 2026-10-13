@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import { backendErrorCode, localizeBackendError } from "./lib/error-messages";
 /** 데스크톱 브리지: POST /api/rpc ({op,...args}) → {ok:true,data}|{ok:false,error} */
 import type {
   AppInfo,
@@ -20,16 +21,20 @@ import type {
 } from "./types";
 
 export class RpcError extends Error {
+  public readonly code: string | undefined;
+  public readonly rawMessage: string;
   constructor(
     public op: string,
     message: string,
   ) {
-    super(message);
+    super(localizeBackendError(message));
+    this.rawMessage = message;
+    this.code = backendErrorCode(message);
     this.name = "RpcError";
   }
-  /** 낙관적 revision 충돌 여부 (오류 문자열로 판별) */
+  /** Keep conflict handling independent of the selected display language. */
   get isConflict(): boolean {
-    return /revision|conflict/i.test(this.message);
+    return this.code === "conflict" || /revision|conflict/i.test(this.rawMessage);
   }
 }
 
@@ -82,7 +87,7 @@ async function shellJSON<T>(path: string, body?: unknown): Promise<T> {
   } catch {
     /* 셸 없음 */
   }
-  if (!res.ok || !env?.ok) throw new Error(env?.error || `HTTP ${res.status}`);
+  if (!res.ok || !env?.ok) throw new Error(localizeBackendError(env?.error || `HTTP ${res.status}`));
   return env.data as T;
 }
 
@@ -317,7 +322,7 @@ export const api = {
     form.append("size", String(file.size));
     const response = await postFile("/api/attachments", form, signal);
     const result = await response.json();
-    if (!response.ok || !result.ok || !result.data) throw new Error(result.error || t("파일 업로드에 실패했습니다."));
+    if (!response.ok || !result.ok || !result.data) throw new Error(localizeBackendError(result.error || t("파일 업로드에 실패했습니다.")));
     const asset = result.data;
     if (
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(asset.id) ||
@@ -355,7 +360,7 @@ export const api = {
       /* 빈 응답 허용 */
     }
     if (!res.ok || !body || body.ok === false) {
-      throw new Error(body?.error || t("가져오기 실패 (HTTP {status})", { status: res.status }));
+      throw new Error(localizeBackendError(body?.error || t("가져오기 실패 (HTTP {status})", { status: res.status })));
     }
     return body.data?.imported ?? body.imported ?? 0;
   },

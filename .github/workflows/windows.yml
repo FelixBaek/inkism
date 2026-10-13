@@ -61,7 +61,7 @@ jobs:
       - name: Validate native clipboard test scripts
         shell: powershell
         run: |
-          foreach ($file in @('tools/scripts/windows-worker-paste.ps1', 'tools/scripts/windows-system-ime.ps1')) {
+          foreach ($file in @('tools/scripts/windows-worker-paste.ps1', 'tools/scripts/windows-system-ime.ps1', 'tools/scripts/test-windows-source-ui.ps1', 'tools/scripts/test-windows-installer.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors) | Out-Null
@@ -70,7 +70,7 @@ jobs:
               throw "Windows PowerShell parser rejected $file"
             }
           }
-          foreach ($file in @('tools/scripts/verify-windows-worker-paste.ts', 'tools/scripts/verify-windows-windowed-ime.ts')) {
+          foreach ($file in @('tools/scripts/verify-windows-worker-paste.ts', 'tools/scripts/verify-windows-windowed-ime.ts', 'tools/scripts/test-windows-note-links.ts', 'tools/scripts/verify-source-ui.ts')) {
             node --no-warnings -e "require('node:module').stripTypeScriptTypes(require('node:fs').readFileSync(process.argv[1], 'utf8'))" $file
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }

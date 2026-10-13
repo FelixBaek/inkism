@@ -1,4 +1,4 @@
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {waitSaved} from './save-state.ts';
 import assert from 'node:assert/strict';
 import {assertBlockBytes} from './block-identity-bytes.ts';

@@ -1,6 +1,6 @@
 // Actual successive key events while the selected offscreen range is prepared.
 // insertText/paste as one transaction cannot detect dropped subsequent keys.
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {trackSaves} from './save-state.ts';
 import assert from 'node:assert/strict';
 import {assertBlockBytes} from './block-identity-bytes.ts';

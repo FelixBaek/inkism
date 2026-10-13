@@ -1,10 +1,11 @@
-// Golden hashes were captured from the prior synchronous source scanner.
+// Legacy golden hashes preserve the prior scanner's source/context contract.
+// Opening-tag byte positions are checked separately against the original UTF-8.
 // Actual Worker messages are inspected; source text never returns in results.
 import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 import type {AddressInfo} from 'node:net';
 import {createServer} from 'vite';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 const server=await createServer({root:fileURLToPath(new URL('..',import.meta.url)),server:{port:0,strictPort:false,host:'127.0.0.1',hmr:false}});let browser;
 try{
  await server.listen();browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});const page=await browser.newPage();
@@ -26,6 +27,23 @@ try{
    ['<P data-a="x>y"><B>start&amp;end</B></P><hr>','8546bc08cbb1d8aeaaa23382ef85b308d02e45a4592bb2b8de02534931eac168'],
   ];
   const hash=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(value))))).map(v=>v.toString(16).padStart(2,'0')).join('');
+  const withoutPositions=segments=>segments.map(segment=>({...segment,
+   start_context:segment.start_context.map(({at,...ancestor})=>ancestor),
+   end_context:segment.end_context.map(({at,...ancestor})=>ancestor),
+  }));
+  let positionsChecked=0;
+  const verifyPositions=(segments,source,byteOffset)=>{
+   const encoder=new TextEncoder(),bytes=encoder.encode(source);
+   for(const segment of segments)for(const [context,limit]of [
+    [segment.start_context,segment.byte_offset],
+    [segment.end_context,segment.byte_offset+encoder.encode(segment.source).length],
+   ])for(const ancestor of context){
+    if(!Number.isSafeInteger(ancestor.at)||ancestor.at<byteOffset||ancestor.at>limit)throw Error('invalid opening-tag byte position');
+    const offset=ancestor.at-byteOffset,opening=encoder.encode(ancestor.open);
+    if(offset+opening.length>bytes.length||opening.some((byte,index)=>bytes[offset+index]!==byte))throw Error('opening-tag position does not match original UTF-8 bytes');
+    positionsChecked++;
+   }
+  };
   const post=Worker.prototype.postMessage,terminate=Worker.prototype.terminate;let started=0,terminated=0,maxResponse=0,leakedSource=false;
   Worker.prototype.postMessage=function(...args){
    started++;this.addEventListener('message',event=>{
@@ -39,7 +57,8 @@ try{
   try{
    for(const [source,expected] of fixtures){
     const segments=Array.from<any>(await scanSourceInWorker({source,byteOffset:123,context:[]},()=>{}));
-    if(await hash(segments)!==expected)throw Error('worker differs from prior scanner golden');
+    if(await hash(withoutPositions(segments))!==expected)throw Error('worker differs from prior scanner golden');
+    verifyPositions(segments,source,123);
     if(segments.map(s=>s.source).join('')!==source)throw Error('source text lost');
    }
    const source='<p>'+'X'.repeat(5*1024*1024)+'</p>';let previous=performance.now(),gap=0,ticks=0;
@@ -67,8 +86,8 @@ try{
    if(!malformed)throw Error('malformed nesting admitted');
    const next=Array.from<any>(await scanSourceInWorker({source:'<p>next😀</p>',byteOffset:0,context:[]},()=>{}));
    if(next[0].source!=='<p>next😀</p>'||terminated!==started||leakedSource)throw Error('worker cleanup/retry/source response failed');
-   return {goldens:fixtures.length,measurement:{duration,gap,ticks,segments:segments.length},maxResponse,started,terminated,canceled:refused,malformed,partial:partial.length};
+   return {goldens:fixtures.length,positionsChecked,measurement:{duration,gap,ticks,segments:segments.length},maxResponse,started,terminated,canceled:refused,malformed,partial:partial.length};
   }finally{Worker.prototype.postMessage=post;Worker.prototype.terminate=terminate;}
  });
- assert.equal(result.goldens,5);assert.ok(result.canceled&&result.malformed);assert.equal(result.started,result.terminated);console.log('PASS source scan worker:',JSON.stringify(result));
+ assert.equal(result.goldens,5);assert.ok(result.positionsChecked>0);assert.ok(result.canceled&&result.malformed);assert.equal(result.started,result.terminated);console.log('PASS source scan worker:',JSON.stringify(result));
 }finally{await browser?.close();await server.close();}

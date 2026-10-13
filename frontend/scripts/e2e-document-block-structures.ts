@@ -15,7 +15,7 @@
 // document_blocks/document_segments는 limit<=32, document_block_window는
 // limit<=65536으로만 읽히는지 확인한다. 문서 전체 DOM은 만들지 않는다.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {waitForPredicate} from './wait-for-predicate.ts';
 import {historyKey} from './history-keys.ts';
 const base=process.env.INKISM_URL;assert.ok(base);

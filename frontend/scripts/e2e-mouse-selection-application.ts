@@ -1,7 +1,7 @@
 import {waitForAsync} from './async-browser-condition.ts';
 // Real mouse drag across a virtualized window in the shipped React/Go/Rust app.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {historyKey} from './history-keys.ts';
 const base=process.env.INKISM_URL;assert.ok(base);
 const rpc=async(op,args={})=>{const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const value=await response.json();assert.ok(value.ok,value.error);return value.data;};

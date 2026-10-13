@@ -1,5 +1,4 @@
 import { CommandManager, commands, Node as ExtensionNode, isNodeActive, type Editor } from "@tiptap/core";
-import { setBlockType } from "@tiptap/pm/commands";
 import { AllSelection, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
 
 export type BlockFormatOperation =
@@ -27,15 +26,9 @@ export function normalizeBlockquoteSelection(transaction: Transaction) {
     transaction.setSelection(TextSelection.between(doc.resolve(1), doc.resolve(doc.content.size - 1)));
 }
 
-type StructureOperation = Exclude<BlockFormatOperation, { type: "paragraph" | "heading" }>;
+type StructureOperation = Exclude<BlockFormatOperation, { type: "paragraph" | "heading" | "codeBlock" }>;
 function structureCommand(operation: StructureOperation) {
   if (operation.type === "blockquote") return commands.toggleWrap("blockquote");
-  if (operation.type === "codeBlock")
-    return commands.toggleNode(
-      "codeBlock",
-      "paragraph",
-      operation.language === undefined ? {} : { language: operation.language },
-    );
   return commands.toggleList(operation.type, operation.type === "taskList" ? "taskItem" : "listItem", false);
 }
 
@@ -60,19 +53,24 @@ function nativeStructure(state: EditorState, operation: StructureOperation): Tra
 
 /** One native command, shared by the synchronous model and the worker. */
 export function nativeBlockFormat(state: EditorState, operation: BlockFormatOperation): Transaction {
-  if (operation.type !== "paragraph" && operation.type !== "heading") return nativeStructure(state, operation);
-  const paragraph =
-    operation.type === "paragraph" || (operation.toggle && isNodeActive(state, "heading", { level: operation.level }));
-  const type = state.schema.nodes[paragraph ? "paragraph" : "heading"];
-  const attrs = operation.type === "heading" && !paragraph ? { level: operation.level } : undefined;
-  let transaction = state.tr;
-  if (
-    !type ||
-    (!isNodeActive(state, type, attrs) &&
-      !setBlockType(type, attrs)(state, (value) => {
-        transaction = value;
-      }))
-  )
-    throw new Error("이 선택 범위의 문단 구조를 보존하며 서식을 변경할 수 없습니다. 원문을 유지합니다.");
+  if (operation.type !== "paragraph" && operation.type !== "heading" && operation.type !== "codeBlock")
+    return nativeStructure(state, operation);
+  const formatAttrs = operation.type === "heading" ? { level: operation.level }
+    : operation.type === "codeBlock" && operation.language !== undefined ? { language: operation.language }
+    : undefined;
+  const paragraph = operation.type === "paragraph" ||
+    ((operation.type === "codeBlock" || operation.toggle) && isNodeActive(state, operation.type, formatAttrs));
+  const type = state.schema.nodes[paragraph ? "paragraph" : operation.type];
+  const attrs = paragraph ? undefined : formatAttrs;
+  const transaction = state.tr;
+  if (!type) throw new Error("이 선택 범위의 문단 구조를 보존하며 서식을 변경할 수 없습니다. 원문을 유지합니다.");
+  if (!isNodeActive(state, type, attrs)) {
+    // A format change keeps each source block's identity and shared attributes.
+    // Passing one attrs object would reset every id to the schema default.
+    for (const range of state.selection.ranges)
+      transaction.setBlockType(range.$from.pos, range.$to.pos, type, node => ({ ...node.attrs, ...attrs }));
+    if (!transaction.docChanged)
+      throw new Error("이 선택 범위의 문단 구조를 보존하며 서식을 변경할 수 없습니다. 원문을 유지합니다.");
+  }
   return transaction;
 }

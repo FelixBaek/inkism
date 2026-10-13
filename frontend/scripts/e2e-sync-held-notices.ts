@@ -10,7 +10,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
-import {chromium, type Page} from 'playwright-core';
+import {chromium, type Page} from './browser-env.ts';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const shots = process.env.INKISM_SHOTS;

@@ -215,3 +215,25 @@ export function contextIdentity(
     tags,
   };
 }
+
+/** Apply sequential opening-tag splices to the coordinates and wrappers of a
+ * different projection of the same source (for example the full selection).
+ * The body itself is unchanged: every tag precedes its bounded source span. */
+export function rebaseSegmentIdentity(segment: DocumentSegment, tags: BodySplice[]): DocumentSegment {
+  let current = segment;
+  for (const edit of tags) {
+    const growth = utf8(edit.replacement) - utf8(edit.expected);
+    const context = (list: SegmentAncestor[]) => list.map((ancestor) => ({
+      ...ancestor,
+      ...(ancestor.at === edit.start && ancestor.open === edit.expected ? { open: edit.replacement } : {}),
+      ...(ancestor.at !== undefined && ancestor.at > edit.start ? { at: ancestor.at + growth } : {}),
+    }));
+    current = {
+      ...current,
+      byte_offset: current.byte_offset > edit.start ? current.byte_offset + growth : current.byte_offset,
+      start_context: context(current.start_context),
+      end_context: context(current.end_context),
+    };
+  }
+  return current;
+}

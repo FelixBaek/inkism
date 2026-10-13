@@ -15,6 +15,7 @@ import type { EditorView } from "@tiptap/pm/view";
 import { Extension, type Editor } from "@tiptap/core";
 import { windowSelection, type DocumentSelection, type BlockFormatOperation } from "../lib/document-selection";
 import { normalizeBlockquoteSelection } from "../lib/native-block-format";
+import { mountedBlockFormat } from "../lib/mounted-block-format";
 import { BlockTools, type DocumentBlockAction, type DocumentBlockDrag } from "./BlockTools";
 import { contentExtensions } from "../extensions/content-schema";
 import { markdownContentExtensions } from "../lib/markdown-compatible";
@@ -311,7 +312,10 @@ export function RichEditor({
                 intercept(
                   { kind: "block", type: "heading", level: attributes.level as 1 | 2 | 3, toggle: false },
                   props,
-                ) || props.commands.setNode("heading", attributes)
+                ) ||
+                (canEdit.current && mountedBlockFormat(props, {
+                  kind: "block", type: "heading", level: attributes.level as 1 | 2 | 3, toggle: false,
+                }))
               );
             },
             toggleHeading: (attributes) => (props) => {
@@ -320,11 +324,15 @@ export function RichEditor({
                 intercept(
                   { kind: "block", type: "heading", level: attributes.level as 1 | 2 | 3, toggle: true },
                   props,
-                ) || props.commands.toggleNode("heading", "paragraph", attributes)
+                ) ||
+                (canEdit.current && mountedBlockFormat(props, {
+                  kind: "block", type: "heading", level: attributes.level as 1 | 2 | 3, toggle: true,
+                }))
               );
             },
             setParagraph: () => (props) =>
-              intercept({ kind: "block", type: "paragraph" }, props) || props.commands.setNode("paragraph"),
+              intercept({ kind: "block", type: "paragraph" }, props) ||
+              (canEdit.current && mountedBlockFormat(props, { kind: "block", type: "paragraph" })),
             toggleBulletList: () => (props) =>
               intercept({ kind: "block", type: "bulletList" }, props) ||
               props.commands.toggleList("bulletList", "listItem"),
@@ -346,7 +354,9 @@ export function RichEditor({
                 .run(),
             toggleCodeBlock: (attributes) => (props) =>
               intercept({ kind: "block", type: "codeBlock", language: attributes?.language }, props) ||
-              props.commands.toggleNode("codeBlock", "paragraph", attributes),
+              (canEdit.current && mountedBlockFormat(props, {
+                kind: "block", type: "codeBlock", language: attributes?.language,
+              })),
           };
         },
       }),

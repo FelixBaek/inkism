@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 import {createServer} from 'vite';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 
 const executablePath=process.env.CHROMIUM_PATH;
 assert.ok(executablePath,'headless Chromium required: set CHROMIUM_PATH');
@@ -120,7 +120,8 @@ try{
     else if(i%10===7)raw.push(`<h3>소제목 ${i} 😀</h3>`);
     else raw.push(`<p>${`본문 ${i} 한글😀 여름 <strong>강조 ${i} 😀</strong> 마침 `.repeat(2)}</p>`);
    }
-   const blocks: any[]=raw.map((html,ordinal)=>({html:canonicalRichHTML(html),ordinal}));
+   // Existing identities must survive independent sync/worker transforms.
+   const blocks: any[]=raw.map((html,ordinal)=>({html:canonicalRichHTML(html.replace(/^<([a-z0-9]+)>/,`<$1 id="source-block-${ordinal}">`)),ordinal}));
    const whole=blocks.map(block=>block.html).join('');
    ok(canonicalRichHTML(whole)===whole,'per-block canonical HTML must concatenate to the canonical whole');
    let inputBytes=0;
@@ -166,6 +167,7 @@ try{
    ok(stats.live===0,'native block worker must be terminated after the async run');
    ok(ticks>=20,'main-thread timers must progress during the async run, ticks='+ticks);
    ok(enc.encode(asyncResult.previewWindow.raw).length<=32768,'bounded preview window');
+   ok(blocks.every((block,index)=>asyncResult.replacement.includes(`id="source-block-${index}"`)),'existing identities preserved through worker formatting');
    const mismatched=fields.filter(field=>!deepEqual(baseline[field],asyncResult[field]));
    ok(!mismatched.length,'sync/async mismatch: '+mismatched.join(','));
    const asyncCreated=stats.created-started.created,asyncTerminated=stats.terminated-started.terminated;

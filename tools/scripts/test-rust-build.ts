@@ -1,7 +1,7 @@
 // Exercise package routing without cross-compiling or publishing to a real feed.
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync, mkdirSync, copyFileSync, chmodSync, writeFileSync, readFileSync, existsSync, rmSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, copyFileSync, cpSync, chmodSync, writeFileSync, readFileSync, existsSync, rmSync} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
@@ -14,22 +14,29 @@ function fixture() {
   mkdirSync(scripts, {recursive: true});
   mkdirSync(bin);
   mkdirSync(path.join(root, 'feed'));
-  for (const name of ['build-windows.sh', 'build-windows-tauri.sh', 'publish-update.sh']) {
+  for (const name of ['build-windows.sh', 'build-windows-tauri.sh', 'publish-update.sh', 'package-sync-relay.sh']) {
     copyFileSync(path.join(repo, 'tools/scripts', name), path.join(scripts, name));
     chmodSync(path.join(scripts, name), 0o755);
   }
+  cpSync(path.join(repo, 'tools/deploy/sync-relay'), path.join(root, 'tools/deploy/sync-relay'), {recursive: true});
+  writeFileSync(path.join(root, 'ca-certificates.crt'), 'fixture CA');
   writeFileSync(path.join(root, 'README.md'), 'fixture');
   writeFileSync(path.join(root, 'signing.key'), 'fixture key');
   const stub = (name: string, body: string) => writeFileSync(path.join(bin, name), '#!/bin/sh\nset -eu\n' + body, {mode: 0o755});
   stub('npm', 'exit 0\n');
   stub('git', '[ "$1" != rev-parse ] || printf fixture-commit\n');
+  stub('ldd', '[ \"${DYNAMIC_RELAY:-}\" != 1 ] || { echo \"libc.so.6 => /lib/libc.so.6\"; exit 0; }\n' + 'echo \"not a dynamic executable\"; exit 1\n');
   stub('go', 'echo "unexpected Go command" >&2; exit 99\n');
   stub('cargo', `printf '%s|version=%s|feed=%s\\n' "$*" "\${INKISM_APP_VERSION:-}" "\${INKISM_APP_UPDATE_FEED:-}" >> "$BUILD_CALLS"
 [ "\${FAIL_CARGO:-}" != 1 ] || exit 42
 if [ "$1" = build ]; then
-  out="$CARGO_TARGET_DIR/x86_64-pc-windows-gnu/release"
+  case "$*" in
+    *core/sync-relay*) out="$CARGO_TARGET_DIR/x86_64-unknown-linux-gnu/release" ;;
+    *) out="$CARGO_TARGET_DIR/x86_64-pc-windows-gnu/release" ;;
+  esac
   mkdir -p "$out"
   case "$*" in
+    *core/sync-relay*) printf rust-relay > "$out/inkism-sync-relay" ;;
     *desktop-tauri*) printf rust-shell > "$out/inkism.exe"; printf loader > "$out/WebView2Loader.dll" ;;
     *) printf rust-engine > "$out/inkism-engine.exe" ;;
   esac
@@ -42,6 +49,7 @@ fi
 `);
   const env = {...process.env, PATH: bin + path.delimiter + process.env.PATH,
     CARGO_TARGET_DIR: path.join(root, 'custom-target'), BUILD_CALLS: path.join(root, 'calls'),
+    CA_BUNDLE: path.join(root, 'ca-certificates.crt'),
     INKISM_UPDATE_SIGNING_KEY: path.join(root, 'signing.key'), INKISM_UPDATE_DIR: path.join(root, 'feed'),
     INKISM_APP_UPDATE_FEED: 'https://updates.example.test/'};
   const run = (name: string, args: string[], extra = {}) => spawnSync('bash', [path.join(scripts, name), ...args], {cwd: root, env: {...env, ...extra}, encoding: 'utf8'});
@@ -97,5 +105,29 @@ test('an unset feed builds and signs locally without publishing', () => {
     assert.ok(existsSync(path.join(f.root, 'dist/update-tauri/0.3.99/latest.json.sig')));
     assert.equal(existsSync(path.join(f.root, 'feed/latest.json')), false);
     assert.match(result.stdout, /not published/);
+  } finally { rmSync(f.root, {recursive: true, force: true}); }
+});
+
+test('relay package honors the Cargo target and accepts ldd status 1 for a static binary', () => {
+  const f = fixture();
+  try {
+    const result = f.run('package-sync-relay.sh', ['dist/relay-test']);
+    assert.equal(result.status, 0, result.stderr);
+    const app = path.join(f.root, 'dist/relay-test');
+    assert.equal(readFileSync(path.join(app, 'inkism-sync-relay'), 'utf8'), 'rust-relay');
+    assert.equal(readFileSync(path.join(app, 'ca-certificates.crt'), 'utf8'), 'fixture CA');
+    assert.match(readFileSync(path.join(app, 'SHA256SUMS'), 'utf8'), /inkism-sync-relay/);
+    assert.equal(f.run('package-sync-relay.sh', ['dist/relay-test']).status, 1);
+    assert.equal(readFileSync(path.join(app, 'inkism-sync-relay'), 'utf8'), 'rust-relay');
+  } finally { rmSync(f.root, {recursive: true, force: true}); }
+});
+
+test('relay package rejects a dynamically linked binary before publishing files', () => {
+  const f = fixture();
+  try {
+    const result = f.run('package-sync-relay.sh', ['dist/relay-test'], {DYNAMIC_RELAY: '1'});
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /dynamically linked/);
+    assert.equal(existsSync(path.join(f.root, 'dist/relay-test')), false);
   } finally { rmSync(f.root, {recursive: true, force: true}); }
 });
