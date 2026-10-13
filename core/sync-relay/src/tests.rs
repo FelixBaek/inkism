@@ -539,6 +539,8 @@ async fn collaboration_metadata_presence_permissions_and_cas(){
  assert_eq!(access(&r,"POST",&format!("{bp}/session"),"viewer",json!({"client_id":"client-bbbbbbbbbbbb","page_id":""}),false).await.json()["sessions"].as_array().unwrap().len(),1);
  r.presence.lock().unwrap().clear();
  for i in 0..64{assert_eq!(access(&r,"POST",&format!("{bp}/session"),"viewer",json!({"client_id":format!("client-{i:016}"),"page_id":""}),false).await.code,200);}
+ // Slow password hashing (Windows runners) can take longer than the 40 s session TTL; keep all 64 alive for the cap check.
+ for peer in r.presence.lock().unwrap().iter_mut(){peer.expires=i64::MAX;}
  assert_eq!(access(&r,"POST",&format!("{bp}/session"),"viewer",json!({"client_id":"client-overflow000000","page_id":""}),false).await.code,429);
  // Expired sessions disappear without waiting for wall-clock TTL in a test.
  for peer in r.presence.lock().unwrap().iter_mut(){peer.expires=0;}
