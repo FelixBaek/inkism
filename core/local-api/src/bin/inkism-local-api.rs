@@ -337,10 +337,9 @@ mod tests {
     }
 
     fn repository() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .canonicalize()
-            .unwrap()
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+        // Windows canonicalize returns a verbatim \\?\D:\ path that Node scripts cannot resolve.
+        root.to_str().and_then(|s| s.strip_prefix(r"\\?\")).map_or(root.clone(), PathBuf::from)
     }
 
     /// The opt-in Chromium fixtures need the runtime (`variable`) and `CHROMIUM_PATH`.
