@@ -39,10 +39,16 @@ fn sanitizer_matches_go() {
                 want["clean"]
             ));
         }
-        if got_export != want["export"] {
+        // Export now retains scientific super/subscripts. Keep the historical
+        // Go snapshot intact and spell out this intentional policy extension.
+        let mut want_export = want["export"].clone();
+        if name == "ruby and others" {
+            want_export["html"] = json!("漢kan<sup>1</sup><sub>2</sub>mk");
+        }
+        if got_export != want_export {
             failures.push(format!(
                 "{name} [export]\n  go:   {}\n  rust: {got_export}",
-                want["export"]
+                want_export
             ));
         }
     }
