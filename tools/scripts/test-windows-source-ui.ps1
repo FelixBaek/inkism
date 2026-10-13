@@ -105,6 +105,8 @@ public static class InkismInput {
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);
     [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(POINT point);
     [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr window,uint flags);
+    public static IntPtr WindowAtPoint(int x,int y) {return WindowFromPoint(new POINT {x=x,y=y});}
+    public static int WindowProcessId(IntPtr window) {uint process;GetWindowThreadProcessId(window,out process);return (int)process;}
     public static void ActivateWindow(IntPtr window) {
         if(GetForegroundWindow()==window || SetForegroundWindow(window))return;
         uint process;uint foregroundThread=GetWindowThreadProcessId(GetForegroundWindow(),out process);
@@ -624,7 +626,7 @@ function Verify-SourceData {
     node (Join-Path $root 'tools/scripts/verify-source-ui.ts') (Join-Path (Split-Path $binary) 'inkism-engine.exe') $db $expectedPath
     if($LASTEXITCODE){throw 'Source bytes/format/restart verification failed'}
 }
-function Confirm-TestDownloadPermission {
+function Confirm-TestDownloadPermission([ref]$attempts) {
     $app.Refresh()
     if ($app.HasExited) { throw 'Test app exited while awaiting its download' }
     try {
@@ -667,10 +669,52 @@ function Confirm-TestDownloadPermission {
             -not [InkismInput]::IsProcessInAppTree($allow[0].Current.ProcessId, $app.Id)) {
             throw 'Local download permission controls are absent, ambiguous or outside the test app'
         }
-        $allow[0].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
-        # Host output must not become an extra pipeline value alongside the
-        # downloaded filename returned by Wait-TestDownload.
-        Write-Host "PASS: native multiple-download permission accepted only for http://wails.localhost in disposable profile (owned process $promptProcess)"
+        if ($attempts.Value -ge 3) { throw 'Local download permission stayed open after three scoped native clicks' }
+        $foreground = [InkismInput]::GetForegroundWindow()
+        if (-not [InkismInput]::IsProcessInAppTree([InkismInput]::WindowProcessId($foreground), $app.Id)) {
+            $permissionWindow = [IntPtr]$prompt.Current.NativeWindowHandle
+            if ($permissionWindow -eq [IntPtr]::Zero) { $permissionWindow = $app.MainWindowHandle }
+            [InkismInput]::ActivateWindow($permissionWindow)
+        }
+        $foreground = [InkismInput]::GetForegroundWindow()
+        if (-not [InkismInput]::IsProcessInAppTree([InkismInput]::WindowProcessId($foreground), $app.Id)) {
+            throw 'Owned download permission could not reach the foreground'
+        }
+        # This WebView2 bubble exposes InvokePattern but ignores Invoke. Send a
+        # real pointer click only after verifying the exact UIA button at its
+        # current coordinates and the native window/process below that point.
+        $rect = $allow[0].Current.BoundingRectangle
+        if ($rect.Width -le 4 -or $rect.Height -le 4 -or $allow[0].Current.IsOffscreen) {
+            throw 'Local download Allow button has no visible bounds'
+        }
+        $x = [int](($rect.Left + $rect.Right) / 2)
+        $y = [int](($rect.Top + $rect.Bottom) / 2)
+        $pointWindow = [InkismInput]::WindowAtPoint($x, $y)
+        if (-not [InkismInput]::IsProcessInAppTree([InkismInput]::WindowProcessId($pointWindow), $app.Id)) {
+            throw 'Download Allow coordinates are covered by a window outside the test app'
+        }
+        $hit = [System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($x, $y))
+        $sameButton = $false
+        for ($depth = 0; $depth -lt 8 -and $null -ne $hit; $depth++) {
+            if ([System.Windows.Automation.AutomationElement]::Compare($hit, $allow[0])) { $sameButton = $true; break }
+            $hit = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($hit)
+        }
+        if (-not $sameButton) { throw 'Download Allow coordinates do not hit the validated permission button' }
+        $attempts.Value++
+        [InkismInput]::SetCursorPos($x, $y) | Out-Null
+        [InkismInput]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
+        [InkismInput]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+        $dismissedDeadline = [DateTime]::UtcNow.AddSeconds(2)
+        do {
+            $window = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+            if ($window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition).Count -eq 0) {
+                # Host output must not join the downloaded filename pipeline.
+                Write-Host "PASS: scoped native Allow click dismissed http://wails.localhost multiple-download permission in disposable profile (owned process $promptProcess)"
+                return
+            }
+            Start-Sleep -Milliseconds 50
+        } while ([DateTime]::UtcNow -lt $dismissedDeadline)
+        Write-Host "Native download permission stayed open after scoped click $($attempts.Value)/3"
     } catch {
         # The bubble may disappear between discovery and observation. Recheck
         # the actual file on the next bounded download-wait iteration.
@@ -679,6 +723,7 @@ function Confirm-TestDownloadPermission {
 }
 function Wait-TestDownload([string]$title,[string]$extension,[DateTime]$since,[scriptblock]$ready = $null) {
     $deadline=[DateTime]::UtcNow.AddSeconds(30)
+    $permissionAttempts = 0
     do {
         $matches=Get-ChildItem -LiteralPath ([InkismInput]::Downloads()) -Filter ($title+'*.'+$extension) -ErrorAction SilentlyContinue | Where-Object {$_.LastWriteTimeUtc -ge $since} | Sort-Object LastWriteTimeUtc -Descending
         foreach($file in $matches){try{
@@ -688,7 +733,7 @@ function Wait-TestDownload([string]$title,[string]$extension,[DateTime]$since,[s
             # Require this request's actual content before returning a path.
             if($bytes.Length -gt 0 -and ($null -eq $ready -or (& $ready $bytes))){return $file.FullName}
         }catch{}}
-        Confirm-TestDownloadPermission
+        Confirm-TestDownloadPermission ([ref]$permissionAttempts)
         Start-Sleep -Milliseconds 100
     }while([DateTime]::UtcNow -lt $deadline)
     throw "Native download absent: $title.$extension"
