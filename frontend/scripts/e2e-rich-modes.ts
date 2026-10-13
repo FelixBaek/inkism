@@ -110,8 +110,9 @@ try{
  await rich().waitFor();assert.equal(await rich().getAttribute('contenteditable'),'true');
  await page.getByRole('textbox',{name:'노트 제목',exact:true}).fill('새 서식 노트');await rich().click();await page.keyboard.insertText('한글 새 노트');
  await page.keyboard.press('Control+s');await saved();
- await until(async()=>(await rpc('workspace_get')).active!==unknown.id,'new note workspace');
- const fresh=await rpc('get',{id:(await rpc('workspace_get')).active});assert.equal(fresh.content_format,'html');assert.ok(fresh.content.includes('한글 새 노트'));
+ // The workspace may briefly report no active note while the new one is stored.
+ let freshId='';await until(async()=>{const active=(await rpc('workspace_get')).active;if(active&&active!==unknown.id){freshId=active;}return freshId!=='';},'new note workspace');
+ const fresh=await rpc('get',{id:freshId});assert.equal(fresh.content_format,'html');assert.ok(fresh.content.includes('한글 새 노트'));
  await page.reload();await rich().waitFor();assert.ok((await rich().innerText()).includes('한글 새 노트'));
  assert.deepEqual(errors,[]);
  console.log('PASS actual React/Go/Rust: TEXT is rich, HTML is source, view switching preserves format/revision, source-rich edits/reload, failed save blocks view change, unknown/BOM/CRLF/text/Markdown originals preserved, readonly guard, copy cancel/failure/success/race, new canonical rich note and immediate save. Windows/native IME/large rich virtualization remain separate.');
