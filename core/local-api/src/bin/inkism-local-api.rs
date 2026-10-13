@@ -155,6 +155,7 @@ fn run(o: Options) -> local_api::Result<()> {
         handler.lazy_editor = o.lazy;
         handler.host = address.clone();
         handler.update = Some(Arc::clone(&update));
+        handler.agent = Some(local_api::AgentApi::start(engine.clone(), None));
         eprintln!("Development preview: http://{address}");
         serve(listener, Arc::new(handler), Arc::new(o.assets)).await
     })?;

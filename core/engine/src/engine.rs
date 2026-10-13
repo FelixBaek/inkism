@@ -119,6 +119,7 @@ impl Engine {
         let conn = self.connection();
         let reply = match op {
             "list" => ops_notes::list(&self.query_conn, &req)?,
+            "changes" => ops_notes::changes(&self.query_conn, &req)?,
             "due_reminders" => ops_notes::due_reminders(&self.query_conn, &req)?,
             "get" => ops_notes::get(conn, &req)?,
             "note_preview" => ops_notes::preview(conn, &req)?,
