@@ -61,7 +61,7 @@ use rusqlite::Connection;
 /// v15 adds the synced notebook cover photo: `notebooks.cover` (nullable
 /// canonical JSON, see `notebook_cover`). Existing rows read back NULL.
 pub const MAIN_USER_VERSION: i32 = 15;
-pub const SEARCH_USER_VERSION: i32 = 13;
+pub const SEARCH_USER_VERSION: i32 = 14;
 
 pub const MAIN_SCHEMA_SQL: &str = r#"
 -- Local-only undo receipts; never synced/exported as settings.
@@ -580,6 +580,13 @@ pub fn init_search(conn: &Connection) -> Result<()> {
         if version < 13 {
             // Segment contexts gained opening-tag offsets (`at`); rebuild the
             // derived layouts so internal edits can identify their blocks.
+            conn.execute_batch(
+                "DELETE FROM document_segment_index; DELETE FROM document_segment_layout;",
+            )?;
+        }
+        if version < 14 {
+            // Known math leaves now stay whole within a bounded segment. Rebuild
+            // derived layouts that previously recorded those blocks as unsupported.
             conn.execute_batch(
                 "DELETE FROM document_segment_index; DELETE FROM document_segment_layout;",
             )?;
