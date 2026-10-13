@@ -3,8 +3,7 @@ import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
-import { TextSelection } from "@tiptap/pm/state";
+import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
 import { termDefinitionRange } from "../lib/term-definition-range";
 import { registerCommands } from "../lib/app-commands";
 import { completeAI } from "../lib/ai-provider";
@@ -15,6 +14,19 @@ import { t } from "../i18n";
 import "./TermDefinitionPopover.css";
 
 const OPEN = "inkism-term-definition";
+/** Creates the expanded note once; a retry after an ambiguous failure recovers the same note. */
+async function promoteNote(id:string,title:string,text:string) {
+  try { return await api.save({id,title,content:text,text,content_format:"text",require_absent:true}); }
+  catch (error_) {
+    // A response may fail after the server commits. Recover our exact
+    // promoted note rather than creating another note on retry.
+    let existing;
+    try { existing=await api.get(id); } catch { throw error_; }
+    if(existing.title!==title || existing.content!==text || existing.content_format!=="text"){throw error_;}
+    return existing;
+  }
+}
+
 export function openTermDefinition(editor: Editor) { editor.view.dom.dispatchEvent(new Event(OPEN)); }
 export function canDefineTerm(editor: Editor) {
   const { selection, doc } = editor.state;
@@ -48,7 +60,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
   const panel = useRef<HTMLDivElement>(null);
   const abort = useRef<AbortController>();
   const active = useRef<Target | null>(null);
-  const close = () => { if(mutating.current)return; abort.current?.abort(); active.current = null; setTarget(null); setBusy(false); };
+  const close = () => { if(mutating.current){return;} abort.current?.abort(); active.current = null; setTarget(null); setBusy(false); };
   const valid = (item: Target) => active.current === item && !editor.isDestroyed && editor.state.doc === item.doc && editor.isEditable && !readOnly && !disabled;
   const show = (item: Target) => {
     abort.current?.abort(); dirty.current=false; active.current = item; setTarget(item); setDefinition(item.definition); setNoteId(item.noteId ?? "");
@@ -65,7 +77,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
     const decorationKey=new PluginKey("term-definition-accessibility");
     editor.registerPlugin(new Plugin({key:decorationKey,props:{decorations(state){
       const decorations: Decoration[]=[];
-      state.doc.descendants((node,pos)=>{const mark=node.marks.find(mark=>mark.type.name==="termDefinition");if(node.isText && mark)decorations.push(Decoration.inline(pos,pos+node.nodeSize,{tabindex:"0",role:"button","aria-label":`${node.text}: ${t("용어 설명")}`}));});
+      state.doc.descendants((node,pos)=>{const marked=node.marks.some(mark=>mark.type.name==="termDefinition");if(node.isText && marked)decorations.push(Decoration.inline(pos,pos+node.nodeSize,{tabindex:"0",role:"button","aria-label":`${node.text}: ${t("용어 설명")}`}));});
       return DecorationSet.create(state.doc,decorations);
     }}}));
     const position = (from: number) => { const c = editor.view.coordsAtPos(from); return {left: Math.max(12, Math.min(c.left, window.innerWidth - 372)), top: Math.max(12, Math.min(c.bottom + 10, window.innerHeight - 440))}; };
@@ -104,7 +116,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
     const update = () => { if (active.current && editor.state.doc !== active.current.doc && !mutating.current) close(); };
     dom.addEventListener(OPEN,open); dom.addEventListener("mouseover",existing); dom.addEventListener("focusin",existing); dom.addEventListener("click",existing);
     dom.addEventListener("focusin",register); editor.on("transaction",update); editor.on("selectionUpdate",selectionChanged);
-    return () => { abort.current?.abort(); active.current=null; if(!editor.isDestroyed)editor.unregisterPlugin(decorationKey); dom.removeEventListener(OPEN,open); dom.removeEventListener("mouseover",existing); dom.removeEventListener("focusin",existing); dom.removeEventListener("click",existing); dom.removeEventListener("focusin",register); unregister?.(); editor.off("transaction",update); editor.off("selectionUpdate",selectionChanged); };
+    return () => { abort.current?.abort(); active.current=null; if(!editor.isDestroyed){editor.unregisterPlugin(decorationKey);} dom.removeEventListener(OPEN,open); dom.removeEventListener("mouseover",existing); dom.removeEventListener("focusin",existing); dom.removeEventListener("click",existing); dom.removeEventListener("focusin",register); unregister?.(); editor.off("transaction",update); editor.off("selectionUpdate",selectionChanged); };
   }, [editor,readOnly,disabled]);
   useLayoutEffect(() => {
     const element=panel.current;
@@ -155,14 +167,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
       if (expand && target.createdNoteId) linked=target.createdNoteId;
       else if (expand) {
         target.promotionId ??= crypto.randomUUID();
-        let created;
-        try { created = await api.save({id:target.promotionId,title:target.term,content:definition.trim(),text:definition.trim(),content_format:"text",require_absent:true}); }
-        catch (failure) {
-          // A response may fail after the server commits. Recover our exact
-          // promoted note rather than creating another note on retry.
-          try { const existing=await api.get(target.promotionId); if(existing.title!==target.term || existing.content!==definition.trim() || existing.content_format!=="text")throw failure; created=existing; }
-          catch { throw failure; }
-        }
+        const created=await promoteNote(target.promotionId,target.term,definition.trim());
         target.createdNoteId=created.id; linked=created.id; setNoteId(created.id); store.refreshList();
       }
       if (!valid(target)) return;
@@ -178,7 +183,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
     } catch(e) {if(active.current===target)setError(e instanceof Error?e.message:String(e));}
     finally {mutating.current=false;setSaving(false);if(active.current===target){setBusy(false);if(editor.isDestroyed || editor.state.doc!==target.doc)setError(t("문서가 변경되어 본문 설명을 저장하지 않았습니다. 생성한 노트와 용어집 항목은 유지됩니다."));}}
   };
-  const remove = () => { if(!target || !valid(target))return; editor.chain().focus().setTextSelection({from:target.from,to:target.to}).unsetMark("termDefinition").run();close(); };
+  const remove = () => { if(!target || !valid(target)){return;} editor.chain().focus().setTextSelection({from:target.from,to:target.to}).unsetMark("termDefinition").run();close(); };
   if (!target) return null;
   const preview = target.preview;
   return createPortal(<div ref={panel} className="term-definition-popover" style={{left:target.left,top:target.top}} role="dialog" aria-label={t("용어 설명")} aria-modal="false">
@@ -191,8 +196,8 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
     </> : <>
       <label className="term-definition-label">{t("짧은 설명")}<textarea autoFocus maxLength={2000} rows={4} value={definition} disabled={busy} onChange={e=>{dirty.current=true;setDefinition(e.target.value);setAiPreview(false);}} placeholder={t("이 문맥에서 쓰인 의미를 적어 주세요.")} /></label>
       <div className="term-definition-ai"><button type="button" disabled={busy} onClick={()=>void generate()}>{t("AI로 설명")}</button><small>{definition.length}/2000</small></div>
-      {busy && <p role="status">{t("처리 중…")} <button type="button" disabled={saving} onClick={close}>{t("취소")}</button></p>}
-      {aiPreview && <p className="term-definition-hint" role="status">{t("AI 초안입니다. 확인한 뒤 저장하세요.")}</p>}
+      {busy && <p><output>{t("처리 중…")}</output> <button type="button" disabled={saving} onClick={close}>{t("취소")}</button></p>}
+      {aiPreview && <output className="term-definition-hint">{t("AI 초안입니다. 확인한 뒤 저장하세요.")}</output>}
       <details><summary>{t("용어집 · 노트 연결")}</summary>
         <label className="term-definition-label">{t("연결할 용어집 항목")}<select value={selectedGlossaryId} disabled={busy} onChange={e=>{dirty.current=true;setSelectedGlossaryId(e.target.value);const entry=entries.find(x=>x.id===e.target.value);if(entry){setDefinition(entry.definition.slice(0,2000));setNoteId(entry.noteId??"");}}}><option value="">{t("새 용어집 항목")}</option>{entries.map(entry=><option key={entry.id} value={entry.id}>{entry.term}{entry.lang?` (${entry.lang})`:""} — {entry.definition.slice(0,48)}</option>)}</select></label>
         <label><input type="checkbox" checked={glossary} disabled={busy} onChange={e=>setGlossary(e.target.checked)}/>{t("용어집에도 저장")}</label>

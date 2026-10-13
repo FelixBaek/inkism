@@ -4,15 +4,15 @@ import DOMPurify from "dompurify";
 // examples inside attribute values; it is never inserted as innerHTML.
 const termText = new WeakMap<Node, string>();
 DOMPurify.addHook('beforeSanitizeAttributes', node => {
-  if (!(node instanceof Element) || node.tagName !== 'SPAN') return;
-  const value = node.getAttribute('data-term-definition');
+  if (!(node instanceof HTMLElement) || node.tagName !== 'SPAN') return;
+  const value = node.dataset.termDefinition;
   if (value?.trim() && Array.from(value).length <= 2000 &&
       !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) termText.set(node, value);
 });
 DOMPurify.addHook('afterSanitizeAttributes', node => {
   const value = termText.get(node);
-  if (value !== undefined && node instanceof Element) {
-    node.setAttribute('data-term-definition', value);
+  if (value !== undefined && node instanceof HTMLElement) {
+    node.dataset.termDefinition = value;
     termText.delete(node);
   }
 });

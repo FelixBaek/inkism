@@ -282,59 +282,85 @@ pub fn markdown_locations(content: &str) -> Vec<(String,usize,usize,String)> {
  out
 }
 
+/// End of a tag starting at `i`: the next `>` outside quotes, or None if unterminated.
+fn tag_end(b: &[u8], mut i: usize) -> Option<usize> {
+    let mut quote = 0;
+    while i < b.len() {
+        let c = b[i];
+        if quote != 0 {
+            if c == quote { quote = 0; }
+        } else if c == b'\'' || c == b'"' {
+            quote = c;
+        } else if c == b'>' {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
+fn skip_space(b: &[u8], mut i: usize, end: usize) -> usize {
+    while i < end && b[i].is_ascii_whitespace() { i += 1; }
+    i
+}
+
+/// Rewrites `data-term-note-id` values among the attributes in `content[i..end]`.
+fn remap_span_attributes(content: &str, mut i: usize, end: usize, ids: &std::collections::HashMap<&str, String>, out: &mut String, copied: &mut usize) {
+    let b = content.as_bytes();
+    while i < end {
+        while i < end && (b[i].is_ascii_whitespace() || b[i] == b'/') { i += 1; }
+        let key = i;
+        while i < end && !b[i].is_ascii_whitespace() && ![b'=', b'>', b'/'].contains(&b[i]) { i += 1; }
+        let name = &content[key..i];
+        i = skip_space(b, i, end);
+        if b.get(i) != Some(&b'=') {
+            if i == key { i += 1; }
+            continue;
+        }
+        i = skip_space(b, i + 1, end);
+        let quote = matches!(b.get(i), Some(b'\'' | b'"')).then(|| { i += 1; b[i - 1] });
+        let value = i;
+        while i < end && quote.map_or(!b[i].is_ascii_whitespace(), |q| b[i] != q) { i += 1; }
+        if let Some(replacement) = name.eq_ignore_ascii_case("data-term-note-id").then(|| ids.get(&content[value..i])).flatten() {
+            out.push_str(&content[*copied..value]);
+            out.push_str(replacement);
+            *copied = i;
+        }
+        if quote.is_some() && i < end { i += 1; }
+    }
+}
+
 /// Rewrite only a span's reference attribute, keeping all other source bytes.
 /// Comments, quoted attribute examples and raw/code elements are not references.
 pub fn remap_term_note_ids(content: &str, ids: &std::collections::HashMap<&str, String>) -> String {
+    const RAW: [&str; 7] = ["script", "style", "textarea", "title", "pre", "code", "template"];
     let b = content.as_bytes();
-    let mut i = 0; let mut copied = 0; let mut out = String::new();
+    let (mut i, mut copied, mut out) = (0, 0, String::new());
     let mut hidden: Option<String> = None;
     while i < b.len() {
         if b[i] != b'<' { i += 1; continue; }
         if b[i..].starts_with(b"<!--") {
-            i = content[i+4..].find("-->").map(|n| i+4+n+3).unwrap_or(b.len()); continue;
+            i = content[i + 4..].find("-->").map_or(b.len(), |n| i + 4 + n + 3);
+            continue;
         }
-        let begin = i; i += 1;
-        let closing = b.get(i) == Some(&b'/'); if closing { i += 1; }
-        let start = i; while i < b.len() && b[i].is_ascii_alphanumeric() { i += 1; }
+        let begin = i;
+        let closing = b.get(i + 1) == Some(&b'/');
+        let start = begin + 1 + usize::from(closing);
+        i = start;
+        while i < b.len() && b[i].is_ascii_alphanumeric() { i += 1; }
         if start == i { continue; }
         let tag = content[start..i].to_ascii_lowercase();
-        let mut quote = 0; let mut end = i;
-        while end < b.len() {
-            let c = b[end];
-            if quote != 0 { if c == quote { quote = 0; } }
-            else if c == b'\'' || c == b'"' { quote = c; }
-            else if c == b'>' { break; }
-            end += 1;
+        let Some(end) = tag_end(b, i) else { break };
+        match &hidden {
+            Some(name) => { if closing && &tag == name { hidden = None; } }
+            None if !closing && RAW.contains(&tag.as_str()) => hidden = Some(tag),
+            None if !closing && tag == "span" => remap_span_attributes(content, i, end, ids, &mut out, &mut copied),
+            None => {}
         }
-        if end == b.len() { break; }
-        if let Some(name) = &hidden {
-            if closing && &tag == name { hidden = None; }
-            i = end+1; continue;
-        }
-        if !closing && ["script","style","textarea","title","pre","code","template"].contains(&tag.as_str()) {
-            hidden = Some(tag); i = end+1; continue;
-        }
-        if tag != "span" || closing { i = end+1; continue; }
-        while i < end {
-            while i < end && (b[i].is_ascii_whitespace() || b[i] == b'/') { i += 1; }
-            let key = i; while i < end && !b[i].is_ascii_whitespace() && ![b'=',b'>',b'/'].contains(&b[i]) { i += 1; }
-            let name = &content[key..i];
-            while i < end && b[i].is_ascii_whitespace() { i += 1; }
-            if b.get(i) != Some(&b'=') { if i == key { i += 1; } continue; }
-            i += 1; while i < end && b[i].is_ascii_whitespace() { i += 1; }
-            let quote = if matches!(b.get(i),Some(b'\''|b'"')) { let q=b[i];i+=1;Some(q) } else { None };
-            let value = i;
-            while i < end && quote.map_or(!b[i].is_ascii_whitespace(), |q| b[i] != q) { i += 1; }
-            if name.eq_ignore_ascii_case("data-term-note-id") {
-                if let Some(replacement) = ids.get(&content[value..i]) {
-                    out.push_str(&content[copied..value]);out.push_str(replacement);copied=i;
-                }
-            }
-            if quote.is_some() && i < end { i += 1; }
-        }
-        i = (end+1).max(begin+1);
+        i = (end + 1).max(begin + 1);
     }
-    out.push_str(&content[copied..]); out
+    out.push_str(&content[copied..]);
+    out
 }
 
 #[cfg(test)]
