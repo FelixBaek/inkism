@@ -85,14 +85,22 @@ jobs:
           (Get-Command perl).Source
           perl -MIPC::Cmd -MLocale::Maketext::Simple -e 'print "$^X\n"'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Shared native runtime tests
-        if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && matrix.platform != 'android'
+      - name: Shared Windows native runtime tests
+        if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && matrix.platform == 'windows'
         # Git Bash selects its incomplete MSYS Perl instead of the runner's native Perl.
-        shell: ${{ matrix.platform == 'windows' && 'pwsh' || 'bash' }}
+        shell: pwsh
         run: cargo test --locked --manifest-path core/native-host/Cargo.toml --features encrypted-storage
-      - name: Build local test artifacts
-        if: inputs.platform == 'all' || inputs.platform == matrix.platform
-        shell: ${{ matrix.platform == 'windows' && 'pwsh' || 'bash' }}
+      - name: Shared macOS native runtime tests
+        if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && (matrix.platform == 'macos' || matrix.platform == 'ios')
+        shell: bash
+        run: cargo test --locked --manifest-path core/native-host/Cargo.toml --features encrypted-storage
+      - name: Build Windows test artifacts
+        if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && matrix.platform == 'windows'
+        shell: pwsh
+        run: node tools/platform-build.mjs windows
+      - name: Build non-Windows test artifacts
+        if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && matrix.platform != 'windows'
+        shell: bash
         run: node tools/platform-build.mjs '${{ matrix.platform }}'
       - uses: actions/upload-artifact@v4
         if: success() && (inputs.platform == 'all' || inputs.platform == matrix.platform)
