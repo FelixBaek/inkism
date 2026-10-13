@@ -25,7 +25,7 @@ export function TrashedNoteBanner() {
   }, [id]);
   if (!id) return null;
   const left =
-    info?.days != null && info.at !== undefined ? Math.max(0, info.days - Math.floor((Date.now() - info.at) / DAY)) : null;
+    !s.note?.archived && info?.days != null && info.at !== undefined ? Math.max(0, info.days - Math.floor((Date.now() - info.at) / DAY)) : null;
   return (
     <div className="trashed-banner" role="status">
       <span>

@@ -133,6 +133,11 @@ export function PreviewExport({
     setHTML(document);
     setSnapshot(t("{title} · 저장 버전 {revision}", { title: note.title || t("제목 없음"), revision: note.revision }));
   };
+  const printSaved = async (before: Draft, ticket: number) => {
+    if (!(await store.flushNow())) throw new Error(t("저장하지 못했습니다. 원문을 확인한 뒤 다시 시도해 주세요."));
+    const note = store.readDraft();
+    if (note?.id === before.id && ticket === generation.current) await printNote(note.id, note.revision);
+  };
   const perform = async (kind: SavedKind | "source" | "print") => {
     if (request.current) return;
     const ticket = ++generation.current,
@@ -150,9 +155,7 @@ export function PreviewExport({
         return;
       }
       if (kind === "print") {
-        if (!(await store.flushNow())) throw new Error(t("저장하지 못했습니다. 원문을 확인한 뒤 다시 시도해 주세요."));
-        const note = store.readDraft();
-        if (note?.id === before.id && ticket === generation.current) await printNote(note.id, note.revision);
+        await printSaved(before, ticket);
         return;
       }
       await exportSaved(kind, before, ticket, controller.signal);

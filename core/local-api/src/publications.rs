@@ -339,6 +339,27 @@ pub(crate) fn serve(h: &Handler, r: &Request) -> Response {
     }
 }
 
+fn publication_response_body(response: reqwest::blocking::Response) -> Result<Vec<u8>, Response> {
+    let status = response.status().as_u16();
+    let mut data = Vec::new();
+    let limit = inkism_web_content::MAX_BYTES;
+    if response
+        .take(limit as u64 + 1)
+        .read_to_end(&mut data)
+        .is_err()
+        || data.len() > limit
+    {
+        return Err(Response::fail(502, "invalid relay response"));
+    }
+    if !(200..=299).contains(&status) {
+        return Err(Response::fail(
+            502,
+            format!("relay rejected publication action (HTTP {status})"),
+        ));
+    }
+    Ok(data)
+}
+
 fn publish(h: &Handler, r: &Request) -> Result<Response, Response> {
     let mut input = decode(&r.body)?;
     let deadline = Instant::now() + Duration::from_secs(30);
@@ -366,23 +387,7 @@ fn publish(h: &Handler, r: &Request) -> Result<Response, Response> {
                 "relay unavailable; check the published list before retrying",
             )
         })?;
-    let status = response.status().as_u16();
-    let mut data = Vec::new();
-    let limit = inkism_web_content::MAX_BYTES;
-    if response
-        .take(limit as u64 + 1)
-        .read_to_end(&mut data)
-        .is_err()
-        || data.len() > limit
-    {
-        return Err(Response::fail(502, "invalid relay response"));
-    }
-    if !(200..=299).contains(&status) {
-        return Err(Response::fail(
-            502,
-            format!("relay rejected publication action (HTTP {status})"),
-        ));
-    }
+    let data = publication_response_body(response)?;
     if delete {
         return Ok(Response::json(200, &json!({"ok": true})));
     }

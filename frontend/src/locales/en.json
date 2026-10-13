@@ -1,4 +1,5 @@
 {
+  "이 기기에서 지운 지 {days}일이 지난 노트를 자동으로 영구 삭제합니다. 보관한 노트는 지우지 않습니다. 영구 삭제한 노트는 복원할 수 없습니다.": "On this device, automatically delete notes permanently {days} days after they were deleted. Archived notes are kept. Permanently deleted notes cannot be restored.",
   "\"{name}\" 폴더를 삭제할까요? 노트는 삭제되지 않습니다.": "Delete the folder \"{name}\"? Notes won't be deleted.",
   "\"{name}\" 안에 만들 폴더 이름을 입력하세요.": "Enter a name for the folder to create in \"{name}\".",
   "\"{title}\" 노트를 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.": "Permanently delete the note \"{title}\"? This can't be undone.",

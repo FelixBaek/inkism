@@ -12,17 +12,46 @@ import type { Summary } from "../types";
 const DAY = 86_400_000;
 const PURGE_EVERY = 60 * 60_000;
 
+/** One tab stop, with the standard arrow/Home/End behavior for tabs and radios. */
+function moveChoice(event: React.KeyboardEvent<HTMLDivElement>) {
+  const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+  const index = buttons.indexOf(event.target as HTMLButtonElement);
+  if (index < 0) return;
+  let next = -1;
+  switch (event.key) {
+    case "Home":
+      next = 0;
+      break;
+    case "End":
+      next = buttons.length - 1;
+      break;
+    case "ArrowRight":
+    case "ArrowDown":
+      next = (index + 1) % buttons.length;
+      break;
+    case "ArrowLeft":
+    case "ArrowUp":
+      next = (index + buttons.length - 1) % buttons.length;
+      break;
+  }
+  if (next < 0) return;
+  event.preventDefault();
+  buttons[next].focus();
+  buttons[next].click();
+}
+
 /** 보관한 노트 | 지운 노트. 두 보기를 한 "보관함" 화면의 탭으로 묶는다. */
 export function ArchiveTabs() {
   const s = useStore();
   return (
-    <div className="list-segmented" role="tablist" aria-label={t("보관함")}>
+    <div className="list-segmented" role="tablist" aria-label={t("보관함")} onKeyDown={moveChoice}>
       {(["archive", "trash"] as const).map((type) => (
         <button
           key={type}
           type="button"
           role="tab"
           aria-selected={s.view.type === type}
+          tabIndex={s.view.type === type ? 0 : -1}
           onClick={() => s.setView({ type })}
         >
           {type === "archive" ? t("보관한 노트") : t("지운 노트")}
@@ -35,30 +64,48 @@ export function ArchiveTabs() {
 /** 자동 삭제 기간. 기본은 "안 함"이고, 기간을 켤 때만 확인을 받는다. */
 export function TrashRetention({ days, onChange }: Readonly<{ days: TrashDays; onChange: (days: TrashDays) => void }>) {
   const s = useStore();
+  const choosing = useRef(false);
+  const [busy, setBusy] = useState(false);
   const choose = async (next: TrashDays) => {
-    if (next === days) return;
-    if (next !== null) {
-      const ok = await s.confirm({
-        title: t("지운 노트 자동 삭제"),
-        message: t("지운 지 {days}일이 지난 노트를 자동으로 영구 삭제합니다. 보관한 노트는 지우지 않습니다. 영구 삭제한 노트는 복원할 수 없습니다.", { days: next }),
-        confirmLabel: t("자동 삭제 켜기"),
-        danger: true,
-      });
-      if (!ok) return;
-    }
+    if (next === days || choosing.current) return;
+    choosing.current = true;
+    setBusy(true);
     try {
+      if (next !== null) {
+        const ok = await s.confirm({
+          title: t("지운 노트 자동 삭제"),
+          message: t(
+            "이 기기에서 지운 지 {days}일이 지난 노트를 자동으로 영구 삭제합니다. 보관한 노트는 지우지 않습니다. 영구 삭제한 노트는 복원할 수 없습니다.",
+            { days: next },
+          ),
+          confirmLabel: t("자동 삭제 켜기"),
+          danger: true,
+        });
+        if (!ok) return;
+      }
       onChange((await api.setTrashRetention(next)).days);
       if (next !== null) await purgeExpired(s);
     } catch (e) {
       await s.showError(t("자동 삭제"), e instanceof Error ? e.message : String(e));
+    } finally {
+      choosing.current = false;
+      setBusy(false);
     }
   };
   return (
     <div className="trash-retention">
       <span>{t("자동 삭제")}</span>
-      <div className="list-segmented" role="radiogroup" aria-label={t("자동 삭제")}>
+      <div className="list-segmented" role="radiogroup" aria-label={t("자동 삭제")} onKeyDown={moveChoice}>
         {([7, 30, 90, null] as const).map((d) => (
-          <button key={String(d)} type="button" role="radio" aria-checked={days === d} onClick={() => void choose(d)}>
+          <button
+            key={String(d)}
+            type="button"
+            role="radio"
+            aria-checked={days === d}
+            tabIndex={days === d ? 0 : -1}
+            disabled={busy}
+            onClick={() => void choose(d)}
+          >
             {d === null ? t("안 함") : t("{days}일", { days: d })}
           </button>
         ))}
@@ -68,7 +115,10 @@ export function TrashRetention({ days, onChange }: Readonly<{ days: TrashDays; o
 }
 
 /** 지운 노트 페이지의 지운 시각과 자동 삭제 기간. */
-export function useTrashTimes(items: Summary[], active: boolean): [Record<string, number>, TrashDays, (d: TrashDays) => void] {
+export function useTrashTimes(
+  items: Summary[],
+  active: boolean,
+): [Record<string, number>, TrashDays, (d: TrashDays) => void] {
   const [times, setTimes] = useState<Record<string, number>>({});
   const [days, setDays] = useState<TrashDays>(null);
   const key = active ? items.map((n) => n.id).join() : "";
@@ -84,7 +134,7 @@ export function useTrashTimes(items: Summary[], active: boolean): [Record<string
     };
     // key는 items의 id 목록이다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [active, key]);
   return [times, days, setDays];
 }
 
@@ -134,10 +184,7 @@ export function useTrashPurge() {
 }
 
 /** 지운 노트 N개 선택됨: 복원·영구 삭제·모두 비우기 (Figma 08 팝업). */
-export function TrashSelectionDialog({
-  ids,
-  onClose,
-}: Readonly<{ ids: string[]; onClose: (done: boolean) => void }>) {
+export function TrashSelectionDialog({ ids, onClose }: Readonly<{ ids: string[]; onClose: (done: boolean) => void }>) {
   const s = useStore();
   const ref = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
@@ -153,19 +200,43 @@ export function TrashSelectionDialog({
     try {
       await work();
       onClose(true);
+    } catch (e) {
+      await s.showError(t("지운 노트"), e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   };
   return (
-    <dialog ref={ref} className="dialog-layer" onCancel={(e) => (e.preventDefault(), onClose(false))}>
-      <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose(false)}>
-        <div className="dialog trash-dialog" role="dialog" aria-modal="true" aria-labelledby="trash-dialog-title">
+    <dialog
+      ref={ref}
+      className="dialog-layer"
+      aria-labelledby="trash-dialog-title"
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!busy) onClose(false);
+      }}
+      onMouseDown={(e) => {
+        if (
+          !busy &&
+          (e.target === e.currentTarget ||
+            (e.target instanceof HTMLElement && e.target.classList.contains("dialog-backdrop")))
+        )
+          onClose(false);
+      }}
+    >
+      <div className="dialog-backdrop">
+        <div className="dialog trash-dialog">
           <div className="dialog-title-row">
             <h2 id="trash-dialog-title" className="dialog-title">
               {ids.length ? t("지운 노트 {count}개 선택됨", { count: ids.length }) : t("지운 노트")}
             </h2>
-            <button type="button" className="icon-btn" aria-label={t("대화상자 닫기")} onClick={() => onClose(false)}>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={t("대화상자 닫기")}
+              disabled={busy}
+              onClick={() => onClose(false)}
+            >
               <X size={16} aria-hidden />
             </button>
           </div>
@@ -188,7 +259,11 @@ export function TrashSelectionDialog({
               type="button"
               className="btn"
               disabled={busy || !ids.length}
-              onClick={() => void run(async () => { for (const id of ids) await s.quickDelete(id, true); })}
+              onClick={() =>
+                void run(async () => {
+                  for (const id of ids) await s.quickDelete(id, true);
+                })
+              }
             >
               {t("영구 삭제")}
             </button>
@@ -196,7 +271,11 @@ export function TrashSelectionDialog({
               type="button"
               className="btn btn-primary"
               disabled={busy || !ids.length}
-              onClick={() => void run(async () => { for (const id of ids) await s.quickRestore(id); })}
+              onClick={() =>
+                void run(async () => {
+                  for (const id of ids) await s.quickRestore(id);
+                })
+              }
             >
               {t("복원")}
             </button>

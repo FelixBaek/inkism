@@ -1,5 +1,5 @@
 //! Trashed-note retention: when each note entered the trash, an optional
-//! synced auto-delete period (7/30/90 days; default none) and the purge that
+//! local auto-delete period (7/30/90 days; default none) and the purge that
 //! applies it. Archived notes are never purged.
 //!
 //! Trash times are LOCAL (`note_trash_times`), kept by triggers on
@@ -9,11 +9,10 @@
 //! this replica saw it, never earlier.
 use crate::error::{EngineError, Result};
 use crate::ids;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 
-/// Synced setting: "7" | "30" | "90"; a missing row or NULL means never.
-pub const KEY: &str = "trash_retention_days";
+/// A missing local row or NULL means never. Older sync peers reject new setting keys.
 const DAYS: [i64; 3] = [7, 30, 90];
 const DAY_MS: i64 = 86_400_000;
 /// Bounded work per purge call; the caller simply calls again later.
@@ -24,7 +23,14 @@ const NOW_MS: &str = "CAST(strftime('%s','now') AS INTEGER)*1000";
 /// Additive and idempotent: runs inside `init_main`'s transaction.
 pub fn init(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(&format!(
-        "CREATE TABLE IF NOT EXISTS note_trash_times(
+        "CREATE TABLE IF NOT EXISTS local_trash_retention(
+            id INTEGER PRIMARY KEY CHECK(id=1), days INTEGER
+        );
+        INSERT OR IGNORE INTO local_trash_retention(id,days)
+            SELECT 1,CASE WHEN value IN ('7','30','90') THEN CAST(value AS INTEGER) END
+            FROM settings WHERE key='trash_retention_days';
+        DELETE FROM settings WHERE key='trash_retention_days';
+        CREATE TABLE IF NOT EXISTS note_trash_times(
             note_id    TEXT PRIMARY KEY REFERENCES notes_meta(id) ON DELETE CASCADE,
             trashed_at INTEGER NOT NULL
         );
@@ -50,10 +56,10 @@ pub fn validate(value: &str) -> Result<()> {
 }
 
 fn days(conn: &Connection) -> Result<Option<i64>> {
-    Ok(crate::settings::stored(conn, KEY)?
-        .and_then(|(value, _)| value)
-        .and_then(|v| v.parse().ok())
-        .filter(|d| DAYS.contains(d)))
+    let value: Option<i64> = conn.query_row(
+        "SELECT days FROM local_trash_retention WHERE id=1", [], |r| r.get(0),
+    ).optional()?.flatten();
+    Ok(value.filter(|d| DAYS.contains(d)))
 }
 
 /// {op:"trash_retention_get"} -> {days: 7|30|90|null}
@@ -72,7 +78,10 @@ pub fn set(conn: &Connection, args: &Value) -> Result<Value> {
         validate(v)?;
     }
     conn.execute_batch("BEGIN IMMEDIATE;")?;
-    let r = crate::settings::write_local(conn, KEY, value.as_deref()).map(|_| Value::Null);
+    let r = conn.execute(
+        "INSERT INTO local_trash_retention(id,days) VALUES(1,?1) ON CONFLICT(id) DO UPDATE SET days=excluded.days",
+        [value.as_deref().and_then(|v| v.parse::<i64>().ok())],
+    ).map(|_| Value::Null).map_err(EngineError::from);
     crate::ops_notes::finish_tx(conn, r)?;
     get(conn)
 }
@@ -102,6 +111,12 @@ pub fn times(conn: &Connection, args: &Value) -> Result<Value> {
 /// non-archived notes whose trash time is older than the chosen period, one at
 /// a time through the ordinary permanent-delete path. No period = no-op.
 pub fn purge(conn: &Connection, now_ms: i64) -> Result<Value> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result = purge_tx(conn, now_ms);
+    crate::ops_notes::finish_tx(conn, result)
+}
+
+fn purge_tx(conn: &Connection, now_ms: i64) -> Result<Value> {
     let Some(days) = days(conn)? else {
         return Ok(json!({ "deleted": [], "more": false }));
     };
@@ -118,7 +133,7 @@ pub fn purge(conn: &Connection, now_ms: i64) -> Result<Value> {
     let more = expired.len() as i64 > PURGE_BATCH;
     let mut deleted = Vec::new();
     for id in expired.into_iter().take(PURGE_BATCH as usize) {
-        crate::ops_notes::delete(conn, &json!({ "id": id }))?;
+        crate::ops_notes::delete_tx(conn, &id)?;
         deleted.push(id);
     }
     Ok(json!({ "deleted": deleted, "more": more }))
@@ -176,6 +191,71 @@ mod tests {
 
         set(&conn, &json!({"days": null})).unwrap();
         assert_eq!(get(&conn).unwrap()["days"], Value::Null);
+    }
+
+    #[test]
+    fn purge_rechecks_archive_and_retrash_after_a_concurrent_writer() {
+        for archive in [true, false] {
+            let dir = std::env::temp_dir().join(format!("inkism-retention-{}", ids::new_id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let path = dir.join("notes.db");
+            let conn = Connection::open(&path).unwrap();
+            crate::schema::init_main(&conn).unwrap();
+            conn.execute_batch("PRAGMA journal_mode=WAL;").unwrap();
+            let id = ids::new_id();
+            note(&conn, &id, 1, 0);
+            set(&conn, &json!({"days":7})).unwrap();
+            conn.execute("UPDATE note_trash_times SET trashed_at=0", []).unwrap();
+            conn.execute_batch("BEGIN IMMEDIATE;").unwrap();
+            if archive {
+                conn.execute("UPDATE notes_meta SET archived=1 WHERE id=?1", [&id]).unwrap();
+            } else {
+                conn.execute("UPDATE notes_meta SET trashed=0 WHERE id=?1", [&id]).unwrap();
+                conn.execute("UPDATE notes_meta SET trashed=1 WHERE id=?1", [&id]).unwrap();
+            }
+            let (started, wait) = std::sync::mpsc::channel();
+            let worker = std::thread::spawn(move || {
+                let other = Connection::open(path).unwrap();
+                other.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+                started.send(()).unwrap();
+                purge(&other, ids::now_ms()).unwrap()
+            });
+            wait.recv().unwrap();
+            // The old implementation reads stale eligibility under WAL, then
+            // waits for the writer inside delete(). The fixed one locks first.
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            conn.execute_batch("COMMIT;").unwrap();
+            assert_eq!(worker.join().unwrap()["deleted"], json!([]));
+            assert!(exists(&conn, &id));
+            drop(conn);
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn local_policy_never_enters_synced_settings() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::schema::init_main(&conn).unwrap();
+        set(&conn, &json!({"days":7})).unwrap();
+        assert_eq!(get(&conn).unwrap()["days"], 7);
+        assert_eq!(crate::settings::stored(&conn, "trash_retention_days").unwrap(), None);
+        crate::schema::init_main(&conn).unwrap();
+        assert_eq!(get(&conn).unwrap()["days"], 7);
+    }
+
+    #[test]
+    fn purge_rolls_back_the_whole_batch_on_failure() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::schema::init_main(&conn).unwrap();
+        note(&conn, "a", 1, 0);
+        note(&conn, "b", 1, 0);
+        conn.execute("UPDATE note_trash_times SET trashed_at=0", []).unwrap();
+        conn.execute_batch("CREATE TRIGGER deny_second BEFORE DELETE ON notes_meta WHEN OLD.id='b' BEGIN SELECT RAISE(ABORT,'blocked'); END;").unwrap();
+        set(&conn, &json!({"days":7})).unwrap();
+        assert!(purge(&conn, ids::now_ms()).is_err());
+        assert!(exists(&conn, "a"));
+        assert!(exists(&conn, "b"));
+        assert!(conn.is_autocommit());
     }
 
     #[test]

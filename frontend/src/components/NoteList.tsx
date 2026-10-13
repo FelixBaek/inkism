@@ -173,7 +173,7 @@ export function NoteList() {
                   onMenu={setMenu}
                   picked={picked.has(n.id)}
                   onPick={trash ? () => pick(n.id) : undefined}
-                  meta={trash ? trashLabel(times[n.id], retention) : undefined}
+                  meta={trash ? trashLabel(times[n.id], n.archived ? null : retention) : undefined}
                 />
               ))}
             </React.Fragment>

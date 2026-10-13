@@ -933,6 +933,9 @@ textarea {
   padding: 18px 32px 80px;
 }
 .tiptap-prose {
+  /* Chromium's automatic kerning varies with text-run length. Keep native
+     paragraphs and bounded source windows on the same visual rows. */
+  font-kerning: none;
   font-size: calc(var(--fs-editor) * var(--editor-zoom, 1));
   line-height: 1.7;
   min-height: 50vh;
