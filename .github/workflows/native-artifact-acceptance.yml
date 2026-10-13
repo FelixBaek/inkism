@@ -1,7 +1,7 @@
 name: Existing native artifact acceptance
 on:
   push:
-    branches: [main, 'codex/**']
+    branches: [main]
     paths:
       - '.github/workflows/native-artifact-acceptance.yml'
       - 'tools/scripts/native-artifact-*'
@@ -14,12 +14,14 @@ on:
         default: all
 permissions:
   contents: read
-  actions: read
 concurrency:
   group: native-artifact-acceptance-${{ github.ref }}-${{ inputs.platform }}
   cancel-in-progress: false
 jobs:
   apple:
+    permissions:
+      contents: read
+      actions: read
     if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'macos' || inputs.platform == 'ios'
     strategy:
       fail-fast: false
@@ -52,6 +54,9 @@ jobs:
             ${{ runner.temp }}/native-acceptance/${{ matrix.platform }}/*.png
             ${{ runner.temp }}/native-acceptance/${{ matrix.platform }}/*.log
   android:
+    permissions:
+      contents: read
+      actions: read
     if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'android'
     runs-on: ubuntu-22.04
     timeout-minutes: 25
