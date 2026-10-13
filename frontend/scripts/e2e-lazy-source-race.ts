@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright-core';
+import {trackSaves} from './save-state.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48291';
 const rpc=async(op,args={})=>{
  const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});
@@ -25,7 +26,7 @@ try{
  await page.locator('[data-window-start="0"]').waitFor();assert.equal(fullReads,0);
  assert.equal(await page.locator('.status-words').textContent(),`원문 ${(Buffer.byteLength(content)/1024).toLocaleString('ko-KR',{maximumFractionDigits:1})}KB`);
  const editor=page.locator('.tiptap-prose');
- const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+ const saves=trackSaves(page),saved=()=>saves.saved();
  await editor.locator('p').first().click();await page.keyboard.press('Home');await page.keyboard.insertText('보존편집 ');await page.keyboard.press('Control+s');await saved();
  const before=await rpc('get',{id:note.id});
  // MARKDOWN on an HTML note is now a view (no format-change dialog to cancel); the partial draft must still
@@ -43,7 +44,8 @@ try{
   await page.getByRole('heading',{name:'원문 형식 변경 실패',exact:true}).waitFor();
   await page.getByRole('button',{name:'확인',exact:true}).click();
   await page.locator('[data-window-start="0"]').waitFor();assert.equal(await page.locator('.split-primary .cm-content').count(),0);
-  await page.keyboard.press('Control+s');await saved();
+  // The held input may already have been flushed when the conversion failed; the stored body is checked next.
+  await page.keyboard.press('Control+s');await saves.settled();
   const stored=await rpc('get',{id:note.id});
   if(kind==='body')assert.ok(stored.content.includes('대기중입력'));
   else assert.equal(stored.title,title+' 변경');

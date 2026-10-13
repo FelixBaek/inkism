@@ -151,6 +151,12 @@ fn vault_versions_arrive_as_ciphertext_without_key_and_switch_form_in_place() {
     let raw: String = db(&p.bp).query_row("SELECT data FROM encrypted_named_versions WHERE id=?1", [&vid], |r| r.get(0)).unwrap();
     assert!(!raw.contains("SECRET-v1") && raw.contains("locked_body"), "{raw}");
     assert_eq!(p.b.execute(json!({"op":"vault_versions","id":n["id"]}))["ok"], false, "listed without the vault key");
+    // The history can name the sealed snapshot without its body or ciphertext.
+    let sealed = call(&p.b, json!({"op":"history_sealed","id":n["id"]}));
+    assert_eq!(sealed.as_array().map(Vec::len), Some(1), "{sealed}");
+    assert_eq!(sealed[0]["id"], vid.as_str());
+    assert_eq!(sealed[0]["label"], "비밀");
+    assert!(!sealed.to_string().contains("SECRET") && !sealed.to_string().contains("locked_body"), "{sealed}");
 
     // Vault rename on A rewrites only that row on B.
     call(&p.a, json!({"op":"vault_unlock","password":"pw-named"}));
@@ -168,6 +174,7 @@ fn vault_versions_arrive_as_ciphertext_without_key_and_switch_form_in_place() {
     sync(&p.a);
     sync(&p.b);
     assert_eq!(count(&p.bp, "SELECT count(*) FROM encrypted_named_versions WHERE id=?1", &vid), 0);
+    assert_eq!(call(&p.b, json!({"op":"history_sealed","id":n["id"]})), json!([]));
     // A keyed receiver must not mistake the unlock for a stale plaintext and re-seal it.
     sync(&p.a);
     assert_eq!(count(&p.ap, "SELECT count(*) FROM encrypted_named_versions WHERE id=?1", &vid), 0);
@@ -311,11 +318,14 @@ fn undecodable_entity_kind_stays_pending_without_blocking_other_records() {
         assert!(app.wait_sync_idle(30000));
         call(app, json!({"op":"sync_status"}))
     };
-    // A also pulls the unknown record; its own note is still pushed.
-    assert!(!round(&p.a)["error"].is_null());
+    // A also pulls the unknown record; its own note is still pushed. A
+    // record from a newer app is held and reported as such, not as an error.
+    let status = round(&p.a);
+    assert!(status["error"].is_null() && status["unsupported_records"] == 1, "{status}");
     for _ in 0..2 {
         let status = round(&p.b);
-        assert!(!status["error"].is_null(), "unknown record must be reported: {status}");
+        assert!(status["error"].is_null(), "newer record is not a sync failure: {status}");
+        assert_eq!(status["unsupported_records"], 1, "unknown record must be reported: {status}");
         assert!(status["pending"].as_u64().unwrap() >= 1, "{status}");
     }
     assert_eq!(call(&p.b, json!({"op":"get","id":n["id"]}))["title"], "뒤의 노트");

@@ -2,8 +2,10 @@
 // current view. No complete body may be requested by the lazy editor.
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright-core';
+import {waitSaved} from './save-state.ts';
 import {waitForPredicate} from './wait-for-predicate.ts';
 import {historyKey} from './history-keys.ts';
+import {assertBlockBytes,blockIds,withoutBlockIds} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL;assert.ok(base);
 const rpc=async(op,args={})=>{const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const value=await response.json();assert.ok(value.ok,value.error);return value.data;};
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
@@ -20,7 +22,13 @@ const action=async(name)=>{
  if(name==='아래에 문단 추가'){await page.getByRole('button',{name:'블록 넣기',exact:true}).click();await page.getByRole('option',{name:'블록 삽입: 본문',exact:true}).click();return;}
  await page.getByRole('button',{name:'블록 동작',exact:true}).click();await page.getByRole('menuitem',{name:{'블록 복제':'복제','블록 삭제':'삭제'}[name]??name,exact:true}).click();
 };
-const stored=async(id,expected)=>{await waitForPredicate(async()=>((await rpc('get',{id})).content===expected),'block action did not preserve complete source',10000);await ready();};
+// Exact complete source, except the identity given to `added` edited blocks.
+const stored=async(id,expected,added=0,ids?)=>{
+ let actual='';const message='block action did not preserve complete source';
+ try{await waitForPredicate(async()=>{actual=(await rpc('get',{id})).content;return withoutBlockIds(actual)===withoutBlockIds(expected)&&blockIds(actual).length>=blockIds(expected).length+added;},message,10000);}
+ catch(error){assertBlockBytes(actual,expected,{added,ids,message});throw error;}
+ const result=assertBlockBytes(actual,expected,{added,ids,message});await ready();return result;
+};
 try{
  const target='<p><strong>'+('한글😀&amp; '.repeat(30000))+'</strong></p>',prefix='<p>선행 원문 &amp;</p>',tail='<p>후미 원문</p>',source=prefix+target+tail;
  const nativeTarget='<p><strong>짧은 원문</strong></p>';
@@ -33,8 +41,9 @@ try{
  await waitForPredicate(async()=>((await rpc('get',{id:native.id})).content.includes('블록 전체 교체')),'native block replacement was not saved');
  const nativeSource=(await rpc('get',{id:native.id})).content;
  assert.ok(nativeSource.startsWith(prefix+nativeTarget),nativeSource);
- const nativeReplacement=nativeSource.slice((prefix+nativeTarget).length);
- assert.equal(nativeReplacement,'<p><strong>블록 전체 교체</strong></p>');
+ // The duplicated block, replaced by typing, is the one edited block.
+ assertBlockBytes(nativeSource.slice((prefix+nativeTarget).length),'<p><strong>블록 전체 교체</strong></p>',{added:1,message:'native block replacement'});
+ const nativeReplacement=withoutBlockIds(nativeSource.slice((prefix+nativeTarget).length));
  const note=await rpc('save',{note:{title:'전체 블록 동작 '+Date.now(),content:source,content_format:'html'}});await rpc('wait_index');
  lastNote=note.id;
  await page.goto(base+'/?virtual=1'+(process.env.INKISM_LAZY==='0'?'':'&lazy=1'));await page.getByRole('button',{name:'노트 열기: '+note.title,exact:true}).click();await ready();
@@ -43,7 +52,9 @@ try{
  await root.evaluate((el: any)=>{el.editor.commands.setTextSelection(10);el.editor.view.focus();});
  await action('블록 복제');await stored(note.id,prefix+target+target+tail);
  assert.ok((await root.textContent()).length<66000);assert.ok(await page.locator('*').count()<1500);
- await page.keyboard.insertText('블록 전체 교체');await stored(note.id,prefix+target+nativeReplacement+tail);
+ // The duplicated huge block is replaced from a bounded internal window. The
+ // replacement block is the one edited block: it alone gains an identity.
+ await page.keyboard.insertText('블록 전체 교체');await stored(note.id,prefix+target+nativeReplacement+tail,1);
  await historyKey(page,'undo');await stored(note.id,prefix+target+target+tail);
  await historyKey(page,'undo');await stored(note.id,source);
  await historyKey(page,'redo');await stored(note.id,prefix+target+target+tail);
@@ -53,7 +64,7 @@ try{
  await action('아래로 이동');await stored(note.id,prefix+tail+target);
  await historyKey(page,'undo');await stored(note.id,source);
  await action('아래에 문단 추가');await stored(note.id,prefix+target+'<p></p>'+tail);
- await page.keyboard.insertText('새 블록');await stored(note.id,prefix+target+'<p>새 블록</p>'+tail);
+ await page.keyboard.insertText('새 블록');await stored(note.id,prefix+target+'<p>새 블록</p>'+tail,1);
  await historyKey(page,'undo');await stored(note.id,prefix+target+'<p></p>'+tail);
  await historyKey(page,'undo');await stored(note.id,source);
  await action('블록 삭제');await stored(note.id,prefix+tail);
@@ -69,7 +80,7 @@ try{
  await action('위로 이동');const movedUp=[...blocks];[movedUp[31],movedUp[32]]=[movedUp[32],movedUp[31]];await stored(boundary.id,movedUp.join(''));await undo();await stored(boundary.id,body);
  await jump(0);await root.evaluate((el: any)=>{const e=el.editor;let pos=0;for(let i=0;i<31;i++)pos+=e.state.doc.child(i).nodeSize;e.commands.setNodeSelection(pos);e.view.focus();});
  await action('아래로 이동');const movedDown=[...blocks];[movedDown[31],movedDown[32]]=[movedDown[32],movedDown[31]];await stored(boundary.id,movedDown.join(''));
- await page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+ await waitSaved(page);
  await page.reload();await ready();await undo();await stored(boundary.id,body);
  assert.equal(await root.evaluate((el: any)=>el.editor.state.selection.from),0,'node selection restored relative to the one-block preview');
  await historyKey(page,'redo');await stored(boundary.id,movedDown.join(''));await undo();await stored(boundary.id,body);

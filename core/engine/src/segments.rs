@@ -20,6 +20,11 @@ pub struct Ancestor {
     pub open: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub prelude: String,
+    /// Byte offset of `open` (block-relative in the cache, note-absolute in
+    /// pages). Lets an edit inside a large block give the enclosing block an
+    /// identity with a bounded splice of just this opening tag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<u64>,
 }
 #[derive(Clone, Debug)]
 pub struct Segment {
@@ -350,6 +355,7 @@ fn tag_token(source: &str, at: usize, stack: &[Ancestor]) -> Option<(usize, Opti
                 tag: name,
                 open: String::new(),
                 prelude: String::new(),
+                at: None,
             },
         ))
     } else if !child_allowed(stack, &name) {
@@ -366,6 +372,7 @@ fn tag_token(source: &str, at: usize, stack: &[Ancestor]) -> Option<(usize, Opti
                 tag: name,
                 open: source[at..end].to_string(),
                 prelude: String::new(),
+                at: Some(at as u64),
             },
         ))
     };
@@ -657,8 +664,9 @@ fn read_segments(
         blob.read_at_exact(&mut bytes, start as usize)?;
         let source = String::from_utf8(bytes)
             .map_err(|_| EngineError::internal("invalid cached segment UTF-8"))?;
-        let start_context = segment_context(&row.get::<_, String>(3)?)?;
-        let end_context = segment_context(&row.get::<_, String>(4)?)?;
+        let start_context =
+            absolute_context(segment_context(&row.get::<_, String>(3)?)?, byte_start);
+        let end_context = absolute_context(segment_context(&row.get::<_, String>(4)?)?, byte_start);
         if start_context
             .iter()
             .chain(&end_context)
@@ -674,6 +682,17 @@ fn read_segments(
         return Err(EngineError::internal("incomplete cached segment page"));
     }
     Ok(out)
+}
+
+/// Cached ancestor offsets are block-relative; pages report note offsets.
+fn absolute_context(context: Vec<Ancestor>, byte_start: i64) -> Vec<Ancestor> {
+    context
+        .into_iter()
+        .map(|a| Ancestor {
+            at: a.at.map(|at| at + byte_start as u64),
+            ..a
+        })
+        .collect()
 }
 
 fn segment_context(json: &str) -> Result<Vec<Ancestor>> {

@@ -1,4 +1,5 @@
 import {chromium} from 'playwright-core';
+import {trackSaves} from './save-state.ts';
 import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47958';
 const rpc=async(op,args={})=>{const r=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const v=await r.json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
@@ -18,7 +19,7 @@ await page.route('**/api/rpc',async route=>{
  await route.continue();
 });
 const at=n=>page.waitForFunction(n=>document.querySelector('[data-window-start]')?.getAttribute('data-window-start')===String(n),n);
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saves=trackSaves(page),saved=()=>saves.saved();
 const jump=async n=>{await page.getByLabel('이동할 블록 번호').fill(String(n+1));await page.getByRole('button',{name:'이동',exact:true}).click();await at(n);};
 try{
  await page.goto(process.env.INKISM_LAZY_FLAG==='1'?base:base+'/?virtual=1&lazy=1');await page.getByRole('button',{name:'노트 열기: '+title,exact:true}).click();await at(0);assert.equal(fullReads,0);
@@ -33,8 +34,9 @@ try{
  await page.keyboard.press('Control+y');await saved();assert.ok((await rpc('get',{id:note.id})).content.includes('첫입력'));
  assert.equal(fullReads,0);
  // Metadata changes advance the same queue revision without fetching a body.
- await page.getByRole('button',{name:'노트 동작 메뉴',exact:true}).click();
- await page.getByRole('menuitem',{name:'즐겨찾기에 추가',exact:true}).click();
+ // The note action menu was removed; the inspector's favorite toggle is the metadata entry point.
+ // It is controlled by the stored note, so it turns checked only after the metadata RPC.
+ const favorite=page.getByRole('checkbox',{name:'즐겨찾기',exact:true});await favorite.click();await page.waitForFunction(el=>el.checked,await favorite.elementHandle());
  for(let i=0;i<100 && !(await rpc('get',{id:note.id})).favorite;i++)await new Promise(r=>setTimeout(r,20));
  await page.locator('.tiptap-prose p').first().click();await page.keyboard.press('Home');await page.keyboard.insertText('메타이후 ');await page.keyboard.press('Control+s');await saved();
  assert.ok((await rpc('get',{id:note.id})).content.includes('메타이후'));

@@ -1,8 +1,10 @@
 // Shipped React + Go + Rust. Isolated profile; never personal desktop input.
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright-core';
+import {waitSaved} from './save-state.ts';
 import {waitForPredicate} from './wait-for-predicate.ts';
 import {historyKey} from './history-keys.ts';
+import {assertBlockBytes} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL;
 assert.ok(base,'isolated application URL required');
 const rpc=async(op,args={})=>{const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const value=await response.json();assert.equal(value.ok,true,JSON.stringify(value));return value.data;};
@@ -15,7 +17,7 @@ page.on('pageerror',e=>errors.push(e.message));
 const editor=page.locator('.tiptap-prose');
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized);
 const idle=()=>page.waitForFunction(()=>!document.querySelector('.window-error')&&Array.from(document.querySelectorAll<HTMLButtonElement>('.window-controls button')).some(b=>b.textContent==='이동'&&!b.disabled));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>waitSaved(page);
 const segment=n=>page.waitForFunction(n=>document.querySelector('[data-segment-start]')?.getAttribute('data-segment-start')===String(n),n);
 const focus=()=>editor.evaluate((el:any)=>el.editor.view.focus());
 const body=async()=>(await rpc('get',{id:note.id})).content;
@@ -66,7 +68,8 @@ try{
  await cdp.send('Input.imeSetComposition',{text:'한',selectionStart:1,selectionEnd:1});
  assert.equal(await body(),source,'provisional IME does not write');
  await cdp.send('Input.insertText',{text:'한글😀'});await idle();await saved();
- assert.equal(await body(),'<p><strong>한글😀</strong></p>');
+ // The committed composition is the one new block: it gains an identity.
+ assertBlockBytes(await body(),'<p><strong>한글😀</strong></p>',{added:1,message:'whole-document IME'});
  await historyKey(page,'undo');await saved();assert.equal(await body(),source);
  assert.deepEqual(errors,[]);assert.ok(requests.includes('document_segments'));
  console.log('PASS cross-segment Shift scalar/delete, whole format/copy/IME, bounded DOM, restart undo/redo, raw outside preservation; lazy='+(process.env.INKISM_LAZY!=='0'));

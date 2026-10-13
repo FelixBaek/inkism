@@ -63,17 +63,19 @@ try{
   await page.keyboard.type('z');await saved();
   const actualBody=(await rpc('get',{id:note.id})).content;
   let expectedBody=oracle.html+html(texts.slice(100));
-  if(process.env.INKISM_MOUSE_RESELECT==='1'){
-   // A normal local edit assigns an identity to its touched block. The native
-   // node/mark-only oracle deliberately has no identity plugin: verify exactly
-   // one generated ID at the edited paragraph, then include that ID in the
-   // byte-for-byte oracle instead of stripping attributes from the saved body.
+  {
+   // A local edit, and equally input committed over a document selection,
+   // assigns an identity to its touched block. The native node/mark-only
+   // oracle deliberately has no identity plugin: verify exactly one generated
+   // ID at the edited paragraph, then include that ID in the byte-for-byte
+   // oracle instead of stripping attributes from the saved body.
    const ids=[...actualBody.matchAll(/ id="([^"]*)"/g)];
    assert.equal(ids.length,1,'only the locally edited paragraph acquires an ID');
    assert.match(ids[0][1],/^ink-block-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-   const blockOpening='<p>문단 '+origin.block+' ';
+   // The replacement joins into the first selected paragraph (either direction).
+   const edited=Math.min(origin.block,destination.block),blockOpening='<p>문단 '+edited+' ';
    assert.equal(expectedBody.split(blockOpening).length,2,'the edited paragraph has one exact source location');
-   expectedBody=expectedBody.replace(blockOpening,'<p id="'+ids[0][1]+'">문단 '+origin.block+' ');
+   expectedBody=expectedBody.replace(blockOpening,'<p id="'+ids[0][1]+'">문단 '+edited+' ');
   }
   equalBody(actualBody,expectedBody,'replacement uses the exact native range');
   await historyKey(page,'undo');await saved();assert.equal((await rpc('get',{id:note.id})).content,source,'undo preserves all outside paragraphs');

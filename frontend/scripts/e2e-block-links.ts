@@ -10,7 +10,8 @@ try{
  const ready=()=>page.waitForFunction(()=>Boolean((document.querySelector('.tiptap-prose') as any)?.editor?.isInitialized)&&Array.from(document.querySelectorAll<HTMLButtonElement>('.window-controls button')).some(b=>b.textContent==='이동'&&!b.disabled));await ready();
  await page.locator('.tiptap-prose p').first().click();await page.locator('.tiptap-prose p').first().hover();await page.getByRole('button',{name:'블록 동작',exact:true}).click();await page.getByRole('menuitem',{name:'문단 링크 복사',exact:true}).click();
  let linked='';for(let i=0;i<100;i++){linked=(await rpc('get',{id:note.id})).content;if(linked.includes('id="ink-block-'))break;await page.waitForTimeout(100);}
- assert.equal(linked.replace(/ id="ink-block-[^"]+"/g,''),target+filler);assert.equal((linked.match(/id="ink-block-/g)||[]).length,2);await ready();await page.waitForTimeout(500);
+ assert.equal(linked.replace(/ id="ink-block-[^"]+"/g,''),target+filler);// Only the linked paragraph gains an identity; its untouched neighbour keeps exact bytes.
+ assert.equal((linked.match(/id="ink-block-/g)||[]).length,1);assert.match(linked,/^<p id="ink-block-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}">Link this paragraph<\/p><p>f-0 /);await ready();await page.waitForTimeout(500);
  assert.deepEqual(errors,[]);
  console.log('PASS windowed paragraph link creation, persistent block IDs, and exact source preservation');
 }finally{await browser.close();}

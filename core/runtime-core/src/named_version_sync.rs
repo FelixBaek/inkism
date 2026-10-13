@@ -140,21 +140,21 @@ fn seal(note: &str, key_id: &str, plain: &Value, sealer: Sealer) -> Result<Value
 /// snapshots into the vault (same ids) and journal them so peers receive the
 /// vault form. Without the key nothing changes and the lock waits.
 pub fn seal_local_plaintext(c: &Connection, note: &str, key_id: &str, sealer: Sealer) -> Result<()> {
-    let plain = named_versions::backup(c, note)?;
-    let plain = plain.as_array().cloned().unwrap_or_default();
-    if plain.is_empty() {
+    // One snapshot at a time: the caller's transaction makes the move atomic,
+    // so memory holds one plaintext snapshot and its vault form.
+    let ids = named_versions::named_ids(c, note)?;
+    if ids.is_empty() {
         return Ok(());
     }
-    let mut rows = encrypted_versions::rows(c, note)?.as_array().cloned().unwrap_or_default();
-    let mut moved = Vec::new();
-    for version in &plain {
-        let row = seal(note, key_id, version, sealer)?;
-        rows.retain(|v| v["id"] != row["id"]);
-        moved.push(row["id"].as_str().unwrap_or_default().to_string());
-        rows.push(row);
+    for id in &ids {
+        let version = named_versions::backup_row(c, note, id)?
+            .ok_or_else(|| RuntimeError::internal("named version vanished"))?;
+        let row = seal(note, key_id, &version, sealer)?;
+        drop(version);
+        encrypted_versions::put(c, note, &row)?;
     }
-    encrypted_versions::replace(c, note, &json!(rows), false)?;
-    for id in &moved {
+    encrypted_versions::check_totals(c, note)?;
+    for id in &ids {
         c.execute("DELETE FROM history WHERE id=?1 AND label IS NOT NULL", [id])?;
         republish(c, id, note)?;
     }
@@ -229,11 +229,9 @@ pub fn apply(c: &Connection, e: &Entity, sealer: Sealer) -> Result<()> {
         }
         value["id"] = json!(e.id);
         value["label"] = json!(name);
-        let mut rows = encrypted_versions::rows(c, note)?.as_array().cloned().unwrap_or_default();
-        rows.retain(|v| v["id"] != e.id);
-        rows.push(value);
-        // Changed-row update: other snapshots of the note are left untouched.
-        encrypted_versions::replace(c, note, &json!(rows), false)?;
+        // Changed-row update: other snapshots of the note are neither read
+        // nor touched; the per-note limits still cover all of them.
+        encrypted_versions::upsert(c, note, &value)?;
         c.execute("DELETE FROM history WHERE id=?1 AND label IS NOT NULL", [&e.id])?;
     } else if existing_plain {
         c.execute("UPDATE history SET label=?1 WHERE id=?2 AND label IS NOT NULL AND label IS NOT ?1", params![name, e.id])?;

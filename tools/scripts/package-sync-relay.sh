@@ -2,7 +2,6 @@
 # Package the sync relay into a new source-versioned directory.
 #
 # - Builds a static Linux/amd64 binary from ./core/sync-relay (Rust, static glibc).
-# - Builds relay-export (static Go) for the one-time bbolt -> SQLite migration.
 # - Copies tools/deploy/sync-relay deployment files next to the binary.
 # - Records the git source commit in BUILD.txt and file hashes in SHA256SUMS.
 # - Refuses to overwrite or delete an existing destination.
@@ -24,7 +23,6 @@ if [ -e "$target" ]; then
 fi
 
 command -v cargo >/dev/null || { echo "error: cargo not found" >&2; exit 1; }
-command -v go >/dev/null || { echo "error: go toolchain not found (needed for relay-export)" >&2; exit 1; }
 command -v git >/dev/null || { echo "error: git not found" >&2; exit 1; }
 
 mkdir -p "$(dirname "$target")"
@@ -42,10 +40,6 @@ if ! ldd "$staging/inkism-sync-relay" 2>&1 | grep -Eq 'statically linked|not a d
   echo "error: relay binary is dynamically linked" >&2
   exit 1
 fi
-
-echo "building relay-export (CGO_ENABLED=0 GOOS=linux GOARCH=amd64)..."
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-  go build -trimpath -ldflags "-s -w" -o "$staging/relay-export" ./desktop/cmd/relay-export
 
 cp "${CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}" "$staging/ca-certificates.crt"
 
@@ -70,8 +64,6 @@ cp tools/deploy/sync-relay/state/.keep "$staging/state/.keep"
   echo "built at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "rustc: $(RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-stable}" rustc --version)"
   echo "build: RUSTFLAGS=\"-C target-feature=+crt-static\" cargo build --release --locked --target $rust_target --manifest-path core/sync-relay/Cargo.toml"
-  echo "go: $(go version)"
-  echo "relay-export: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags \"-s -w\" ./desktop/cmd/relay-export"
 } > "$staging/BUILD.txt"
 
 (

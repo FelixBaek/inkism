@@ -5,7 +5,6 @@
 use fs2::FileExt;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -38,7 +37,11 @@ pub struct Store {
 
 impl Store {
     pub fn open(path: &Path) -> Result<Store, Error> {
-        let lock = OpenOptions::new().read(true).write(true).create(true).mode_0600().open(path)?;
+        // Unix flock is advisory, so the database file itself is locked. A
+        // Windows lock is mandatory and would fail SQLite's own reads and
+        // writes ("disk I/O error"), so Windows locks a `<db>.lock` beside it.
+        let lock_path = if cfg!(windows) { lock_file(path) } else { path.to_path_buf() };
+        let lock = OpenOptions::new().read(true).write(true).create(true).mode_0600().open(&lock_path)?;
         let started = Instant::now();
         while lock.try_lock_exclusive().is_err() {
             if started.elapsed() >= Duration::from_secs(1) {
@@ -46,6 +49,13 @@ impl Store {
             }
             std::thread::sleep(Duration::from_millis(50));
         }
+        let db = if cfg!(windows) {
+            OpenOptions::new().read(true).write(true).create(true).mode_0600().open(path)?
+        } else {
+            lock.try_clone()?
+        };
+        refuse_foreign_file(&db, path)?;
+        drop(db);
         let conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA temp_store=MEMORY;")?;
         conn.execute_batch(SCHEMA)?;
@@ -68,64 +78,30 @@ impl Store {
         let tx = self.conn.transaction()?;
         f(&tx)
     }
+}
 
-    /// Loads a JSON-lines dump written by desktop/cmd/relay-export into this
-    /// (empty) database and checks it against the dump's trailer.
-    pub fn import_bolt_dump(&mut self, dump: &Path) -> Result<(usize, usize), Error> {
-        use base64::{engine::general_purpose::STANDARD, Engine};
-        let lines = BufReader::new(File::open(dump)?).lines();
-        self.update(|tx| {
-            let existing: i64 = tx.query_row("SELECT count(*) FROM entries", [], |r| r.get(0))?;
-            if existing != 0 {
-                return Err("target database is not empty".into());
-            }
-            let (mut buckets, mut entries, mut end) = (0usize, 0usize, None);
-            for line in lines {
-                let line = line?;
-                if end.is_some() {
-                    return Err("data after the end marker".into());
-                }
-                let v: serde_json::Value = serde_json::from_str(&line)?;
-                let field = |name: &str| -> Result<Vec<u8>, Error> {
-                    Ok(STANDARD.decode(v[name].as_str().ok_or(format!("missing {name}"))?)?)
-                };
-                match v["type"].as_str() {
-                    Some("bucket") => {
-                        let name = String::from_utf8(field("name")?)?;
-                        let seq = v["sequence"].as_u64().ok_or("missing sequence")?;
-                        tx.execute(
-                            "INSERT INTO buckets(name, sequence) VALUES (?1, ?2) ON CONFLICT(name) DO UPDATE SET sequence = excluded.sequence",
-                            params![name, seq as i64],
-                        )?;
-                        buckets += 1;
-                    }
-                    Some("entry") => {
-                        let bucket = String::from_utf8(field("bucket")?)?;
-                        tx.execute(
-                            "INSERT INTO entries(bucket, key, value) VALUES (?1, ?2, ?3)",
-                            params![bucket, field("key")?, field("value")?],
-                        )?;
-                        entries += 1;
-                    }
-                    Some("end") => end = Some((v["buckets"].as_u64(), v["entries"].as_u64())),
-                    _ => return Err(format!("unknown dump line: {line}").into()),
-                }
-            }
-            if end != Some((Some(buckets as u64), Some(entries as u64))) {
-                return Err("dump is truncated or its counts do not match".into());
-            }
-            // NextSequence must never hand out a seq that already has a record.
-            let seq = sequence(tx, RECORDS)?;
-            let last: Option<Vec<u8>> = tx
-                .query_row("SELECT max(key) FROM entries WHERE bucket = ?1", [RECORDS], |r| r.get(0))
-                .optional()?
-                .flatten();
-            if last.is_some_and(|k| k.len() == 8 && u64::from_be_bytes(k.try_into().unwrap()) > seq) {
-                return Err("records sequence is behind the stored records".into());
-            }
-            Ok((buckets, entries))
-        })
+fn lock_file(path: &Path) -> std::path::PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(".lock");
+    name.into()
+}
+
+/// A non-empty file that is not SQLite (typically the Go relay's bbolt
+/// relay.db) is refused before SQLite touches it, with the upgrade path.
+fn refuse_foreign_file(file: &File, path: &Path) -> Result<(), Error> {
+    use std::io::Read;
+    let mut header = Vec::with_capacity(16);
+    file.take(16).read_to_end(&mut header)?;
+    if header.is_empty() || header == b"SQLite format 3\0" {
+        return Ok(());
     }
+    Err(format!(
+        "{}: not a SQLite database. A relay.db from the old Go (bbolt) relay is no longer opened or converted by this version; \
+         migrate it once with the relay package built from commit 3ca693d (relay-export + --import-bolt-dump), then upgrade. \
+         The file was left unchanged.",
+        path.display()
+    )
+    .into())
 }
 
 trait Mode0600 {

@@ -55,7 +55,15 @@ function tokenSize(source: string, at: number, token: string, encoder: TextEncod
 }
 
 /** Maintain the open-ancestor stack (and table colgroup preludes) for one token. */
-function trackTag(stack: SegmentAncestor[], opened: number[], source: string, at: number, end: number, token: string) {
+function trackTag(
+  stack: SegmentAncestor[],
+  opened: number[],
+  source: string,
+  at: number,
+  end: number,
+  token: string,
+  byte: number,
+) {
   const tag = source[at] === "<" ? /^<(\/)?([a-z][a-z0-9]*)\b/i.exec(token) : null;
   if (!tag) return;
   const name = tag[2].toLowerCase();
@@ -66,7 +74,7 @@ function trackTag(stack: SegmentAncestor[], opened: number[], source: string, at
     if (name === "colgroup" && start! >= 0 && stack.at(-1)?.tag === "table")
       stack.at(-1)!.prelude = source.slice(start!, end);
   } else if (!VOIDS.has(name) && !token.endsWith("/>")) {
-    stack.push({ tag: name, open: token });
+    stack.push({ tag: name, open: token, at: byte });
     opened.push(at);
   }
 }
@@ -124,7 +132,7 @@ export function* modelSourceSegments(
       throw new Error("원문 토큰 내부에서 줄 경계를 자를 수 없습니다.");
     if (bytes - startBytes + size > 32768 && at > start) yield take();
     if (size > 32768) throw new Error("큰 서식 토큰의 표시 범위를 준비하지 못했습니다. 원문을 유지합니다.");
-    trackTag(stack, opened, source, at, end, token);
+    trackTag(stack, opened, source, at, end, token, byteOffset + bytes);
     bytes += size;
     at = end;
     // Keep closing ancestor shells with their content. Parsing a final </ul>

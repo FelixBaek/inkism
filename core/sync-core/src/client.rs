@@ -206,7 +206,12 @@ impl RelayClient {
                 "relay rejected pull ({status}): {detail}"
             )));
         }
-        let page: Page = serde_json::from_reader(response.take(48 << 20))?;
+        // serde_json reads a `Read` one byte at a time; unbuffered, every
+        // byte of a multi-megabyte page was a separate blocking body poll.
+        let page: Page = serde_json::from_reader(std::io::BufReader::with_capacity(
+            256 << 10,
+            response.take(48 << 20),
+        ))?;
         Ok(ChangePage {
             items: page.items,
             cursor: page.cursor,

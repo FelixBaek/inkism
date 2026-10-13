@@ -1,4 +1,5 @@
 import {chromium} from 'playwright-core';
+import {trackSaves} from './save-state.ts';
 import assert from 'node:assert/strict';
 import {historyKey} from './history-keys.ts';
 import {waitForPredicate} from './wait-for-predicate.ts';
@@ -10,7 +11,7 @@ const note=await rpc('save',{note:{title,content:initial,text:'한글'}});await 
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 const page=await browser.newPage({viewport:{width:1440,height:960}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
 const root=page.locator('.tiptap-prose');
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saves=trackSaves(page),saved=()=>saves.saved();
 const at=offset=>page.waitForFunction(offset=>document.querySelector('[data-window-start]')?.getAttribute('data-window-start')===String(offset),offset);
 const jump=async offset=>{await page.getByLabel('이동할 블록 번호').fill(String(offset+1));await page.getByRole('button',{name:'이동',exact:true}).click();await at(offset);};
 const type=async text=>{await root.locator('p').first().click();await page.keyboard.press('Home');await page.keyboard.insertText(text);await page.keyboard.press('Control+s');await saved();};
@@ -45,7 +46,7 @@ try {
  // No redo button any more: Ctrl+Y must be a no-op (no window jump, no body change) after the new branch.
  const baseline=(await rpc('get',{id:note.id})).content;
  await redo();await page.waitForTimeout(500);assert.equal(await page.locator('[data-window-start]').getAttribute('data-window-start'),'128');
- await page.keyboard.press('Control+s');await saved();assert.equal((await rpc('get',{id:note.id})).content,baseline);assert.ok((await root.textContent()).includes('새분기'));
+ await page.keyboard.press('Control+s');await saves.unchanged();assert.equal((await rpc('get',{id:note.id})).content,baseline);assert.ok((await root.textContent()).includes('새분기'));
  await page.route('**/api/rpc',route=>route.request().postDataJSON().op==='document_splice_html' ? route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({ok:false,error:'offline test'})}) : route.continue());
  await root.locator('p').first().click();await page.keyboard.press('Home');await page.keyboard.insertText('실패보존 ');await page.keyboard.press('Control+s');await page.getByRole('button',{name:'다시 저장',exact:true}).waitFor();
  await undo();assert.equal((await root.textContent()).includes('실패보존'),false);

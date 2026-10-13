@@ -1,5 +1,7 @@
 import {chromium} from 'playwright-core';
+import {waitSaved} from './save-state.ts';
 import assert from 'node:assert/strict';
+import {assertBlockBytes} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47896';
 const rpc=async(op,args={})=>{const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const value=await response.json();assert.equal(value.ok,true,JSON.stringify(value));return value.data;};
 const title='전환순서 '+Date.now();
@@ -7,6 +9,8 @@ const a=await rpc('save',{note:{title:title+' A',content:'<p>처음</p>',text:'�
 const b=await rpc('save',{note:{title:title+' B',content:'<p>둘째</p>',text:'둘째'}});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 const page=await browser.newPage();const root=page.locator('.tiptap-prose');
+// Same isolated profile as the other UI tests: Korean UI and the note inspector closed (at 1280px it opens as a modal overlay over the editor).
+await page.addInitScript(()=>{if(window.top!==window||!/^https?:$/.test(location.protocol))return;localStorage.setItem('inkism.lang','ko');if(localStorage.getItem('inkism.inspector')===null)localStorage.setItem('inkism.inspector','false');});
 let release,started,finished;const ready=new Promise(r=>started=r),gate=new Promise(r=>release=r),handled=new Promise(r=>finished=r);
 try {
  await page.goto(base);await page.getByRole('button',{name:'노트 열기: '+a.title,exact:true}).click();await root.waitFor();
@@ -15,7 +19,7 @@ try {
  await page.getByRole('button',{name:'노트 열기: '+b.title,exact:true}).click();
  await page.getByRole('button',{name:'노트 열기: '+a.title,exact:true}).click();
  release();await handled;await page.unroute('**/api/rpc');
- await page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+ await waitSaved(page);
  // Drain the old selection's 25 ms flush waiter as well as React's commit.
  await page.waitForTimeout(100);
  assert.equal(await page.getByLabel('노트 제목',{exact:true}).inputValue(),a.title);
@@ -24,8 +28,8 @@ try {
  await root.click();await page.keyboard.press('Control+End');await page.keyboard.insertText(' 충돌');await page.keyboard.press('Control+s');
  await page.getByRole('button',{name:'서버 버전으로 교체',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.tiptap-prose')?.textContent==='원격 새 내용');
  await root.click();await page.keyboard.press('Control+End');await page.keyboard.insertText(' 이후편집');await page.keyboard.press('Control+s');
- await page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
- assert.equal((await rpc('get',{id:a.id})).content,'<p>원격 새 내용 이후편집</p>');
+ await waitSaved(page);
+ assertBlockBytes((await rpc('get',{id:a.id})).content,'<p>원격 새 내용 이후편집</p>',{added:1,message:'edit after server replacement'});
  // Discarding a conflicting source editor must not flush its last buffered keys
  // back over the explicitly selected server version during unmount.
  await page.getByRole('button',{name:'HTML',exact:true}).click();

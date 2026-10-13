@@ -5,9 +5,8 @@ edition = "2021"
 license = "MIT"
 description = "Inkism encrypted sync relay: opaque records, attachment ciphertext, public snapshots, optional owner recovery."
 
-# Wire-compatible port of desktop/internal/relay (Go). Storage is SQLite; an
-# old bbolt relay.db is migrated once with desktop/cmd/relay-export and
-# `inkism-sync-relay --import-bolt-dump`.
+# Keeps the original relay wire format (HTTP routes, JSON bytes, cursors);
+# storage is SQLite.
 
 [[bin]]
 name = "inkism-sync-relay"

@@ -1,7 +1,9 @@
 // Shipped React/Go/Rust, isolated profile. No personal desktop automation.
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright-core';
+import {waitSaved} from './save-state.ts';
 import {historyKey} from './history-keys.ts';
+import {assertBlockBytes} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL;
 assert.ok(base,'isolated application URL required');
 const rpc=async(op,args={})=>{const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const value=await response.json();assert.equal(value.ok,true,JSON.stringify(value));return value.data;};
@@ -17,7 +19,7 @@ const page=await browser.newPage({viewport:{width:1440,height:960}}),errors=[],s
 page.on('pageerror',error=>errors.push(error.message));
 const editor=page.locator('.tiptap-prose');
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized&&Array.from(document.querySelectorAll<any>('.window-controls button')).some(button=>button.textContent==='이동'&&!button.disabled));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>waitSaved(page);
 const body=async()=>(await rpc('get',{id:note.id})).content;
 const idle=()=>page.waitForFunction(()=>!document.querySelector('.document-selection-status')&&!document.querySelector('.window-error'));
 try{
@@ -50,7 +52,9 @@ try{
  // The next character must land at the actual edit, rather than the start of
  // the prepared source range or a distant preview.
  await page.keyboard.insertText('후속');await saved();
- assert.equal(await body(),source.slice(0,seam-1)+'후속'+source.slice(seam),'follow-up input retains exact caret');
+ // Typing in the internal window identifies the giant paragraph around it by
+ // one splice of its opening tag; every other byte is exact.
+ assertBlockBytes(await body(),source.slice(0,seam-1)+'후속'+source.slice(seam),{added:1,message:'follow-up input retains exact caret'});
  await page.reload();await ready();
  await historyKey(page,'undo');await saved();assert.equal(await body(),deleted,'restart undo follow-up input');
  await historyKey(page,'undo');await saved();assert.equal(await body(),source,'restart undo selected deletion');

@@ -56,7 +56,6 @@ pub mod merge_changes;
 
 pub mod resources;
 
-pub mod collaboration_bindings;
 
 pub mod named_versions;
 
