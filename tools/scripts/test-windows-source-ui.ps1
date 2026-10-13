@@ -652,9 +652,9 @@ try {
         if((Read-Field (Find-Element '노트 제목')) -ne $title){throw 'Active source tab did not restore'}
         Wait-SourceMarker $format 'native_typed'
         $before=[DateTime]::UtcNow
-        # Raw source export is a note command (command palette), no longer a toolbar button.
+        # Raw source export is a note command (command palette, shown as "Export as" › 원문), no longer a toolbar button.
         Invoke-Element (Find-Element '명령창 열기' ([System.Windows.Automation.ControlType]::Button))
-        Invoke-Element (Find-Element '다른 형식으로 내보내기' ([System.Windows.Automation.ControlType]::ListItem))
+        Invoke-Element (Find-Element 'Export as' ([System.Windows.Automation.ControlType]::ListItem))
         Invoke-Element (Find-Element '원문' ([System.Windows.Automation.ControlType]::ListItem))
         $extension=switch($format){'html'{'html'}'markdown'{'md'}default{'txt'}}
         $download=Wait-TestDownload $title $extension $before {param([byte[]]$data) (Remove-BlockIds ([System.Text.Encoding]::UTF8.GetString($data))) -ceq $content}
