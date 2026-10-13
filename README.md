@@ -63,7 +63,7 @@ npm --prefix frontend run test:unit
 
 Add `--features encrypted-storage` to the Rust tests to cover encrypted storage.
 Browser tests use Playwright Chromium: `tools/scripts/test-browser.sh`.
-Known issue: many editor browser tests have not caught up with recent UI changes and fail.
+Browser checks exercise the paths declared by each script. Physical IME, OS key storage and installation are verified on the target platform.
 
 ## Sync relay
 
@@ -74,7 +74,7 @@ then run `docker compose -p inkism-sync up -d --build`.
 The relay is the Rust crate `core/sync-relay` and stores data in SQLite. It no longer
 opens or converts a `relay.db` from the earlier Go (bbolt) relay. The one-time migration
 tools (`desktop/cmd/relay-export` and `inkism-sync-relay --import-bolt-dump`) remain in
-git history at commit `3ca693d`; package that commit (it also needs the Go toolchain)
+git history at commit `6958e78`; package that commit (it also needs the Go toolchain)
 to convert an old database once.
 
 ## License
