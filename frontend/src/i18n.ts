@@ -15,15 +15,25 @@ export type Lang = (typeof LANGS)[number]["id"];
 const KEY = "inkism.lang";
 const DICTS: Record<Lang, Record<string, string>> = { ko: {}, en, zh, ja };
 
-function initialLang(): Lang {
-  try {
-    const saved = localStorage.getItem(KEY);
-    if (saved && saved in DICTS) return saved as Lang;
-  } catch {
-    // storage can be unavailable; fall back to Korean
+/** A saved choice wins; otherwise use the first supported system language. */
+export function preferredLanguage(saved: unknown, systemLanguages: readonly string[]): Lang {
+  if (typeof saved === "string" && LANGS.some(({ id }) => id === saved)) return saved as Lang;
+  for (const language of systemLanguages) {
+    const base = language.toLowerCase().split("-")[0];
+    if (LANGS.some(({ id }) => id === base)) return base as Lang;
   }
-  // ponytail: 기본은 한국어. 시스템 언어 따라가기는 브라우저 검사들이 언어를 고정한 뒤에 켠다.
   return "ko";
+}
+
+function initialLang(): Lang {
+  let saved: string | null = null;
+  try {
+    saved = localStorage.getItem(KEY);
+  } catch {
+    // The system preference also works when storage is unavailable.
+  }
+  const languages = typeof document === "undefined" || typeof navigator === "undefined" ? [] : navigator.languages.length ? navigator.languages : [navigator.language];
+  return preferredLanguage(saved, languages);
 }
 
 export const lang: Lang = initialLang();
@@ -32,7 +42,7 @@ const dict = DICTS[lang];
 
 /** 한국어 원문을 현재 언어로 바꾼다. `{name}` 자리는 vars 값으로 채운다. 번역이 없으면 원문을 쓴다. */
 export function t(ko: string, vars?: Record<string, string | number>): string {
-  const text = dict[ko] ?? ko;
+  const text = Object.prototype.hasOwnProperty.call(dict, ko) ? dict[ko] : ko;
   return vars ? text.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)) : text;
 }
 

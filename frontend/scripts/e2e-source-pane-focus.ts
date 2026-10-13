@@ -1,6 +1,6 @@
 import {waitForPredicate} from './wait-for-predicate.ts';
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48305';
 const rpc=async(op,args={})=>{
  const value=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();

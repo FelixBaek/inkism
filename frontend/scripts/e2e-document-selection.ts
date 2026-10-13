@@ -1,4 +1,4 @@
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {trackSaves} from './save-state.ts';
 import assert from 'node:assert/strict';
 import {waitForPredicate} from './wait-for-predicate.ts';
@@ -31,12 +31,12 @@ try{
  await page.locator('.tiptap-prose').evaluate((el: any)=>el.editor.commands.toggleHeading({level:1}));
  await formatted();await saved();
  let headings=(await rpc('get',{id:note.id})).content;
- assert.equal((headings.match(/<h1>/g)||[]).length,10000);
+ const headingIds=assertBlockBytes(headings,content.replaceAll('<p>','<h1>').replaceAll('</p>','</h1>'),{added:10000,message:'all selected headings receive identities'});
  assert.equal(await page.locator('.tiptap-prose h1').count(),32);
  await focus();await page.keyboard.press('Control+a');
  await page.locator('.tiptap-prose').evaluate((el: any)=>el.editor.commands.toggleHeading({level:1}));
  await formatted();await saved();
- assert.equal((await rpc('get',{id:note.id})).content,content);
+ assertBlockBytes((await rpc('get',{id:note.id})).content,content,{added:10000,ids:headingIds,message:'format toggle keeps existing identities'});
  await focus();await page.keyboard.press('Control+z');await saved();
  assert.equal((await rpc('get',{id:note.id})).content,headings);
  await page.reload();await page.locator('[data-window-start="0"]').waitFor();

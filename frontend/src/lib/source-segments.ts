@@ -42,6 +42,53 @@ function tokenEnd(source: string, at: number): number {
   return source.codePointAt(at)! > 0xffff ? at + 2 : at + 1;
 }
 
+/** Read an actual opening-tag attribute, ignoring quoted values of other
+ * attributes. The pure scanner is also used in a worker, without a DOM. */
+function dataType(token: string): string | undefined {
+  const name = /^<[a-z][a-z0-9]*\b/i.exec(token);
+  if (!name) return;
+  let at = name[0].length;
+  while (at < token.length) {
+    while (/\s/.test(token[at] ?? "")) at++;
+    if (token[at] === ">" || token[at] === "/") return;
+    const attr = /^[^\s=/>]+/.exec(token.slice(at));
+    if (!attr) return;
+    at += attr[0].length;
+    while (/\s/.test(token[at] ?? "")) at++;
+    let value: string | undefined;
+    if (token[at] === "=") {
+      at++;
+      while (/\s/.test(token[at] ?? "")) at++;
+      const quote = token[at];
+      if (quote === '"' || quote === "'") {
+        const end = token.indexOf(quote, ++at);
+        if (end < 0) return;
+        value = token.slice(at, end); at = end + 1;
+      } else {
+        const unquoted = /^[^\s>]+/.exec(token.slice(at));
+        if (!unquoted) return;
+        value = unquoted[0]; at += value.length;
+      }
+    }
+    if (attr[0].toLowerCase() === "data-type") return value;
+  }
+}
+
+/** Canonical math HTML represents a leaf, not editable span/div content.
+ * Splitting its text duplicates the atom when bounded models are joined.
+ * Keep known leaves whole; ordinary HTML wrappers retain normal token cuts. */
+function mathLeafEnd(source: string, at: number, openingEnd: number): number | undefined {
+  const opening = source.slice(at, openingEnd), tag = /^<(span|div)\b/i.exec(opening)?.[1].toLowerCase();
+  if (!tag || dataType(opening) !== (tag === "span" ? "inline-math" : "block-math")) return;
+  const bounded = source.slice(openingEnd, at + 32769), close = bounded.indexOf("<");
+  if (close < 0) {
+    if (source.length > at + 32768) throw new Error("큰 서식 토큰의 표시 범위를 준비하지 못했습니다. 원문을 유지합니다.");
+    return;
+  }
+  const closing = new RegExp(`^<\\/${tag}\\s*>`, "i").exec(source.slice(openingEnd + close, openingEnd + close + 64));
+  return closing ? openingEnd + close + closing[0].length : undefined;
+}
+
 function utf8Length(cp: number): number {
   if (cp <= 0x7f) return 1;
   if (cp <= 0x7ff) return 2;
@@ -125,14 +172,16 @@ export function* modelSourceSegments(
   };
   let cutIndex = firstCut(cuts, byteOffset);
   while (at < source.length) {
-    const end = tokenEnd(source, at),
+    const openingEnd = tokenEnd(source, at),
+      leafEnd = source[at] === "<" ? mathLeafEnd(source, at, openingEnd) : undefined,
+      end = leafEnd ?? openingEnd,
       token = source.slice(at, end);
     const size = tokenSize(source, at, token, encoder);
     if (cuts[cutIndex] !== undefined && cuts[cutIndex] < byteOffset + bytes + size)
       throw new Error("원문 토큰 내부에서 줄 경계를 자를 수 없습니다.");
     if (bytes - startBytes + size > 32768 && at > start) yield take();
     if (size > 32768) throw new Error("큰 서식 토큰의 표시 범위를 준비하지 못했습니다. 원문을 유지합니다.");
-    trackTag(stack, opened, source, at, end, token, byteOffset + bytes);
+    if (leafEnd === undefined) trackTag(stack, opened, source, at, end, token, byteOffset + bytes);
     bytes += size;
     at = end;
     // Keep closing ancestor shells with their content. Parsing a final </ul>

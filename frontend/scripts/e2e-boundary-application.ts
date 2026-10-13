@@ -1,6 +1,6 @@
 // Real application/Rust with an isolated profile. Never personal PC input.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {waitSaved} from './save-state.ts';
 import {historyKey} from './history-keys.ts';
 import {assertBlockBytes,blockIds,withoutBlockIds} from './block-identity-bytes.ts';

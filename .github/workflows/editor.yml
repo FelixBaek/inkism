@@ -39,6 +39,7 @@ jobs:
         run: |
           INKISM_TEST_PREVIEW="$PWD/core/local-api/target/debug/inkism-local-api" INKISM_TEST_ENGINE="$PWD/core/runtime-core/target/debug/inkism-engine" npm --prefix frontend run test:unit
           npm --prefix frontend run test:unit:coverage:core
+          node --test tools/scripts/test-rust-build.ts
       - name: Verify production and StrictMode editor lifecycles
         shell: bash
         run: |

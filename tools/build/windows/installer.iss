@@ -1,4 +1,9 @@
-; Validation builds never register over a user's installed Inkism.
+; Validation builds use a separate URL scheme and never register over installed Inkism.
+#ifdef ValidationBuild
+#define NoteProtocol "inkism-validation-note"
+#else
+#define NoteProtocol "note"
+#endif
 [Setup]
 #ifdef ValidationBuild
 AppId=Inkism-Isolated-Validation
@@ -17,6 +22,7 @@ AppPublisher=Felix
 DefaultDirName={localappdata}\Programs\Inkism
 DefaultGroupName=inkism
 PrivilegesRequired=lowest
+ChangesAssociations=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
@@ -32,6 +38,7 @@ UninstallDisplayIcon={app}\Inkism.exe
 
 [Tasks]
 Name: desktopicon; Description: "Create a desktop shortcut"; Flags: unchecked
+Name: notelinks; Description: "Open note:// links with Inkism"; Flags: unchecked
 
 [Files]
 Source: "..\..\..\dist\windows\Inkism.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -47,6 +54,14 @@ Name: "{group}\inkism"; Filename: "{app}\Inkism.exe"
 Name: "{autodesktop}\inkism"; Filename: "{app}\Inkism.exe"; Tasks: desktopicon
 
 #endif
+
+[Registry]
+; This optional task changes only the current user's selected note-link handler.
+; Cleanup is conditional in CurUninstallStepChanged; another later handler survives.
+Root: HKCU; Subkey: "Software\Classes\{#NoteProtocol}"; ValueType: string; ValueName: ""; ValueData: "URL:Inkism Note"; Tasks: notelinks
+Root: HKCU; Subkey: "Software\Classes\{#NoteProtocol}"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Tasks: notelinks
+Root: HKCU; Subkey: "Software\Classes\{#NoteProtocol}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\Inkism.exe"",0"; Tasks: notelinks
+Root: HKCU; Subkey: "Software\Classes\{#NoteProtocol}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Inkism.exe"" --open ""%1"""; Tasks: notelinks
 
 [Run]
 Filename: "{app}\Inkism.exe"; Description: "Open inkism"; Flags: nowait postinstall skipifsilent
@@ -69,4 +84,14 @@ begin
     Result := 'Unable to check Microsoft WebView2. Install WebView2 and retry.';
   if (Result = '') and (Code <> 0) then
     Result := 'Microsoft WebView2 installation failed. Check your internet connection and retry.';
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  RegisteredCommand: String;
+begin
+  if CurUninstallStep = usUninstall then
+    if RegQueryStringValue(HKCU, 'Software\Classes\{#NoteProtocol}\shell\open\command', '', RegisteredCommand) then
+      if CompareText(RegisteredCommand, ExpandConstant('"{app}\Inkism.exe" --open "%1"')) = 0 then
+        RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\{#NoteProtocol}');
 end;

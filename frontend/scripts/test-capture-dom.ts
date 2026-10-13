@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,readFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {captureDOM} from './capture-dom.ts';
 const dir=await mkdtemp(join(tmpdir(),'inkism-dom-helper-'));
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});

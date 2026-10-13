@@ -1,6 +1,6 @@
 // Shipped application + Go bridge + current Rust runtime. Synthetic profile only.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {historyKey} from './history-keys.ts';
 import {waitSaved,waitSaveState} from './save-state.ts';
 import {assertBlockBytes} from './block-identity-bytes.ts';

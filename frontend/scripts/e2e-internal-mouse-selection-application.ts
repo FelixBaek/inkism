@@ -1,7 +1,7 @@
 import {waitForAsync} from './async-browser-condition.ts';
 // A real drag across two source pieces of the same oversized paragraph.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {historyKey} from './history-keys.ts';
 import {assertBlockBytes} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL;assert.ok(base);

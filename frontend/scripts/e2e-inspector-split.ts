@@ -1,4 +1,4 @@
-import{chromium}from'playwright-core';import assert from'node:assert/strict';
+import{chromium}from'./browser-env.ts';import assert from'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48178';const rpc=async(op,args={})=>{const v=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
 // The split entry button is gone; only a previously saved split layout still opens the pane, so seed one.
 const x=await rpc('save',{note:{title:'속성 분할 왼쪽',content:'<p>왼쪽</p>',content_format:'html'}}),y=await rpc('save',{note:{title:'속성 분할 오른쪽',content:'<p>오른쪽</p>',content_format:'html'}});await rpc('workspace_set',{ids:[x.id],active:x.id,locations:{}});await rpc('split_set',{id:y.id,mode:'source'});

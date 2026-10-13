@@ -32,11 +32,14 @@ trap 'rm -rf "$staging"' EXIT
 dirty="$(git status --porcelain)"
 
 rust_target=x86_64-unknown-linux-gnu
+cargo_target_dir="${CARGO_TARGET_DIR:-core/sync-relay/target}"
 echo "building static relay binary (cargo --release, $rust_target, crt-static)..."
 RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-stable}" RUSTFLAGS="-C target-feature=+crt-static" \
-  cargo build --release --locked --target "$rust_target" --manifest-path core/sync-relay/Cargo.toml
-cp "core/sync-relay/target/$rust_target/release/inkism-sync-relay" "$staging/inkism-sync-relay"
-if ! ldd "$staging/inkism-sync-relay" 2>&1 | grep -Eq 'statically linked|not a dynamic executable'; then
+  cargo build --release --locked --target "$rust_target" --target-dir "$cargo_target_dir" --manifest-path core/sync-relay/Cargo.toml
+cp "$cargo_target_dir/$rust_target/release/inkism-sync-relay" "$staging/inkism-sync-relay"
+# ldd exits 1 for a fully static ELF; inspect its output independently of that exit code.
+linkage="$(ldd "$staging/inkism-sync-relay" 2>&1 || true)"
+if ! grep -Eq 'statically linked|not a dynamic executable' <<< "$linkage"; then
   echo "error: relay binary is dynamically linked" >&2
   exit 1
 fi

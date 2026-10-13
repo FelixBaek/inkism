@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {trackSaves} from './save-state.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48291';
 const rpc=async(op,args={})=>{

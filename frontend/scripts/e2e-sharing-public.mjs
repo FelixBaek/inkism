@@ -1,4 +1,4 @@
-import { chromium } from 'playwright-core';
+import { chromium } from './browser-env.ts';
 import path from 'node:path';import {fileURLToPath} from 'node:url';
 import { spawn } from 'node:child_process';import fs from 'node:fs/promises';import assert from 'node:assert/strict';
 const port=Number(process.env.SHARING_TEST_PORT||49273),base=`http://127.0.0.1:${port}`,token='sharing-fixture-owner-token-1234567890';
