@@ -198,8 +198,10 @@ def main():
                 raise RuntimeError("Android package installation did not report success")
             report["checkpoints"].append("Existing ARM64 APK installed without rebuilding")
             launch()
+            original = wait_for(storage, "encrypted mobile library initialization")
+            report["storage_before"] = original
+            report["checkpoints"].append("Native Android host created the encrypted library and device-key identity")
             start = wait_for(lambda: labelled(hierarchy("startup"), NEW_NOTE), "rendered note UI")
-            original = storage()
             screenshot("startup")
             report["storage_before"] = original
             report["checkpoints"].append("Native process, actual note UI and encrypted library opened")
@@ -236,13 +238,20 @@ def main():
             print("PASS: existing Android ARM64 APK installed; native note UI/input, encrypted library and unchanged key identity survive restart; emulator, not physical-device IME")
     except Exception as error:
         report["failure"] = str(error)
+        if owned_device:
+            try:
+                screenshot("failure")
+            except (RuntimeError, OSError, subprocess.TimeoutExpired) as capture_error:
+                report["failure_capture_error"] = str(capture_error)
         raise
     finally:
         if child is not None:
             try:
                 if owned_device and device_identity():
-                    logs = android("logcat", "-d", "-t", "1500", timeout=20, check=False).stdout
-                    (output / "android-logcat.txt").write_text(logs)
+                    provider = android("shell", "dumpsys", "webviewupdate", timeout=20, check=False).stdout
+                    (output / "webview-provider.log").write_text(provider)
+                    logs = android("logcat", "-d", "-t", "5000", timeout=20, check=False).stdout
+                    (output / "android-logcat.log").write_text(logs)
             except (RuntimeError, subprocess.TimeoutExpired):
                 pass
             if child.poll() is None:
