@@ -37,11 +37,10 @@ pub struct Store {
 
 impl Store {
     pub fn open(path: &Path) -> Result<Store, Error> {
-        // Unix flock is advisory, so the database file itself is locked. A
-        // Windows lock is mandatory and would fail SQLite's own reads and
-        // writes ("disk I/O error"), so Windows locks a `<db>.lock` beside it.
-        let lock_path = if cfg!(windows) { lock_file(path) } else { path.to_path_buf() };
-        let lock = OpenOptions::new().read(true).write(true).create(true).mode_0600().open(&lock_path)?;
+        // Create the database owner-only before SQLite touches it. A sidecar
+        // keeps the process lock separate from SQLite's reads on every OS.
+        let db = OpenOptions::new().read(true).write(true).create(true).mode_0600().open(path)?;
+        let lock = OpenOptions::new().read(true).write(true).create(true).mode_0600().open(lock_file(path))?;
         let started = Instant::now();
         while lock.try_lock_exclusive().is_err() {
             if started.elapsed() >= Duration::from_secs(1) {
@@ -49,11 +48,6 @@ impl Store {
             }
             std::thread::sleep(Duration::from_millis(50));
         }
-        let db = if cfg!(windows) {
-            OpenOptions::new().read(true).write(true).create(true).mode_0600().open(path)?
-        } else {
-            lock.try_clone()?
-        };
         refuse_foreign_file(&db, path)?;
         drop(db);
         let conn = Connection::open(path)?;
