@@ -12,6 +12,28 @@ import {TermDefinition, termAttrs, validTermDefinition} from "../extensions/term
 import { t } from "../i18n";
 
 // A single audited inline extension; arbitrary HTML remains outside the GFM editor.
+/** Attribute names in source order, including duplicates the DOM parser would drop. */
+function attributeNames(source: string): string[] {
+  const names: string[] = [];
+  const space = (c: string | undefined) => c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f";
+  let i = 0;
+  const skip = () => { while (space(source[i])) i++; };
+  while (i < source.length) {
+    skip();
+    const start = i;
+    while (i < source.length && !space(source[i]) && source[i] !== "=") i++;
+    if (i === start) break;
+    names.push(source.slice(start, i).toLowerCase());
+    skip();
+    if (source[i] !== "=") continue;
+    i++; skip();
+    const quote = source[i];
+    if (quote === '"' || quote === "'") { const end = source.indexOf(quote, i + 1); if (end < 0) break; i = end + 1; }
+    else while (i < source.length && !space(source[i])) i++;
+  }
+  return names;
+}
+
 const MarkdownTermDefinition = TermDefinition.extend({
   markdownTokenName: 'termDefinition',
   markdownTokenizer: {
@@ -25,7 +47,7 @@ const MarkdownTermDefinition = TermDefinition.extend({
       const allowed = new Set(['data-term-id','data-term-definition','data-term-glossary-id','data-term-note-id']);
       if (Array.from(span.attributes).some(a => !allowed.has(a.name))) return undefined;
       // Reject duplicate attributes before the DOM parser can normalize them away.
-      const names = Array.from(match[1].matchAll(/([^\s=]+)\s*=\s*(?:"[^"]*"|'[^']*')/g), a => a[1].toLowerCase());
+      const names = attributeNames(match[1]);
       if (new Set(names).size !== names.length || names.length !== span.attributes.length) return undefined;
       const attrs = termAttrs(span as HTMLElement);
       if (!validTermDefinition(attrs)) return undefined;
