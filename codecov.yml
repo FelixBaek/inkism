@@ -1,0 +1,13 @@
+# Codecov = coverage only. It reports but never blocks a merge;
+# SonarCloud owns the quality gate and CodeQL owns security.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+comment:
+  layout: "diff, files"
+  require_changes: true
