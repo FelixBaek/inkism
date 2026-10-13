@@ -70,7 +70,7 @@ export function groupView(notes: KnowledgeItem[], property: string): {key:string
   const groups=new Map<string,{key:string;label:string;items:KnowledgeItem[]}>();
   for(const note of notes){
     const value=propertyValue(note,property);
-    const normalized=Array.isArray(value)?[...value].sort():value;
+    const normalized=Array.isArray(value)?[...value].sort((a,b)=>String(a)<String(b)?-1:String(a)>String(b)?1:0):value;
     const key=normalized===undefined||normalized===''||(Array.isArray(normalized)&&!normalized.length)?'missing':JSON.stringify(normalized);
     if(!groups.has(key))groups.set(key,{key,label:displayProperty(normalized),items:[]});
     groups.get(key)!.items.push(note);

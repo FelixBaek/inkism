@@ -22,7 +22,7 @@ export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-stable}"
 export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc
 SHELL_MANIFEST=desktop-tauri/src-tauri/Cargo.toml
 
-npm --prefix frontend ci --no-audit --no-fund
+npm --prefix frontend ci --ignore-scripts --no-audit --no-fund
 npm --prefix frontend run build
 if [ -z "$BUILD_ONLY" ]; then
   cargo test --locked --manifest-path core/engine/Cargo.toml

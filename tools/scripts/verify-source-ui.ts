@@ -25,7 +25,9 @@ for (const testCase of expected) {
   assert.equal(matching.length, 1, `missing/duplicate title ${testCase.title} ${matching.length}`);
   const note = rpc({op: 'get', id: matching[0].id});
   assert.equal(note.content_format, testCase.format, `${testCase.title} ${note.content_format}`);
-  assert.equal(note.content, testCase.content, `raw UTF-8 differs ${testCase.title} ${JSON.stringify(note.content)} ${JSON.stringify(testCase.content)}`);
+  // Blocks edited in the rich editor gain a random ink-block id; every other byte must match.
+  const content = testCase.format === 'html' ? note.content.replace(/ id="ink-block-[0-9a-f-]{36}"/g, '') : note.content;
+  assert.equal(content, testCase.content, `raw UTF-8 differs ${testCase.title} ${JSON.stringify(note.content)} ${JSON.stringify(testCase.content)}`);
   assert.ok(note.revision >= 1);
 }
 console.log(`PASS: ${expected.length} source notes preserve exact UTF-8 and explicit format after native close`);
