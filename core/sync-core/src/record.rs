@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::Entity;
+use crate::error::{Result, SyncError};
 use crate::vclock::VClock;
 
 /// Current payload schema version.
@@ -35,9 +36,17 @@ impl ChangePayload {
         serde_json::to_vec(self)
     }
 
-    /// Parse decrypted JSON bytes.
-    pub fn decode(bytes: &[u8]) -> serde_json::Result<Self> {
-        serde_json::from_slice(bytes)
+    /// Parse decrypted JSON bytes once and refuse a newer payload schema.
+    /// Versions through v1 retain their existing decoding compatibility.
+    pub fn decode(bytes: &[u8]) -> Result<Self> {
+        let payload: Self = serde_json::from_slice(bytes)?;
+        if payload.version > PAYLOAD_VERSION {
+            return Err(SyncError::UnsupportedPayloadVersion {
+                version: payload.version,
+                supported: PAYLOAD_VERSION,
+            });
+        }
+        Ok(payload)
     }
 
     /// Deterministic total order used to pick a winner under conflict.

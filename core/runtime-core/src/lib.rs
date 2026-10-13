@@ -127,9 +127,9 @@ struct WorkerState {
     /// Notes whose remote changes wait for this device's vault key (last
     /// round). Not an error: they apply after `vault_unlock`.
     vault_key_required: Vec<String>,
-    /// Records written by a newer app version (an entity kind this version
-    /// cannot decode) in the last round. Held pending, not an error: they
-    /// apply after the app is updated.
+    /// Records written by a newer app version (a newer payload schema or an
+    /// entity kind this version cannot decode) in the last round. Held pending,
+    /// not an error; they apply after the app is updated.
     unsupported_records: usize,
 }
 
@@ -310,7 +310,7 @@ impl Svc {
             // Keep excluded events durable. If the user expands the scope
             // later, the same event can then be applied; acknowledging here
             // would make that expansion lose data permanently.
-            // A record this version cannot decode (for example a newer
+            // A record this version cannot decode (a newer payload schema or
             // entity kind) stays pending and reported; it must not stop the
             // remaining records from applying.
             let inc = match sync.resolve_pending(&key.event_id) {
@@ -424,10 +424,11 @@ impl Svc {
     }
 }
 
-/// A record that decrypted and authenticated but names an entity kind this
-/// version does not know: written by a newer app, kept for after an update.
+/// An authenticated record with a newer payload schema or entity kind stays
+/// pending until this app can interpret it after an update.
 fn is_newer_record(e: &sync_core::SyncError) -> bool {
-    matches!(e, sync_core::SyncError::Protocol(m) if m.starts_with("unknown variant"))
+    matches!(e, sync_core::SyncError::UnsupportedPayloadVersion { .. })
+        || matches!(e, sync_core::SyncError::Protocol(m) if m.starts_with("unknown variant"))
 }
 
 /// Re-resolve a pending change under the note lock and apply it.

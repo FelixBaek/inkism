@@ -48,7 +48,6 @@ function Assert-InstalledPayload([string]$source, [string]$destination = $target
 }
 $testProtocol = 'Software\Classes\inkism-validation-note'
 $testProtocolKey = 'HKCU:\' + $testProtocol
-$expectedProtocolCommand = '"' + (Join-Path $target 'Inkism.exe') + '" --open "%1"'
 function Read-ProtocolCommand([string]$scheme) {
     $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Classes\' + $scheme + '\shell\open\command')
     if ($null -eq $key) { return $null }
@@ -59,7 +58,8 @@ if (Test-Path -LiteralPath $testProtocolKey) { throw 'Validation protocol alread
 function Assert-PersonalProtocolPreserved {
     if ((Read-ProtocolCommand 'note') -cne $personalProtocolBefore) { throw 'Validation changed the installed note:// handler' }
 }
-function Assert-InstalledProtocol {
+function Assert-InstalledProtocol([string]$destination = $target) {
+    $expectedProtocolCommand = '"' + (Join-Path $destination 'Inkism.exe') + '" --open "%1"'
     if ((Read-ProtocolCommand 'inkism-validation-note') -cne $expectedProtocolCommand) { throw 'Installed protocol command does not quote the app and URL correctly' }
     $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($testProtocol)
     try { if ($null -eq $key -or $key.GetValueNames() -notcontains 'URL Protocol') { throw 'Installed URL protocol marker is missing' } }
@@ -133,6 +133,18 @@ Write-Output 'PASS: optional HKCU URL protocol, quoted link argument, owned clea
 # and an existing foreign handler untouched through reinstall and removal.
 $optOutForeignCommand = '"C:\InkismValidationOptOutOtherHandler.exe" "%1"'
 $optOutMarker = [guid]::NewGuid().ToString()
+function Set-OptOutForeignProtocol {
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($testProtocol)
+    try {
+        $key.SetValue('', 'URL:Validation foreign sentinel')
+        $key.SetValue('URL Protocol', '')
+        $key.SetValue('InkismValidationSentinel', $optOutMarker)
+    } finally { $key.Dispose() }
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($testProtocol + '\shell\open\command')
+    try { $key.SetValue('', $optOutForeignCommand) } finally { $key.Dispose() }
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($testProtocol + '\DefaultIcon')
+    try { $key.SetValue('', 'C:\InkismValidationOptOutOtherHandler.exe,0') } finally { $key.Dispose() }
+}
 function Assert-OptOutProtocol([bool]$withForeign) {
     if (-not $withForeign) {
         if (Test-Path -LiteralPath $testProtocolKey) { throw 'Unchecked note-link task created a URL protocol' }
@@ -162,18 +174,7 @@ foreach ($withForeign in @($false, $true)) {
     $optOutSentinel = Join-Path $optOutTarget 'preserve-optout-user-data.txt'
     $optOutLogs = Join-Path $root ('dist/installer-optout-' + $caseName)
     try {
-        if ($withForeign) {
-            $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($testProtocol)
-            try {
-                $key.SetValue('', 'URL:Validation foreign sentinel')
-                $key.SetValue('URL Protocol', '')
-                $key.SetValue('InkismValidationSentinel', $optOutMarker)
-            } finally { $key.Dispose() }
-            $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($testProtocol + '\shell\open\command')
-            try { $key.SetValue('', $optOutForeignCommand) } finally { $key.Dispose() }
-            $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($testProtocol + '\DefaultIcon')
-            try { $key.SetValue('', 'C:\InkismValidationOptOutOtherHandler.exe,0') } finally { $key.Dispose() }
-        }
+        if ($withForeign) { Set-OptOutForeignProtocol }
         Assert-OptOutProtocol $withForeign
         Run-Checked $setup ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="" /DIR="' + $optOutTarget + '" /LOG="' + $optOutLogs + '-install.log"')
         Assert-InstalledPayload (Join-Path $root 'dist/windows') $optOutTarget
@@ -204,6 +205,48 @@ foreach ($withForeign in @($false, $true)) {
         }
         if ((Test-Path -LiteralPath $optOutSentinel) -and (Get-Content -LiteralPath $optOutSentinel) -ceq 'preserve-optout') { Remove-Item -LiteralPath $optOutSentinel }
         if ((Test-Path -LiteralPath $optOutTarget) -and -not (Get-ChildItem -LiteralPath $optOutTarget -Force)) { Remove-Item -LiteralPath $optOutTarget }
+    }
+}
+# Upgrading after opt-in must apply the newly unchecked task. A later foreign
+# handler still belongs to its owner even when the old installer registered first.
+foreach ($withForeign in @($false, $true)) {
+    if (Test-Path -LiteralPath $testProtocolKey) { throw 'Opt-in upgrade validation protocol already exists; refusing to overwrite it' }
+    $caseName = if ($withForeign) { 'foreign' } else { 'owned' }
+    $upgradeTarget = Join-Path $env:TEMP ('inkism-install-upgrade-optout-' + [guid]::NewGuid())
+    $upgradeUninstaller = Join-Path $upgradeTarget 'unins000.exe'
+    $upgradeSentinel = Join-Path $upgradeTarget 'preserve-upgrade-user-data.txt'
+    $upgradeLogs = Join-Path $root ('dist/installer-upgrade-optout-' + $caseName)
+    try {
+        Run-Checked $setup ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="notelinks" /DIR="' + $upgradeTarget + '" /LOG="' + $upgradeLogs + '-install.log"')
+        Assert-InstalledPayload (Join-Path $root 'dist/windows') $upgradeTarget
+        Assert-InstalledProtocol $upgradeTarget
+        Set-Content -LiteralPath $upgradeSentinel -Value 'preserve-upgrade'
+        if ($withForeign) { Set-OptOutForeignProtocol }
+        Run-Checked $setup ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="" /DIR="' + $upgradeTarget + '" /LOG="' + $upgradeLogs + '-update.log"')
+        Assert-InstalledPayload (Join-Path $root 'dist/windows') $upgradeTarget
+        Assert-OptOutProtocol $withForeign
+        if ((Get-Content -LiteralPath $upgradeSentinel) -cne 'preserve-upgrade') { throw 'Task deselection upgrade changed unowned user data' }
+        Run-Checked $upgradeUninstaller ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + $upgradeLogs + '-uninstall.log"')
+        Assert-OptOutProtocol $withForeign
+        foreach ($name in $payloadNames) {
+            if (Test-Path -LiteralPath (Join-Path $upgradeTarget $name)) { throw "Task deselection uninstall left an owned payload file behind: $name" }
+        }
+        if (-not (Test-Path -LiteralPath $upgradeSentinel) -or (Get-Content -LiteralPath $upgradeSentinel) -cne 'preserve-upgrade') { throw 'Task deselection uninstall changed unowned user data' }
+        $protocolResult = if ($withForeign) { 'later foreign handler and metadata preserved' } else { 'owned registration removed' }
+        Write-Output ("PASS: opt-in to opt-out upgrade; $protocolResult; exact payload hashes, personal protocol and unowned data preserved")
+    } finally {
+        if (Test-Path -LiteralPath $upgradeUninstaller) {
+            Run-Checked $upgradeUninstaller ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + $upgradeLogs + '-cleanup.log"')
+        }
+        if ($withForeign -and (Read-ProtocolCommand 'inkism-validation-note') -ceq $optOutForeignCommand) {
+            $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($testProtocol)
+            $owned = $false
+            try { if ($null -ne $key) { $owned = $key.GetValue('InkismValidationSentinel') -ceq $optOutMarker } }
+            finally { if ($null -ne $key) { $key.Dispose() } }
+            if ($owned) { [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($testProtocol, $false) }
+        }
+        if ((Test-Path -LiteralPath $upgradeSentinel) -and (Get-Content -LiteralPath $upgradeSentinel) -ceq 'preserve-upgrade') { Remove-Item -LiteralPath $upgradeSentinel }
+        if ((Test-Path -LiteralPath $upgradeTarget) -and -not (Get-ChildItem -LiteralPath $upgradeTarget -Force)) { Remove-Item -LiteralPath $upgradeTarget }
     }
 }
 if (-not (Test-Path $sentinel)) { throw 'Uninstall removed user data' }
