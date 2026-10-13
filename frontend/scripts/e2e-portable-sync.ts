@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';import {build} from 'esbuild';import {readZipEntries} from './read-zip.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:49324';
 const rpc=async(op:string,args={})=>{const r=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const v=await r.json();if(!r.ok||!v.ok)throw Error(v.error||String(r.status));return v.data;};
-const bundle=await build({stdin:{contents:"export * from './lib/portable-sync';",resolveDir:new URL('../src/',import.meta.url).pathname,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'node',logLevel:'error'});const m={exports:{} as any};new Function('module','exports',bundle.outputFiles[0].text)(m,m.exports);const {planFolderChanges,applyFolderChanges}=m.exports;
+const bundle=await build({stdin:{contents:"export * from './lib/portable-sync';",resolveDir:new URL('../src/',import.meta.url).pathname,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'node',logLevel:'error',loader:{'.css':'empty'}});const m={exports:{} as any};new Function('module','exports',bundle.outputFiles[0].text)(m,m.exports);const {planFolderChanges,applyFolderChanges}=m.exports;
 const upload=async(file:File)=>{const f=new FormData();f.append('file',file);f.append('size',String(file.size));const r=await fetch(base+'/api/attachments',{method:'POST',body:f});const v=await r.json();if(!r.ok)throw Error(v.error);return v.data;};
 const asset=await upload(new File(['original bytes'],'photo.txt'));
 const note=await rpc('save',{note:{title:'Outside source',content:`\ufeff# Outside\r\n[file](/api/attachments/${asset.id})`,content_format:'markdown'}});
@@ -21,3 +21,17 @@ assert.equal((await rpc('get',{id:removed.id})).trashed,true);await rpc('patch',
 const stale=await planFolderChanges(files(),(id:string)=>rpc('get',{id}));assert.ok(stale.conflicts.length>=3);
 const repeat=await applyFolderChanges(plan,new Set(plan.changes.map((c:any)=>c.key)),{save:(note:unknown)=>rpc('save',{note}),patch:(id:string,revision:number,sourceHash:string)=>rpc('patch',{id,revision,changes:{trashed:true},require_editable:true,expected_source_sha256:sourceHash}),upload});assert.equal(repeat.saved,0,'stale preview cannot duplicate or overwrite');assert.equal(repeat.errors.length,5);
 console.log('PASS actual portable sync API: generated metadata baseline, new files, identity rename, recoverable trash, immutable attachment edits, metadata, stale repeat refusal');
+// HTML note as a Markdown copy: front matter carries properties, links and properties survive the round trip.
+const target=renamed.id,rich=await rpc('save',{note:{title:'Rich: "q"',content:`<p>Rich <a href="note://${target}">md</a></p>`,content_format:'html'}});
+await rpc('knowledge_set',{id:rich.id,revision:rich.revision,version:0,aliases:[],properties:[{name:'Score',type:'number',value:9}]});
+const post=(body:unknown)=>fetch(base+'/api/portable/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+const source=(await (await post({sources:true})).json()).notes.find((n:any)=>n.id===rich.id);assert.equal(source.format,'html');
+const copy=readZipEntries(Buffer.from(await (await post({markdown:{[rich.id]:{revision:source.revision,markdown:`Rich [md](note://${target})\n`}}})).arrayBuffer()));
+const md=copy.get(`notes/${rich.id}.md`)!.toString();assert.match(md,/^---\nid: ".+"\ntitle: "Rich: \\"q\\""\n/);assert.match(md,/\nproperties:\n {2}"Score": 9\n---\n/);assert.ok(md.endsWith(`---\nRich [md](${target}.md)\n`),md);
+copy.set(`notes/${rich.id}.md`,Buffer.from(md.replace('Rich [md]','Edited [md]')));
+const copyFiles=[...copy].map(([path,bytes])=>{const f=new File([bytes],path.split('/').pop()!);Object.defineProperty(f,'webkitRelativePath',{value:'root/'+path});return f;});
+const richPlan=await planFolderChanges(copyFiles,(id:string)=>rpc('get',{id}));assert.deepEqual(richPlan.conflicts,[]);assert.deepEqual(richPlan.changes.map((c:any)=>c.key),[rich.id]);
+const richResult=await applyFolderChanges(richPlan,new Set([rich.id]),{save:(note:unknown)=>rpc('save',{note}),patch:()=>{throw Error('unexpected');},upload,fromMarkdown:async(text:string)=>`<p>${text.trim().replace(/\[md\]\(([^)]+)\)/,'<a href="$1">md</a>')}</p>`});assert.equal(richResult.saved,1,richResult.errors.join('\n'));
+const richSaved=await rpc('get',{id:rich.id});assert.equal(richSaved.content_format,'html');assert.match(richSaved.content,new RegExp(`^<p>Edited <a href="note://${target}"[^>]*>md</a></p>$`));
+assert.equal((await rpc('knowledge_get',{id:rich.id})).properties[0].value,9);
+console.log('PASS portable Markdown copy: front matter properties, HTML conversion back, note links and properties preserved');

@@ -286,3 +286,20 @@ fn route_checks_method_origin_and_request() {
         .headers
         .contains(&("content-type".into(), "application/zip".into())));
 }
+
+#[test]
+fn note_links_point_to_this_note_or_a_stable_app_link() {
+    let other = "daily-2026-10-14";
+    let source = format!(r#"<a href="note://note#h">self</a><a href="note://{other}">other</a>"#);
+    let md = format!("[self](note://note#h) [other](note://{other}) [[note://{other}]]");
+    let bytes = bundle(&handler(fixture("html", &source)), &req(&source, &md), deadline()).unwrap();
+    let mut archive = ZipArchive::new(Cursor::new(bytes)).unwrap();
+    assert_eq!(
+        String::from_utf8(entry(&mut archive, "note.md")).unwrap(),
+        format!("[self](note.md#h) [other](inkism://note/{other}) [[inkism://note/{other}]]")
+    );
+    assert_eq!(
+        String::from_utf8(entry(&mut archive, "source.html")).unwrap(),
+        format!(r#"<a href="note.md#h">self</a><a href="inkism://note/{other}">other</a>"#)
+    );
+}
