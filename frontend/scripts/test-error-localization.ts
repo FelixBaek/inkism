@@ -28,7 +28,7 @@ try {
       const translated=(key:string,values:Record<string,string>={})=>(dict[key]??key).replace(/\{(\w+)\}/g,(match:string,key:string)=>values[key]??match);
       const conflict='conflict: note n-1 revision 3 != current 4';
       const readonly='conflict: 읽기 전용 노트입니다. 읽기 전용을 해제한 뒤 편집하세요';
-      const cases=[
+      const cases:{raw:string;code?:string;conflict:boolean;text:string;status?:number;budget?:boolean;duplicate?:boolean}[]=[
         {raw:conflict,code:'conflict',conflict:true,text:translated('충돌: {error}',{error:translated('노트 {id}의 버전이 바뀌었습니다 (요청 {expected}, 현재 {current}). 다시 불러와 주세요.',{id:'n-1',expected:'3',current:'4'})})},
         {raw:'storage engine: '+readonly,code:'conflict',conflict:true,text:translated('저장소 오류: {error}',{error:translated('충돌: {error}',{error:translated('읽기 전용 노트입니다. 읽기 전용을 해제한 뒤 편집하세요')})})},
         {raw:'runtime config: 금고 비밀번호가 맞지 않습니다',code:'runtime_config',conflict:false,text:translated('앱 설정 오류: {error}',{error:translated('금고 비밀번호가 맞지 않습니다')})},
@@ -38,6 +38,10 @@ try {
         {raw:'internal: sqlite: disk full /tmp/library.sqlite:77',code:'internal',conflict:false,text:translated('내부 오류: {error}',{error:'sqlite: disk full /tmp/library.sqlite:77'})},
         {raw:'새 진단: /tmp/source.html (예상 11, 실제 12)',code:undefined,conflict:false,text:'새 진단: /tmp/source.html (예상 11, 실제 12)'},
         {raw:'constructor',code:undefined,conflict:false,text:'constructor'},
+        {raw:'invalid: note body exceeds read budget',code:'invalid',conflict:false,budget:true,text:translated('잘못된 요청: {error}',{error:translated('노트 본문이 조회 용량 제한을 초과했습니다. 구간별로 불러옵니다.')})},
+        {raw:'invalid: duplicate block ID "copy-id": rename the duplicate block ID before merging',code:'invalid',conflict:false,duplicate:true,text:translated('잘못된 요청: {error}',{error:translated('중복 문단 ID {id}: 병합 전에 ID를 바꿔 주세요.',{id:'"copy-id"'})})},
+        {raw:'invalid: note body exceeds read budget',code:'invalid',conflict:false,status:403,text:translated('잘못된 요청: {error}',{error:translated('노트 본문이 조회 용량 제한을 초과했습니다. 구간별로 불러옵니다.')})},
+        {raw:'internal: note body exceeds read budget',code:'internal',conflict:false,status:500,text:translated('내부 오류: {error}',{error:translated('노트 본문이 조회 용량 제한을 초과했습니다. 구간별로 불러옵니다.')})},
       ];
       await page.route(base+'/api/rpc',route=>{
         const request=route.request().postDataJSON();requests.push(request);
@@ -48,19 +52,32 @@ try {
       for(let fixture=0;fixture<cases.length;fixture++) {
         const actual=await page.evaluate(async fixture=>{
           // @ts-expect-error -- browser import served by Vite
-          const {rpc,RpcError}=await import('/src/api.ts');
+          const {rpc,RpcError,hasRpcDiagnostic}=await import('/src/api.ts');
           try {await rpc('save',{fixture});throw new Error('fixture unexpectedly succeeded');}
           catch(error) {
             if(!(error instanceof RpcError))throw error;
             document.getElementById('error')!.textContent=error.message;
-            return {code:error.code,raw:error.rawMessage,conflict:error.isConflict};
+            return {code:error.code,raw:error.rawMessage,conflict:error.isConflict,status:error.status,budget:hasRpcDiagnostic(error,'body_read_budget'),duplicate:hasRpcDiagnostic(error,'duplicate_block_id')};
           }
         },fixture);
         const expected=cases[fixture];
-        assert.deepEqual(actual,{code:expected.code,raw:expected.raw,conflict:expected.conflict},lang+' RPC metadata '+fixture);
+        assert.deepEqual(actual,{code:expected.code,raw:expected.raw,conflict:expected.conflict,status:expected.status??400,budget:expected.budget??false,duplicate:expected.duplicate??false},lang+' RPC metadata '+fixture);
         assert.equal(await page.getByRole('alert').textContent(),expected.text,lang+' UI message '+fixture);
       }
       assert.deepEqual(requests,cases.map((_,fixture)=>({op:'save',fixture})),'production rpc client must send the requested operation');
+      assert.deepEqual(await page.evaluate(async()=>{
+        // @ts-expect-error -- browser import served by Vite
+        const {RpcError,hasRpcDiagnostic}=await import('/src/api.ts');
+        const known=new RpcError('get','storage engine: invalid: note body exceeds read budget',400);
+        known.message='Display text is independent of the protocol';
+        return [
+          hasRpcDiagnostic(known,'body_read_budget'),
+          hasRpcDiagnostic(new Error('invalid: note body exceeds read budget'),'body_read_budget'),
+          hasRpcDiagnostic(new RpcError('get','invalid: diagnostic mentions note body exceeds read budget',400),'body_read_budget'),
+          hasRpcDiagnostic(new RpcError('get','invalid: internal: note body exceeds read budget',400),'body_read_budget'),
+          hasRpcDiagnostic(new RpcError('merge_preview','invalid: diagnostic mentions duplicate block ID',400),'duplicate_block_id'),
+        ];
+      }),[true,false,false,false,false],'semantic fallback must not depend on display text or incidental diagnostic mentions');
       const workers=await page.evaluate(async()=>{
         // @ts-expect-error -- browser imports served by Vite
         const {deriveTextInWorker}=await import('/src/lib/plaintext-client.ts');
