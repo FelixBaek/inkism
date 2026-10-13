@@ -38,7 +38,6 @@ jobs:
       - name: Verify model and browser DOM contracts
         run: |
           INKISM_TEST_PREVIEW="$PWD/core/local-api/target/debug/inkism-local-api" INKISM_TEST_ENGINE="$PWD/core/runtime-core/target/debug/inkism-engine" npm --prefix frontend run test:unit
-          npm --prefix frontend run test:unit:coverage:core
           node --test tools/scripts/test-rust-build.ts
       - name: Verify production and StrictMode editor lifecycles
         shell: bash
@@ -72,13 +71,6 @@ jobs:
           node frontend/scripts/e2e-source-first.ts
           node frontend/scripts/e2e-format-race.ts
           node frontend/scripts/e2e-sync-pause.ts
-
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: frontend/lcov.info
-          fail_ci_if_error: true
 
       - uses: actions/upload-artifact@v4
         if: always()

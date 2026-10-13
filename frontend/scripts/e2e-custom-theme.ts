@@ -11,7 +11,9 @@ const colors={canvas:'#fff9ee',surface:'#f5f6f5',text:'#202624',muted:'#626b66',
 try{
  // 저장한 선택이 없으면 다크가 기본이다. 이 검사는 라이트 모드에서 시작한다.
  await page.addInitScript(()=>{if(window.top!==window||!/^https?:$/.test(location.protocol))return;localStorage.setItem('inkism.lang','ko');if(localStorage.getItem('inkism.inspector')===null)localStorage.setItem('inkism.inspector','false');});await page.goto(base);await page.evaluate(()=>localStorage.setItem('inkism-theme','light'));await page.reload();await open();
- await page.getByLabel('본문 배경 색상',{exact:true}).fill('#fff9ee');await page.getByRole('button',{name:'취소',exact:true}).click();assert.equal(await color(),'#f7f6f3');
+ await page.getByLabel('본문 배경 색상',{exact:true}).fill('#fff9ee');await page.getByRole('button',{name:'취소',exact:true}).click();
+ // The light theme from storage can settle after the dialog opens; wait for it instead of sampling once.
+ await page.waitForFunction(()=>getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim()==='#f7f6f3',null,{timeout:5000}).catch(()=>{});assert.equal(await color(),'#f7f6f3');
  await open();await page.getByLabel('본문 배경 색상',{exact:true}).fill('#fff9ee');await page.getByRole('button',{name:'테마 저장',exact:true}).click();assert.equal(await color(),'#fff9ee');
  await page.reload();await open();assert.equal(await color(),'#fff9ee');
  await page.getByLabel('글자 색상',{exact:true}).fill('#fff9ee');await page.getByRole('button',{name:'테마 저장',exact:true}).click();await page.getByRole('alert').filter({hasText:'명암비'}).waitFor();assert.equal(await color(),'#fff9ee');
