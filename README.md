@@ -25,12 +25,11 @@ An encrypted, local-first note app for Windows.
 | `frontend/` | The UI (React/Tiptap) |
 | `core/` | Rust engines: `storage-core` (database, encryption), `engine` (notes, search), `sync-core` (sync), `runtime-core` (the bundle the app runs) |
 | `desktop-tauri/` | Windows app shell (Rust/Tauri); build with `tools/scripts/build-windows-tauri.sh` |
-| `desktop/` | Earlier Go/Wails implementation and legacy data migration/compatibility tools |
 | `tools/` | Build and test scripts, Windows installer, relay deployment, web clipper |
 
 ## Build
 
-You need Rust stable and Node.js 22. Go 1.27+ is only needed for legacy data migration and Go backup compatibility checks.
+You need Rust stable and Node.js 22.
 The encrypted build also needs `perl`, `make` and a C compiler.
 Cross-building for Windows on Linux needs mingw-w64 and `rustup target add x86_64-pc-windows-gnu`.
 
@@ -64,7 +63,7 @@ npm --prefix frontend run test:unit
 
 Add `--features encrypted-storage` to the Rust tests to cover encrypted storage.
 Browser tests use Playwright Chromium: `tools/scripts/test-browser.sh`.
-Known issue: many editor browser tests have not caught up with recent UI changes and fail.
+Browser checks exercise the paths declared by each script. Physical IME, OS key storage and installation are verified on the target platform.
 
 ## Sync relay
 
@@ -72,18 +71,11 @@ Known issue: many editor browser tests have not caught up with recent UI changes
 In that folder, copy `.env.example` to `.env`, set a random `INKISM_RELAY_TOKEN` (32+ characters),
 then run `docker compose -p inkism-sync up -d --build`.
 
-The relay is the Rust crate `core/sync-relay` and stores data in SQLite. A relay
-that still holds an older bbolt `relay.db` is migrated once, from the package folder:
-
-```sh
-docker compose -p inkism-sync stop inkism-sync
-D=$(docker volume inspect -f '{{.Mountpoint}}' inkism-sync_relay-data)
-./relay-export -db "$D/relay.db" -out "$D/relay.bolt.jsonl"
-mv "$D/relay.db" "$D/relay.db.bolt"
-./inkism-sync-relay --import-bolt-dump "$D/relay.bolt.jsonl" --db "$D/relay.db"
-chown 65532:65532 "$D"/relay.db*
-docker compose -p inkism-sync up -d --build
-```
+The relay is the Rust crate `core/sync-relay` and stores data in SQLite. It no longer
+opens or converts a `relay.db` from the earlier Go (bbolt) relay. The one-time migration
+tools (`desktop/cmd/relay-export` and `inkism-sync-relay --import-bolt-dump`) remain in
+git history at commit `6958e78`; package that commit (it also needs the Go toolchain)
+to convert an old database once.
 
 ## License
 

@@ -6,7 +6,7 @@ use sync_core::Key;
 
 #[test]
 fn durable_queue_replays_lost_ack_and_keeps_partial_manifests_private() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let transport = AttachmentTransport::new(&relay.url, TOKEN).unwrap();
     let key = Key::generate();
     let tmp = tempfile::tempdir().unwrap();
@@ -141,7 +141,7 @@ fn corrupt_staged_bytes_are_not_uploaded_or_acknowledged() {
 fn two_attachment_stores_keep_original_ids_through_encrypted_queue_and_relay() {
     use inkism_engine::attachments::AttachmentStore;
     use std::io::{Seek, Write};
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let transport = AttachmentTransport::new(&relay.url, TOKEN).unwrap();
     let key = Key::generate();
     let tmp = tempfile::tempdir().unwrap();

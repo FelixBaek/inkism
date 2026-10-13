@@ -1,0 +1,27 @@
+name: PR review size
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  changed-files:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Keep pull requests below 300 changed files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          count=$(gh api "repos/$GH_REPO/pulls/$PR_NUMBER" --jq '.changed_files')
+          case "$count" in
+            ''|*[!0-9]*) echo "::error::Could not read the pull request file count"; exit 1 ;;
+          esac
+          echo "Changed files: $count (maximum 299)" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$count" -ge 300 ]; then
+            echo "::error::This PR changes $count files. Split it into pull requests with at most 299 files so CodeRabbit can review them."
+            exit 1
+          fi

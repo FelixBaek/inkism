@@ -1,6 +1,6 @@
 //! One isolated, noninteractive browser print job.
 //!
-//! Port of the Go package `desktop/internal/pdfexport`.
+//! Port of the former Go implementation's PDF export.
 //!
 //! # How Windows produces the PDF
 //!
@@ -29,7 +29,7 @@
 //!   folder (profile included) is removed afterwards, and a failed cleanup turns
 //!   a success into an error.
 //! * The renderer adds no CSP or styles. The caller's document must carry them:
-//!   the Go shell (`desktop/internal/bridge/formatted_export.go`) wraps the
+//!   the local API (`inkism-local-api`, `export.rs`) wraps the
 //!   `clean_export` output in a page with a `default-src 'none'` CSP meta,
 //!   `no-referrer`, an `@page{size:A4;margin:18mm}` stylesheet and Korean fonts.
 //!

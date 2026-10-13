@@ -74,6 +74,12 @@ fn collect(
             let start: Vec<Ancestor> =
                 serde_json::from_value(chunk["start_context"].clone()).unwrap();
             let end: Vec<Ancestor> = serde_json::from_value(chunk["end_context"].clone()).unwrap();
+            // Every ancestor names the note byte offset of its exact opening tag.
+            for ancestor in start.iter().chain(&end) {
+                let at = ancestor.at.expect("ancestor offset") as usize;
+                assert!(at >= byte_start && at < bytes + raw.len());
+                assert!(source[at - byte_start..].starts_with(&ancestor.open));
+            }
             let wrapped = render(raw, &start, &end);
             assert!(
                 segments::split(&wrapped).is_some(),
@@ -407,11 +413,22 @@ fn encrypted_internal_windows_reopen_and_splice_preserves_rest_of_source() {
     let db = Db::new();
     let key = || inkism_engine::storage::StorageKey::from_bytes([0x68; 32]);
     let e = Engine::open_encrypted(&db.path, key()).unwrap();
-    let source = format!("<p><strong>{}</strong></p>", "한글😀&amp;".repeat(50000));
+    let atom = math_atom("span", "inline-math", &"x".repeat(8192));
+    let source = format!(
+        "<p><strong>{}</strong>{atom}<strong>{}</strong></p>",
+        "한글😀&amp;".repeat(25000),
+        "한글😀&amp;".repeat(25000)
+    );
     let n = save(&e, &source);
     wait(&e);
     let parts = collect(&e, &n["id"], 1, 0, 0, &source);
-    let part = &parts[parts.len() / 2];
+    assert!(parts
+        .iter()
+        .any(|part| part["source"].as_str().unwrap().contains(&atom)));
+    let part = parts
+        .iter()
+        .find(|part| part["source"].as_str().unwrap().contains("한글"))
+        .unwrap();
     let raw = part["source"].as_str().unwrap();
     let replacement = raw.replacen("한글", "수정", 1);
     let reply=ok(e.execute(json!({"op":"document_splice_html","id":n["id"],"revision":1,"content":{"start":part["byte_offset"],"expected":raw,"replacement":replacement}})));
@@ -432,4 +449,174 @@ fn encrypted_internal_windows_reopen_and_splice_preserves_rest_of_source() {
         expected
     );
     collect(&e, &n["id"], 2, 0, 0, &expected);
+}
+
+fn math_atom(tag: &str, kind: &str, latex: &str) -> String {
+    format!("<{tag} data-latex=\"{latex}\" data-type=\"{kind}\">{latex}</{tag}>")
+}
+
+#[test]
+fn canonical_math_atoms_stay_whole_with_lossless_bounded_contexts() {
+    for (tag, kind) in [("span", "inline-math"), ("div", "block-math")] {
+        for latex in ["x^2".to_owned(), "x".repeat(8192)] {
+            let atom = math_atom(tag, kind, &latex);
+            let prefix = "한글😀&amp;".repeat(7000);
+            let source = if tag == "span" {
+                format!("<p id='stable'>{prefix}{atom}{prefix}</p>")
+            } else {
+                format!("<blockquote><p>{prefix}</p>{atom}<p>{prefix}</p></blockquote>")
+            };
+            let chunks = segments::split(&source).expect("canonical math layout");
+            assert_eq!(
+                chunks
+                    .iter()
+                    .map(|chunk| &source[chunk.range.clone()])
+                    .collect::<String>(),
+                source
+            );
+            assert!(
+                chunks
+                    .iter()
+                    .any(|chunk| source[chunk.range.clone()].contains(&atom)),
+                "atom must never be divided"
+            );
+            for chunk in chunks {
+                assert!(chunk.range.len() <= segments::MAX_SOURCE_BYTES);
+                assert!(!chunk.range.is_empty());
+                assert!(chunk
+                    .start_context
+                    .iter()
+                    .chain(&chunk.end_context)
+                    .all(|a| !a.open.contains("data-type=\"inline-math\"")
+                        && !a.open.contains("data-type=\"block-math\"")));
+                assert!(segments::split(&render(
+                    &source[chunk.range.clone()],
+                    &chunk.start_context,
+                    &chunk.end_context
+                ))
+                .is_some());
+            }
+        }
+    }
+    let escaped = "<p><span title='a > b' data-latex='x&lt;&amp;&quot;😀' data-type=inline-math>x&lt;&amp;\"😀</span></p>";
+    assert!(
+        segments::split(escaped).is_some(),
+        "attribute order, quoting, references and Unicode stay exact"
+    );
+}
+
+#[test]
+fn math_admission_rejects_oversized_unknown_or_nested_leaf_markup() {
+    let atom = math_atom("span", "inline-math", "x");
+    for source in [
+        format!("<p>{}</p>", atom.replace("inline-math", "unknown-math")),
+        format!("<p>{}</p>", atom.replace("inline-math", "block-math")),
+        format!("<p>{}</p>", atom.replace("data-latex=\"x\"", "data-latex")),
+        format!("<p>{}</p>", atom.replace("data-latex=\"x\" ", "")),
+        format!(
+            "<p>{}</p>",
+            atom.replace(">x</span>", "><strong>x</strong></span>")
+        ),
+        format!(
+            "<p>{}</p>",
+            atom.replace(">x</span>", "><script>x</script></span>")
+        ),
+        format!(
+            "<p>{}</p>",
+            atom.replace("</span>", "</span onclick='bad()'>")
+        ),
+        format!("<p>{}</p>", atom.replace("</span>", "</div>")),
+        format!(
+            "<p>{}</p>",
+            atom.replace("data-latex", "onclick='bad()' data-latex")
+        ),
+        format!(
+            "<p>{}</p>",
+            math_atom("span", "inline-math", &"한".repeat(8192))
+        ),
+        format!(
+            "<p title='{}'>ordinary</p>",
+            "x".repeat(segments::TARGET_BYTES)
+        ),
+        format!("<p>&#{};</p>", "1".repeat(segments::TARGET_BYTES)),
+    ] {
+        assert!(
+            segments::split(&source).is_none(),
+            "unexpected supported leaf: {} bytes",
+            source.len()
+        );
+    }
+    let ordinary = format!(
+        "<p><span title='data-type=\"inline-math\"'>{}</span></p>",
+        "x".repeat(65536)
+    );
+    assert!(
+        segments::split(&ordinary)
+            .unwrap()
+            .iter()
+            .any(|chunk| chunk.end_context.iter().any(|a| a.tag == "span")),
+        "attribute values cannot spoof a math atom"
+    );
+}
+
+#[test]
+fn math_segments_reopen_splice_and_v13_cache_upgrade_leave_notes_exact() {
+    let db = Db::new();
+    let atom = math_atom("span", "inline-math", &"x".repeat(8192));
+    let source = format!(
+        "<p id='stable'>{}{atom}{}</p>",
+        "한글😀&amp;".repeat(7000),
+        "尾&#128512;".repeat(7000)
+    );
+    let id;
+    {
+        let e = db.open();
+        id = save(&e, &source)["id"].clone();
+        wait(&e);
+        assert!(collect(&e, &id, 1, 0, 0, &source)
+            .iter()
+            .any(|part| part["source"].as_str().unwrap().contains(&atom)));
+    }
+    let cache = Connection::open(format!("{}.search", db.path)).unwrap();
+    cache.execute_batch("UPDATE document_segment_layout SET supported=0,segment_count=0; DELETE FROM document_segments; PRAGMA user_version=13;").unwrap();
+    drop(cache);
+    let e = db.open();
+    wait(&e);
+    let note = ok(e.execute(json!({"op":"get","id":id})));
+    assert_eq!(note["content"], source);
+    assert_eq!(
+        note["revision"], 1,
+        "derived migration must never edit the note"
+    );
+    let parts = collect(&e, &id, 1, 0, 0, &source);
+    let part = parts
+        .iter()
+        .find(|part| part["source"].as_str().unwrap().contains("한글"))
+        .unwrap();
+    let raw = part["source"].as_str().unwrap();
+    let replacement = raw.replacen("한글", "수정", 1);
+    let changed = ok(e.execute(json!({"op":"document_splice_html","id":id,"revision":1,"content":{"start":part["byte_offset"],"expected":raw,"replacement":replacement}})));
+    assert_eq!(changed["revision"], 2);
+    let at = part["byte_offset"].as_u64().unwrap() as usize;
+    let expected = format!(
+        "{}{}{}",
+        &source[..at],
+        replacement,
+        &source[at + raw.len()..]
+    );
+    wait(&e);
+    drop(e);
+    let e = db.open();
+    wait(&e);
+    let reopened = ok(e.execute(json!({"op":"get","id":id})));
+    assert_eq!(reopened["content"], expected);
+    assert_eq!(reopened["revision"], 2);
+    assert!(collect(&e, &id, 2, 0, 0, &expected)
+        .iter()
+        .any(|part| part["source"].as_str().unwrap().contains(&atom)));
+    let cache = Connection::open(format!("{}.search", db.path)).unwrap();
+    assert_eq!(
+        inkism_engine::schema::search_user_version(&cache).unwrap(),
+        14
+    );
 }
