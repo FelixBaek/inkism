@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import socket
+import shutil
 import subprocess
 import tempfile
 import time
@@ -48,6 +49,9 @@ def main():
     managers = list((sdk / "cmdline-tools").glob("*/bin/avdmanager"))
     manager = next((item for item in managers if item.parts[-3] == "latest"), None)
     manager = manager or (sorted(managers)[-1] if managers else None)
+    configured = shutil.which("avdmanager")
+    if configured and Path(configured).resolve().is_relative_to(sdk / "cmdline-tools"):
+        manager = Path(configured).resolve()
     if not apk.is_file() or not adb.is_file() or not emulator.is_file() or manager is None:
         parser.error("An existing APK and installed SDK adb/emulator/avdmanager are required")
     with zipfile.ZipFile(apk) as bundle:
