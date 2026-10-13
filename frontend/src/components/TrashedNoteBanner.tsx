@@ -27,7 +27,7 @@ export function TrashedNoteBanner() {
   const left =
     !s.note?.archived && info?.days != null && info.at !== undefined ? Math.max(0, info.days - Math.floor((Date.now() - info.at) / DAY)) : null;
   return (
-    <div className="trashed-banner" role="status">
+    <output className="trashed-banner">
       <span>
         {left === null
           ? t("지운 노트예요. 읽기만 할 수 있어요. 복원하면 다시 편집할 수 있어요.")
@@ -36,6 +36,6 @@ export function TrashedNoteBanner() {
       <button type="button" className="btn btn-ghost" onClick={() => void s.restoreSelected()}>
         {t("복원")}
       </button>
-    </div>
+    </output>
   );
 }

@@ -44,7 +44,7 @@ function moveChoice(event: React.KeyboardEvent<HTMLDivElement>) {
 export function ArchiveTabs() {
   const s = useStore();
   return (
-    <div className="list-segmented" role="tablist" aria-label={t("보관함")} onKeyDown={moveChoice}>
+    <div className="list-segmented" role="tablist" tabIndex={-1} aria-label={t("보관함")} onKeyDown={moveChoice}>
       {(["archive", "trash"] as const).map((type) => (
         <button
           key={type}
@@ -95,7 +95,13 @@ export function TrashRetention({ days, onChange }: Readonly<{ days: TrashDays; o
   return (
     <div className="trash-retention">
       <span>{t("자동 삭제")}</span>
-      <div className="list-segmented" role="radiogroup" aria-label={t("자동 삭제")} onKeyDown={moveChoice}>
+      <div
+        className="list-segmented"
+        role="radiogroup"
+        tabIndex={-1}
+        aria-label={t("자동 삭제")}
+        onKeyDown={moveChoice}
+      >
         {([7, 30, 90, null] as const).map((d) => (
           <button
             key={String(d)}
@@ -142,7 +148,8 @@ export function useTrashTimes(
 export function trashLabel(at: number | undefined, days: TrashDays, now = Date.now()): string {
   if (at === undefined) return "";
   const ago = Math.max(0, Math.floor((now - at) / DAY));
-  const when = ago === 0 ? t("오늘 지움") : ago === 1 ? t("어제 지움") : t("{n}일 전 지움", { n: ago });
+  const recent = ago === 0 ? t("오늘 지움") : t("어제 지움");
+  const when = ago < 2 ? recent : t("{n}일 전 지움", { n: ago });
   if (days === null) return when;
   const left = days - ago;
   return `${when} · ${left > 0 ? t("{n}일 뒤 삭제", { n: left }) : t("곧 삭제")}`;
@@ -195,6 +202,17 @@ export function TrashSelectionDialog({ ids, onClose }: Readonly<{ ids: string[];
       if (el?.open) el.close();
     };
   }, []);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const closeBackdrop = (event: MouseEvent) => {
+      const target = event.target;
+      if (!busy && (target === el || (target instanceof HTMLElement && target.classList.contains("dialog-backdrop"))))
+        onClose(false);
+    };
+    el.addEventListener("mousedown", closeBackdrop);
+    return () => el.removeEventListener("mousedown", closeBackdrop);
+  }, [busy, onClose]);
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
     try {
@@ -214,14 +232,6 @@ export function TrashSelectionDialog({ ids, onClose }: Readonly<{ ids: string[];
       onCancel={(e) => {
         e.preventDefault();
         if (!busy) onClose(false);
-      }}
-      onMouseDown={(e) => {
-        if (
-          !busy &&
-          (e.target === e.currentTarget ||
-            (e.target instanceof HTMLElement && e.target.classList.contains("dialog-backdrop")))
-        )
-          onClose(false);
       }}
     >
       <div className="dialog-backdrop">

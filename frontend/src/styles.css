@@ -592,10 +592,6 @@ textarea {
   grid-row: 1;
   grid-column: 1;
 }
-.editor-pane:not(.editor-empty) > .editor-toolbar {
-  grid-row: 1;
-  grid-column: 2;
-}
 .editor-pane:not(.editor-empty) > .editor-source-actions {
   grid-row: 1;
   grid-column: 2;
@@ -656,11 +652,9 @@ textarea {
   opacity: 0.45;
   cursor: default;
 }
-.editor-pane:not(.editor-empty) > .cover-banner {
-  grid-row: 6;
-}
 /* 노트 표지(document.cover): 폴더 표지와 같은 배너를 편집기 폭으로 */
 .editor-pane:not(.editor-empty) > .cover-banner {
+  grid-row: 6;
   height: 200px;
   margin: 0;
 }
@@ -853,6 +847,15 @@ textarea {
 }
 
 /* 툴바: 문서 편집 도구줄 (높이 40, 버튼 30) */
+.editor-pane:not(.editor-empty) > .editor-toolbar {
+  grid-row: 1;
+  grid-column: 2;
+  border-bottom: 0;
+  background: transparent;
+  padding-left: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
 .editor-toolbar {
   display: flex;
   align-items: center;
@@ -865,15 +868,6 @@ textarea {
   top: 0;
   background: var(--raised);
   z-index: 5;
-}
-.editor-pane:not(.editor-empty) > .editor-toolbar {
-  border-bottom: 0;
-  background: transparent;
-  padding-left: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-.editor-toolbar {
   flex-wrap: nowrap;
   overflow-x: auto;
   scrollbar-width: thin;
@@ -1908,10 +1902,6 @@ kbd {
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
-.sync-fields {
-  display: grid;
-  gap: 12px;
-}
 .sync-card {
   display: grid;
   gap: 12px;
@@ -2181,8 +2171,6 @@ kbd {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-}
-.find-row {
   margin-bottom: 12px;
 }
 .find-foot {
@@ -2275,6 +2263,8 @@ kbd {
 }
 
 .sync-fields {
+  display: grid;
+  gap: 12px;
   border: 0;
   padding: 0;
   margin: 0;
@@ -2370,3 +2360,6 @@ kbd {
 .sync-held .btn {
   justify-self: start;
 }
+
+/* Native grouping elements retain the layout of their surrounding controls. */
+:where(fieldset.semantic-group) { margin: 0; padding: 0; border: 0; min-inline-size: 0; }
