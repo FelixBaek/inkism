@@ -40,5 +40,13 @@ try {
   const denied=await page.evaluate(html=>{try{(window as any).compat.compatibleHTMLMarkdown(html);return false}catch{return true}},html);
   assert.equal(denied,true,'HTML-only style must not be silently removed');
  }
+ const term='<span data-term-id="11111111-1111-4111-8111-111111111111" data-term-definition="한글 &quot;정의&quot; &lt;script&gt;literal&lt;/script&gt;">**용어**</span>';
+ for (const source of [term,`앞 ${term} 뒤`,`- ${term}`,`| 용어 |\n| --- |\n| ${term} |`]) {
+  const result=await page.evaluate(source=>{const c=(window as any).compat;const html=c.compatibleMarkdownHTML(source);const json=c.generateJSON(html,c.markdownContentExtensions());const saved=c.serializeCompatibleMarkdown(json);return {html,saved,reopened:c.compatibleMarkdownHTML(saved),converted:c.compatibleHTMLMarkdown(html)};},source);
+  assert.match(result.html,/data-term-definition/);assert.match(result.saved,/data-term-id/);assert.equal(result.reopened,result.html);assert.match(result.converted,/data-term-id/);
+ }
+ for(const source of [term.replace('data-term-id=', 'onclick="evil()" data-term-id='),term.replace('11111111-1111-4111-8111-111111111111','bad'),term.replace('**용어**','<img src=x onerror=evil()>'),term.replace('**용어**','<strong>용어</strong>'),term.replace('data-term-definition=', 'data-term-id="11111111-1111-4111-8111-111111111111" data-term-definition=')]) {
+  assert.equal(await page.evaluate(source=>{try{(window as any).compat.compatibleMarkdownHTML(source);return false}catch{return true}},source),true,'unsafe/unknown term markup must be refused '+source);
+ }
  console.log('PASS Markdown compatibility: empty/basic/marks/lists/tasks/quote/code/image/table, HTML-only input refused');
 } finally {await browser.close()}

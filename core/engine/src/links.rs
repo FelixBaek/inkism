@@ -137,6 +137,14 @@ fn extract_html(content: &str) -> Vec<Link> {
             text.push_str(value);
         }
         if let Some(el) = node.value().as_element() {
+            if el.name() == "span"
+                && el.attr("data-term-id").is_some_and(crate::ids::valid_id)
+                && el.attr("data-term-definition").is_some_and(|definition| !definition.trim().is_empty())
+            {
+                if let Some(id) = el.attr("data-term-note-id").filter(|id| crate::ids::valid_id(id)) {
+                    out.push(Link::ById(id.to_owned()));
+                }
+            }
             if el.name() == "a" {
                 if let Some(href) = el.attr("href").filter(|href| href.starts_with("note://")) {
                     out.extend(extract(href));
@@ -354,4 +362,23 @@ pub fn remap_term_references(content: &str, format: &str, ids: &std::collections
         }
     }
     out.push_str(&content[copied..]); out
+}
+
+#[cfg(test)]
+mod term_link_tests {
+    #[test]
+    fn annotation_note_links_are_indexed_without_code_or_attribute_false_positives() {
+        let annotation = "<span data-term-id='occurrence-1' data-term-definition='Meaning' data-term-note-id='target'>Term</span>";
+        let expected = vec![super::Link::ById("target".to_owned())];
+        assert_eq!(super::extract_format(annotation, "html"), expected);
+        assert_eq!(super::extract_format(annotation, "markdown"), expected);
+        for format in ["html", "markdown"] {
+            for hidden in [format!("<code>{annotation}</code>"), format!("<pre>{annotation}</pre>"), format!("<script>{annotation}</script>"), format!("<!-- {annotation} -->"), annotation.replace("data-term-note-id='target'", "data-term-note-id='bad/id'"), annotation.replace("data-term-id='occurrence-1'", "title='occurrence-1'")] {
+                assert!(super::extract_format(&hidden, format).is_empty(), "{format}: {hidden}");
+            }
+        }
+        assert!(super::extract_format(&format!("`{annotation}`"), "markdown").is_empty());
+        assert!(super::extract_format(&format!("```html\n{annotation}\n```"), "markdown").is_empty());
+        assert!(super::extract_format(annotation, "text").is_empty());
+    }
 }

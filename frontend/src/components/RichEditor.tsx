@@ -616,7 +616,7 @@ export function RichEditor({
       )}
       {editable && editor && <FindReplace editor={editor} readOnly={readOnly} />}
       {editable && editor && !markdownCompatible && <SelectionToolbar editor={editor} />}
-      {editor && <TermDefinitionPopover editor={editor} readOnly={readOnly || !editable} disabled={markdownCompatible} />}
+      {editor && <TermDefinitionPopover editor={editor} readOnly={readOnly || !editable} />}
       <div className={(embedded ? "rich-window-content" : "editor-scroll") + (editable ? " block-gutter" : "")}>
         <EditorContent editor={editor} className="rich-editor" />
       </div>
