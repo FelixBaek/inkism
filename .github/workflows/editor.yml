@@ -36,7 +36,9 @@ jobs:
           node node_modules/playwright-core/cli.js install --with-deps chromium
           node --input-type=module -e 'import {chromium} from "playwright-core"; import {appendFileSync} from "node:fs"; appendFileSync(process.env.GITHUB_ENV, `CHROMIUM_PATH=${chromium.executablePath()}\n`);'
       - name: Verify model and browser DOM contracts
-        run: npm --prefix frontend run test:unit:coverage:core
+        run: |
+          INKISM_TEST_PREVIEW="$PWD/core/local-api/target/debug/inkism-local-api" INKISM_TEST_ENGINE="$PWD/core/runtime-core/target/debug/inkism-engine" npm --prefix frontend run test:unit
+          npm --prefix frontend run test:unit:coverage:core
       - name: Verify production and StrictMode editor lifecycles
         shell: bash
         run: |
@@ -74,7 +76,9 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          
+          files: frontend/lcov.info
+          fail_ci_if_error: true
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:

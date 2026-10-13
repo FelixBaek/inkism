@@ -116,8 +116,10 @@ export function SettingsDialog() {
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<Section>("general");
   useDialogVisibility(dialog,open);
-  useEffect(()=>{const openSettings=()=>setOpen(true);window.addEventListener("inkism-open-settings",openSettings);return()=>window.removeEventListener("inkism-open-settings",openSettings);},[]);
+  const openRef=useRef(open);openRef.current=open;
+  useEffect(()=>{const openSettings=(e:Event)=>{const next=(e as CustomEvent<Section|undefined>).detail;if(next&&SECTIONS.some(x=>x.id===next)){if(openRef.current)void leaveRef.current(next);else setSection(next);}setOpen(true);};window.addEventListener("inkism-open-settings",openSettings);return()=>window.removeEventListener("inkism-open-settings",openSettings);},[]);
   const leave=async(next?:Section)=>{const checks:Promise<boolean>[]=[];window.dispatchEvent(new CustomEvent("inkism-settings-leave",{detail:checks}));if((await Promise.all(checks)).every(Boolean)){if(next)setSection(next);else setOpen(false);}};
+  const leaveRef=useRef(leave);leaveRef.current=leave;
   const current = SECTIONS.find((x) => x.id === section)!;
   const update = useAppUpdate();
   const updateLine = updateText(update);
