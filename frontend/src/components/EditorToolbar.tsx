@@ -750,8 +750,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
           <IconButton label={t("미리보기")} onClick={() => window.dispatchEvent(new Event(PREVIEW_EVENT))}>
             <Eye size={16} aria-hidden />
           </IconButton>
-          {!(pinExtra && !compact) &&
-            popButton("more", 0, t("서식 더보기"), <MoreVertical size={16} weight="bold" aria-hidden />)}
+          {popButton("more", 0, t("서식 더보기"), <MoreVertical size={16} weight="bold" aria-hidden />)}
         </Group>
         <div className="tb-group" ref={aiGroup}>
           <button

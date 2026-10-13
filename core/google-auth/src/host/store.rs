@@ -208,8 +208,10 @@ impl Store for FileStore {
     }
 
     fn remove(&self) -> Result<(), HostError> {
-        remove_if_present(&self.hint_path())?;
-        remove_if_present(&self.path)
+        // 바인딩을 먼저 지운다: 힌트만 남는 건 무해하지만 바인딩만 남으면 계정 표시가 사라진다.
+        remove_if_present(&self.path)?;
+        let _ = remove_if_present(&self.hint_path());
+        Ok(())
     }
 }
 
