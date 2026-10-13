@@ -131,3 +131,58 @@ test('relay package rejects a dynamically linked binary before publishing files'
     assert.equal(existsSync(path.join(f.root, 'dist/relay-test')), false);
   } finally { rmSync(f.root, {recursive: true, force: true}); }
 });
+
+function androidArtifactFixture() {
+  const root=mkdtempSync(path.join(os.tmpdir(),'inkism-android-artifact-'));
+  const bin=path.join(root,'bin'), ndk=path.join(root,'Android NDK');
+  const tools=path.join(ndk,'toolchains/llvm/prebuilt/linux-x86_64/bin');
+  mkdirSync(bin,{recursive:true});mkdirSync(tools,{recursive:true});
+  mkdirSync(path.join(root,'frontend/dist'),{recursive:true});
+  mkdirSync(path.join(root,'tools'),{recursive:true});
+  mkdirSync(path.join(root,'desktop-tauri/src-tauri'),{recursive:true});
+  writeFileSync(path.join(root,'frontend/dist/index.html'),'fixture');
+  copyFileSync(path.join(repo,'tools/platform-build.mjs'),path.join(root,'tools/platform-build.mjs'));
+  cpSync(path.join(repo,'desktop-tauri/installer/android'),path.join(root,'desktop-tauri/installer/android'),{recursive:true});
+  writeFileSync(path.join(tools,'llvm-ranlib'),'#!/bin/sh\nprintf "NDK_RANLIB_SELECTED\\n"\n',{mode:0o755});
+  writeFileSync(path.join(bin,'npm'),`#!/usr/bin/env node
+const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
+const args=process.argv.slice(2);
+fs.appendFileSync(process.env.ARTIFACT_CALLS,JSON.stringify({args,ranlib:process.env.RANLIB_aarch64_linux_android,path:process.env.PATH})+'\\n');
+if(args.includes('init')) {
+ const dir=path.resolve('src-tauri/gen/android/app/src/main');fs.mkdirSync(dir,{recursive:true});
+ fs.writeFileSync(path.join(dir,'AndroidManifest.xml'),'<manifest><application android:allowBackup="true"></application></manifest>');
+}
+if(args.includes('build')) {
+ const result=cp.spawnSync(process.env.RANLIB_aarch64_linux_android,['--version'],{encoding:'utf8'});
+ if(result.status!==0||result.stdout.trim()!=='NDK_RANLIB_SELECTED')process.exit(88);
+}
+`,{mode:0o755});
+  const calls=path.join(root,'calls');
+  const env={...process.env,NDK_HOME:ndk,PATH:bin+path.delimiter+process.env.PATH,ARTIFACT_CALLS:calls};
+  const run=(extra={})=>spawnSync(process.execPath,[path.join(root,'tools/platform-build.mjs'),'android'],{cwd:root,env:{...env,...extra},encoding:'utf8'});
+  return {root,tools,run,calls};
+}
+
+test('Android artifact build selects the NDK ranlib through real child processes and keeps key backup protections', {skip:process.platform!=='linux'}, () => {
+  const f=androidArtifactFixture();
+  try {
+    const result=f.run();assert.equal(result.status,0,result.stderr);
+    const calls=readFileSync(f.calls,'utf8').trim().split('\n').map(value=>JSON.parse(value));
+    const build=calls.find(value=>value.args.includes('build'));
+    assert.ok(build,'must execute the Android build');
+    assert.equal(build.ranlib,'llvm-ranlib');
+    assert.equal(build.path.split(path.delimiter)[0],f.tools);
+    const manifest=readFileSync(path.join(f.root,'desktop-tauri/src-tauri/gen/android/app/src/main/AndroidManifest.xml'),'utf8');
+    assert.match(manifest,/android:allowBackup="false"/);
+    assert.match(manifest,/android:dataExtractionRules="@xml\/inkism_data_extraction_rules"/);
+  } finally {rmSync(f.root,{recursive:true,force:true});}
+});
+
+test('Android artifact build fails before invoking tools when the NDK ranlib is missing', {skip:process.platform!=='linux'}, () => {
+  const f=androidArtifactFixture();
+  try {
+    const result=f.run({NDK_HOME:path.join(f.root,'missing NDK')});
+    assert.notEqual(result.status,0);assert.match(result.stderr,/NDK llvm-ranlib is missing/);
+    assert.equal(existsSync(f.calls),false,'must not start a partial build');
+  } finally {rmSync(f.root,{recursive:true,force:true});}
+});
