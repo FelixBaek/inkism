@@ -208,6 +208,15 @@ function Open-Inkism([bool]$remembered = $false) {
         $app.Refresh()
         if ($app.HasExited) { throw "Inkism exited during launch ($($app.ExitCode))" }
         if ($app.MainWindowHandle -ne [IntPtr]::Zero) {
+            # Check the real loaded UIA APIs on this process's window before
+            # sending input. Parser validation cannot detect a wrong API type.
+            if ([InkismInput]::WindowProcessId($app.MainWindowHandle) -ne $app.Id) { throw 'Native UIA startup window is outside the test process' }
+            $nativeUiRoot = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+            if (-not [System.Windows.Automation.Automation]::Compare($nativeUiRoot, $nativeUiRoot)) { throw 'Native UIA element comparison preflight failed' }
+            $nativeWalker = [System.Windows.Automation.TreeWalker]::RawViewWalker
+            if ($null -eq $nativeWalker) { throw 'Native UIA raw walker is unavailable' }
+            $nativeWalker.GetParent($nativeUiRoot) | Out-Null
+            Write-Host 'PASS: native UIA Compare and RawViewWalker preflight on the owned test window'
             [InkismInput]::ShowWindow($app.MainWindowHandle, 9) | Out-Null
             [InkismInput]::SetForegroundWindow($app.MainWindowHandle) | Out-Null
             if (-not $script:uiLanguageReady) { Set-KoreanTestLanguage }
@@ -696,7 +705,7 @@ function Confirm-TestDownloadPermission([ref]$attempts) {
         $hit = [System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($x, $y))
         $sameButton = $false
         for ($depth = 0; $depth -lt 8 -and $null -ne $hit; $depth++) {
-            if ([System.Windows.Automation.AutomationElement]::Compare($hit, $allow[0])) { $sameButton = $true; break }
+            if ([System.Windows.Automation.Automation]::Compare($hit, $allow[0])) { $sameButton = $true; break }
             $hit = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($hit)
         }
         if (-not $sameButton) { throw 'Download Allow coordinates do not hit the validated permission button' }
