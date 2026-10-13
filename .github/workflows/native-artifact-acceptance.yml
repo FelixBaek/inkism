@@ -72,7 +72,7 @@ jobs:
       - name: Prepare supported emulator and disposable KVM access
         shell: bash
         run: |
-          sdkmanager 'emulator' 'system-images;android-30;google_apis;x86_64'
+          sdkmanager 'emulator' 'system-images;android-35;google_apis;x86_64'
           test -c /dev/kvm
           sudo chmod a+rw /dev/kvm
       - name: Verify exact historical APK
@@ -82,7 +82,7 @@ jobs:
         shell: bash
         run: |
           apk=$(cat "$RUNNER_TEMP/native-acceptance/android/artifact-path.txt")
-          python3 tools/scripts/native-artifact-android.py --sdk "$ANDROID_HOME" --apk "$apk" --output "$RUNNER_TEMP/native-acceptance/android"
+          python3 tools/scripts/native-artifact-android.py --sdk "$ANDROID_HOME" --apk "$apk" --api 35 --output "$RUNNER_TEMP/native-acceptance/android"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
