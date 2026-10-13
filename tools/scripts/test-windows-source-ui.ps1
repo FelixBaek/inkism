@@ -730,6 +730,13 @@ function Confirm-TestDownloadPermission([ref]$attempts) {
         if ($_.Exception.GetBaseException() -isnot [System.Windows.Automation.ElementNotAvailableException]) { throw }
     }
 }
+# The preview opens from the command palette; the editor toolbar no longer has a preview button.
+function Open-Preview {
+    Invoke-Element (Find-Element '명령창 열기' ([System.Windows.Automation.ControlType]::Button))
+    Invoke-Element (Find-Element '미리보기' ([System.Windows.Automation.ControlType]::ListItem))
+}
+# Blocks edited in the rich editor gain a random ink-block id; every other byte must match.
+function Remove-BlockIds([string]$text) { $text -creplace ' id="ink-block-[0-9a-f-]{36}"','' }
 function Wait-TestDownload([string]$title,[string]$extension,[DateTime]$since,[scriptblock]$ready = $null) {
     $deadline=[DateTime]::UtcNow.AddSeconds(30)
     $permissionAttempts = 0
@@ -745,7 +752,8 @@ function Wait-TestDownload([string]$title,[string]$extension,[DateTime]$since,[s
         Confirm-TestDownloadPermission ([ref]$permissionAttempts)
         Start-Sleep -Milliseconds 100
     }while([DateTime]::UtcNow -lt $deadline)
-    throw "Native download absent: $title.$extension"
+    $seen=(Get-ChildItem -LiteralPath ([InkismInput]::Downloads()) -ErrorAction SilentlyContinue | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 8 | ForEach-Object { "$($_.Name) $($_.Length)B $($_.LastWriteTimeUtc.ToString('o'))" }) -join '; '
+    throw "Native download absent: $title.$extension (since $($since.ToString('o')); downloads: $seen)"
 }
 $cases = New-Object System.Collections.Generic.List[object]
 $expectedPath=Join-Path $scratch 'expected-source.json'
@@ -886,8 +894,8 @@ try {
         $before=[DateTime]::UtcNow
         Invoke-NoteCommand @('Export as', '원문')
         $extension=switch($format){'html'{'html'}'markdown'{'md'}default{'txt'}}
-        $download=Wait-TestDownload $title $extension $before {param([byte[]]$data) [System.Text.Encoding]::UTF8.GetString($data) -ceq $content}
-        if([System.IO.File]::ReadAllText($download,[System.Text.Encoding]::UTF8) -cne $content){throw 'Downloaded source differs from canonical content'}
+        $download=Wait-TestDownload $title $extension $before {param([byte[]]$data) (Remove-BlockIds ([System.Text.Encoding]::UTF8.GetString($data))) -ceq $content}
+        if((Remove-BlockIds ([System.IO.File]::ReadAllText($download,[System.Text.Encoding]::UTF8))) -cne $content){throw 'Downloaded source differs from canonical content'}
         # Observe preview open/close without silently reinterpreting the source.
         Invoke-NoteCommand @('미리보기')
         Find-Element '미리보기 · 내보내기' | Out-Null
