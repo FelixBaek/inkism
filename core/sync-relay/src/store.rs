@@ -6,7 +6,7 @@ use fs2::FileExt;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 pub const RECORDS: &str = "records";
@@ -38,7 +38,13 @@ pub struct Store {
 
 impl Store {
     pub fn open(path: &Path) -> Result<Store, Error> {
-        let lock = OpenOptions::new().read(true).write(true).create(true).mode_0600().open(path)?;
+        // Create the database owner-only before SQLite touches it, but hold the
+        // exclusive lock on a sidecar file: Windows locks are mandatory, so
+        // locking the database itself makes SQLite's own reads fail (disk I/O error).
+        OpenOptions::new().read(true).write(true).create(true).mode_0600().open(path)?;
+        let mut lock_path = path.as_os_str().to_owned();
+        lock_path.push(".lock");
+        let lock = OpenOptions::new().read(true).write(true).create(true).mode_0600().open(PathBuf::from(lock_path))?;
         let started = Instant::now();
         while lock.try_lock_exclusive().is_err() {
             if started.elapsed() >= Duration::from_secs(1) {
