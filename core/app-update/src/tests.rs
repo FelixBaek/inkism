@@ -1,4 +1,4 @@
-//! Port of the Go update_test.go.
+//! Port of the former Go implementation's update tests.
 
 use super::*;
 use std::collections::HashMap;
@@ -442,29 +442,4 @@ fn run_helper_rejects_foreign_staging() {
         run_helper(&args).is_err(),
         "staging outside target accepted"
     );
-}
-
-/// End-to-end half of tests/cross-go.sh: serves a feed directory whose
-/// latest.json was signed by the Go `update-sign`, then checks and prepares it.
-#[test]
-#[ignore = "run by tests/cross-go.sh"]
-fn cross_go_signed_feed() {
-    let dir = PathBuf::from(std::env::var("INKISM_CROSS_FEED_DIR").expect("INKISM_CROSS_FEED_DIR"));
-    let pk = parse_public_key(&read(&dir.join("pub.key"))).unwrap();
-    let routes = fs::read_dir(&dir)
-        .unwrap()
-        .flatten()
-        .map(|e| {
-            (
-                format!("/feed/{}", e.file_name().to_string_lossy()),
-                fs::read(e.path()).unwrap(),
-            )
-        })
-        .collect();
-    let d = TempDir::new().unwrap();
-    let u = test_updater(&serve(routes), pk, "0.1.0", &d);
-    let s = u.check();
-    assert!(s.available && s.error.is_empty(), "{s:?}");
-    let staging = u.prepare().unwrap();
-    assert_eq!(read(&staging.join("Inkism.exe")), "cross-shell");
 }

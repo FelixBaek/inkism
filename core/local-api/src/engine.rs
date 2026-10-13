@@ -734,33 +734,21 @@ pub(crate) mod fake {
         }
     }
 
-    /// `testdata/copy_engine.go`, built once with `go build`; `None` without Go.
+    /// The `examples/copy_engine.rs` fixture, which `cargo test` builds next to
+    /// the test binary (`target/<profile>/examples`); `None` when it was not
+    /// built, e.g. under `cargo test --lib`.
     pub(crate) fn fixture_engine() -> Option<PathBuf> {
-        static BUILT: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
-        BUILT
-            .get_or_init(|| {
-                let source = Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("../../desktop/internal/bridge/testdata/copy_engine.go");
-                let out = std::env::temp_dir().join(format!(
-                    "inkism-copy-engine-{}{}",
-                    std::process::id(),
-                    std::env::consts::EXE_SUFFIX
-                ));
-                let built = Command::new("go")
-                    .arg("build")
-                    .arg("-o")
-                    .arg(&out)
-                    .arg(&source)
-                    .status();
-                match built {
-                    Ok(s) if s.success() => Some(out),
-                    _ => {
-                        eprintln!("skipping: go is required to build the fixture engine");
-                        None
-                    }
-                }
-            })
-            .clone()
+        let exe = std::env::current_exe().ok()?;
+        let path = exe.parent()?.parent()?.join("examples").join(format!(
+            "copy_engine{}",
+            std::env::consts::EXE_SUFFIX
+        ));
+        if path.exists() {
+            Some(path)
+        } else {
+            eprintln!("skipping: build the copy_engine example (plain `cargo test` does)");
+            None
+        }
     }
 
     /// The real runtime for tests that need it: `INKISM_TEST_ENGINE`, else the

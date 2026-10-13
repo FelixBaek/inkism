@@ -94,7 +94,7 @@ fn prefetch(path: &Path, relay: &Relay, key: &Key) {
 
 #[test]
 fn invalid_note_stays_pending_while_later_note_applies_across_restart() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate();
     let writer = writer(dir.path(), &relay, &key);
@@ -141,7 +141,7 @@ fn invalid_note_stays_pending_while_later_note_applies_across_restart() {
 
 #[test]
 fn malformed_queue_json_does_not_hide_next_record_and_is_never_acknowledged() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate();
     let writer = writer(dir.path(), &relay, &key);
@@ -188,7 +188,7 @@ fn malformed_queue_json_does_not_hide_next_record_and_is_never_acknowledged() {
 
 #[test]
 fn ack_failure_stops_before_next_note_and_replays_without_overwriting_local_edit() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate();
     let writer = writer(dir.path(), &relay, &key);
@@ -243,7 +243,7 @@ fn ack_failure_stops_before_next_note_and_replays_without_overwriting_local_edit
 
 #[test]
 fn host_write_failure_rolls_back_partial_note_then_allows_later_note_and_retry() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate();
     let writer = writer(dir.path(), &relay, &key);
@@ -307,7 +307,7 @@ fn host_write_failure_rolls_back_partial_note_then_allows_later_note_and_retry()
 
 #[test]
 fn superseded_missing_attachment_is_acknowledged_without_downloading_it() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate();
     let writer = writer(dir.path(), &relay, &key);

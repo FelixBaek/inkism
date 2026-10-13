@@ -1,4 +1,4 @@
-//! Port of desktop/internal/pdfexport/pdf_test.go.
+//! Port of the former Go implementation's PDF export tests.
 
 use super::*;
 
