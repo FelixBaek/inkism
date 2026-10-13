@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Observe an existing Android APK's storage across restart, without UI automation.
+"""Observe this checkout's Android APK storage across restart, without UI automation.
 
-Uses the provenance contract and disposable AVD pattern from the separate
-native-artifact acceptance helpers. Only non-secret hashes/metadata are saved.
+Uses a same-job build receipt and a disposable AVD. Only non-secret hashes/metadata are saved.
 This checks the initialized encrypted library, not note-input persistence.
 """
 import argparse
 import hashlib
-import io
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -23,11 +21,8 @@ import zipfile
 
 PACKAGE = "dev.felixbaek.inkism"
 IMAGE = "system-images;android-35;google_apis;x86_64"
-ARTIFACT = {"id": 11806835059, "run": 38385364826,
-            "head": "f3a14e34491e81b560149550a2eacac7dea10b3a",
-            "name": "inkism-android-test-f3a14e34491e81b560149550a2eacac7dea10b3a",
-            "archiveDigest": "sha256:247abc86fd0fe319f9a83b9b2f278eb11ad75aea06900afc2b28785bb58dab04",
-            "sha256": "c401bbf526b474145bbe19eccadfe70b4de519b8cd52deba217ad094d68a3ae1"}
+APK_PATH = "desktop-tauri/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk"
+BUILD_RECIPE = "node tools/platform-build.mjs android"
 
 
 def command(args, *, timeout=30, env=None, text=True, check=True, input=None):
@@ -38,41 +33,47 @@ def command(args, *, timeout=30, env=None, text=True, check=True, input=None):
     return result
 
 
-def prepare(output):
-    repository = os.environ.get("GITHUB_REPOSITORY", "FelixBaek/inkism")
-    if repository != "FelixBaek/inkism":
-        raise RuntimeError("Pinned artifact belongs to FelixBaek/inkism")
-    endpoint = f"repos/{repository}/actions/artifacts/{ARTIFACT['id']}"
-    metadata = json.loads(command(["gh", "api", endpoint]).stdout)
-    if (metadata["id"] != ARTIFACT["id"] or metadata.get("expired") is not False
-            or metadata.get("name") != ARTIFACT["name"] or metadata.get("digest") != ARTIFACT["archiveDigest"]
-            or metadata.get("workflow_run", {}).get("id") != ARTIFACT["run"]
-            or metadata.get("workflow_run", {}).get("head_sha") != ARTIFACT["head"]):
-        raise RuntimeError("Pinned APK artifact provenance/expiry mismatch")
-    archive = command(["gh", "api", endpoint + "/zip"], timeout=180, text=False).stdout
-    digest = "sha256:" + hashlib.sha256(archive).hexdigest()
-    if len(archive) > 300 * 1024 * 1024 or digest != metadata.get("digest"):
-        raise RuntimeError("Pinned artifact archive digest/size mismatch")
-    with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
-        items = bundle.infolist()
-        if len(items) > 20000 or any(PurePosixPath(item.filename).is_absolute()
-                or ".." in PurePosixPath(item.filename).parts
-                or (item.external_attr >> 16) & 0o170000 == 0o120000 for item in items):
-            raise RuntimeError("Unsafe artifact paths")
-        apks = [item for item in items if item.filename.endswith(".apk")]
-        if len(apks) != 1 or apks[0].file_size > 300 * 1024 * 1024:
-            raise RuntimeError("Expected exactly one bounded APK")
-        payload = bundle.read(apks[0])
-    if hashlib.sha256(payload).hexdigest() != ARTIFACT["sha256"]:
-        raise RuntimeError("Pinned APK binary checksum mismatch")
-    with zipfile.ZipFile(io.BytesIO(payload)) as apk:
-        if "lib/arm64-v8a/libinkism_mobile.so" not in apk.namelist():
-            raise RuntimeError("Pinned APK has no ARM64 native host")
-    target = output / "verified.apk"
-    target.write_bytes(payload)
-    (output / "apk-provenance.json").write_text(json.dumps(
-        {**ARTIFACT, "artifactName": metadata["name"], "archiveDigest": digest}, indent=2) + "\n")
-    return target
+def source_context(checkout, environment=None):
+    environment = os.environ if environment is None else environment
+    source = command(["git", "-C", str(checkout), "rev-parse", "HEAD"]).stdout.strip()
+    run_id = environment.get("GITHUB_RUN_ID", "")
+    repository = environment.get("GITHUB_REPOSITORY", "")
+    if not re.fullmatch(r"[0-9a-f]{40}", source) or environment.get("GITHUB_SHA") != source:
+        raise RuntimeError("Build source is not the current workflow checkout")
+    if not re.fullmatch(r"[1-9][0-9]*", run_id) or repository != "FelixBaek/inkism":
+        raise RuntimeError("Build requires this repository's current workflow run identity")
+    return {"sourceSha": source, "sourceRunId": run_id, "repository": repository}
+
+
+def inspect_apk(apk, checkout):
+    checkout = checkout.resolve()
+    apk = apk if apk.is_absolute() else checkout / apk
+    expected = checkout / APK_PATH
+    if apk.resolve() != expected or any((checkout / parent).is_symlink() for parent in PurePosixPath(APK_PATH).parents):
+        raise RuntimeError("APK is not the current checkout's generated build output")
+    if apk.is_symlink() or not apk.is_file() or not 20 <= apk.stat().st_size <= 300 * 1024 * 1024:
+        raise RuntimeError("Missing or invalid current APK file")
+    with zipfile.ZipFile(apk) as bundle:
+        names = bundle.namelist()
+        if len(names) != len(set(names)) or len(names) > 20000 or any(
+                name not in names for name in ("AndroidManifest.xml", "classes.dex", "lib/arm64-v8a/libinkism_mobile.so")):
+            raise RuntimeError("APK lacks its Android manifest/classes or ARM64 host")
+        with bundle.open("lib/arm64-v8a/libinkism_mobile.so") as native:
+            header = native.read(20)
+        if len(header) != 20 or header[:6] != b"\x7fELF\x02\x01" or int.from_bytes(header[18:20], "little") != 183:
+            raise RuntimeError("APK native host is not an ARM64 ELF binary")
+    hasher = hashlib.sha256()
+    with apk.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return {"apkPath": APK_PATH, "apkSha256": hasher.hexdigest(), "apkBytes": apk.stat().st_size}
+
+
+def validate_receipt(receipt, apk, checkout, context):
+    actual = {"schemaVersion": 1, "recipe": BUILD_RECIPE, **context, **inspect_apk(apk, checkout)}
+    if receipt != actual:
+        raise RuntimeError("APK build receipt source/run/recipe/path/hash mismatch")
+    return actual
 
 
 def validate_storage(relative, header, marker, db_stat, key_stat, app_uid):
@@ -99,7 +100,7 @@ def same_storage(before, after):
         if before[field] != after[field]:
             raise RuntimeError("Restart replaced the encrypted library or key identity")
     for field in ("database", "keyIdentity"):
-        for identity in ("inode", "uid", "mode"):
+        for identity in ("device", "inode", "uid", "mode"):
             if before[field][identity] != after[field][identity]:
                 raise RuntimeError("Restart replaced an app-private storage file")
     if after["database"]["bytes"] < before["database"]["bytes"]:
@@ -113,15 +114,20 @@ def storage_failures(logs):
     return [pattern for pattern in patterns if pattern.lower() in logs.lower()]
 
 
-def require_open_database(absolute, links):
-    if absolute not in links.splitlines():
+def descriptor_identities(observations):
+    return {tuple(map(int, line.split(":"))) for line in observations.splitlines()
+            if re.fullmatch(r"[0-9]+:[0-9]+", line)}
+
+
+def require_open_database(database, observations):
+    if (database["device"], database["inode"]) not in descriptor_identities(observations):
         raise RuntimeError("Owned native app has no observable open database descriptor")
 
 
 def descriptor_command(pid):
     if type(pid) is not int or pid <= 0:
         raise RuntimeError("Invalid owned process PID")
-    loop = f'for fd in /proc/{pid}/fd/*; do readlink "$fd"; done'
+    loop = f'for fd in /proc/{pid}/fd/*; do stat -L -c "%d:%i" "$fd"; done'
     # adb shell joins argv without escaping; preserve sh -c's script as one
     # remote-shell argument, including its loop and literal $fd expansion.
     return ["run-as", PACKAGE, "sh", "-c", shlex.quote(loop)]
@@ -131,16 +137,29 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sdk", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--apk", type=Path)
+    parser.add_argument("--build-receipt", type=Path)
+    parser.add_argument("--record-build", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
         self_test()
         return
+    if args.apk is None or args.build_receipt is None:
+        parser.error("--apk and --build-receipt are required")
+    checkout = Path(__file__).resolve().parents[2]
+    context = source_context(checkout)
+    if args.record_build:
+        receipt = {"schemaVersion": 1, "recipe": BUILD_RECIPE, **context, **inspect_apk(args.apk, checkout)}
+        args.build_receipt.parent.mkdir(parents=True, exist_ok=True)
+        args.build_receipt.write_text(json.dumps(receipt, indent=2) + "\n")
+        print("PASS: current-checkout APK build receipt recorded")
+        return
     if args.sdk is None or args.output is None:
-        parser.error("--sdk and --output are required")
+        parser.error("--sdk and --output are required for storage acceptance")
     sdk, output = args.sdk.resolve(), args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    report = {"artifact": ARTIFACT, "harnessHead": os.environ.get("GITHUB_SHA"),
+    report = {"harnessHead": context["sourceSha"],
               "systemImage": IMAGE, "accepted": False, "uiChecksRun": False,
               "physicalDevice": False, "checkpoints": []}
     adb, emulator = sdk / "platform-tools/adb", sdk / "emulator/emulator"
@@ -188,8 +207,8 @@ def main():
         return {"pid": int(pid), "startTicks": int(stat.rsplit(")", 1)[1].split()[19])}
 
     def file_stat(path):
-        mode, size, inode, uid = android("shell", "run-as", PACKAGE, "stat", "-c", "%a:%s:%i:%u", path).stdout.strip().split(":")
-        return {"mode": int(mode, 8), "bytes": int(size), "inode": int(inode), "uid": int(uid)}
+        mode, size, device, inode, uid = android("shell", "run-as", PACKAGE, "stat", "-c", "%a:%s:%d:%i:%u", path).stdout.strip().split(":")
+        return {"mode": int(mode, 8), "bytes": int(size), "device": int(device), "inode": int(inode), "uid": int(uid)}
 
     def digest(path):
         value = android("shell", "run-as", PACKAGE, "sha256sum", path).stdout.split()[0]
@@ -229,12 +248,12 @@ def main():
             diagnostics = (links.stdout + links.stderr).lower()
             report["databaseDescriptorObservation"] = {
                 "process": process, "commandExitCode": links.returncode,
-                "observedLinkCount": len(links.stdout.splitlines()),
-                "matchedDatabase": absolute in links.stdout.splitlines(),
+                "observedIdentityCount": len(descriptor_identities(links.stdout)),
+                "matchedDatabase": (observed["database"]["device"], observed["database"]["inode"]) in descriptor_identities(links.stdout),
                 "permissionDenied": "permission denied" in diagnostics,
                 "shellSyntaxError": "syntax error" in diagnostics}
             # Unavailable proc-fd observations fail; process liveness alone is insufficient.
-            require_open_database(absolute, links.stdout)
+            require_open_database(observed["database"], links.stdout)
             failures = storage_failures(android("logcat", "--pid", str(process["pid"]), "-d", "-v", "brief").stdout)
             if failures:
                 raise RuntimeError("Native storage/process failure: " + ", ".join(failures))
@@ -262,8 +281,13 @@ def main():
 
     scratch = tempfile.TemporaryDirectory(prefix="inkism-android-storage-")
     try:
-        apk = prepare(output)
-        report["checkpoints"].append("Exact existing APK provenance and checksum verified")
+        if args.build_receipt.stat().st_size > 65536:
+            raise RuntimeError("Build receipt is oversized")
+        provenance = validate_receipt(json.loads(args.build_receipt.read_text()), args.apk, checkout, context)
+        apk = checkout / provenance["apkPath"]
+        report["build"] = provenance
+        (output / "apk-provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
+        report["checkpoints"].append("Same-job current-checkout APK recipe, run identity and binary checksum verified")
         for key, directory in (("ANDROID_AVD_HOME", "avd"), ("ANDROID_USER_HOME", "android-user"), ("ANDROID_EMULATOR_HOME", "emulator")):
             env[key] = str(Path(scratch.name) / directory)
             Path(env[key]).mkdir()
@@ -295,7 +319,7 @@ def main():
             report["advertisedAbis"] = abis
             installed = android("install", "--no-streaming", str(apk), timeout=120)
             if "Success" not in installed.stdout:
-                raise RuntimeError("Pinned APK installation failed")
+                raise RuntimeError("Current APK installation failed")
             resolved = android("shell", "cmd", "package", "resolve-activity", "--brief", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", PACKAGE).stdout.splitlines()
             components = [line for line in resolved if re.fullmatch(re.escape(PACKAGE) + r"/(?:\.|" + re.escape(PACKAGE) + r"\.)[A-Za-z0-9_.]+", line)]
             if len(components) != 1:
@@ -321,7 +345,7 @@ def main():
                                      "Whole encrypted file digests recorded; SQLite may checkpoint WAL on reopening"]
             report["checkpoints"].append("Fresh process reopened the same encrypted database inode/header and key identity after force-stop")
             report["accepted"] = True
-            print("PASS: pinned Android APK encrypted storage reopens with the same private database and key identity; no UI checks")
+            print("PASS: current-checkout Android APK encrypted storage reopens with the same private database and key identity; no UI checks")
     except Exception as error:
         report["failure"] = str(error)
         raise
@@ -360,7 +384,7 @@ def main():
 
 def self_test():
     marker = ("INKISM-MOBILE-KEY-1\n" + str(uuid.uuid4())).encode()
-    db = {"mode": 0o600, "bytes": 4096, "inode": 10, "uid": 10001}
+    db = {"mode": 0o600, "bytes": 4096, "device": 8, "inode": 10, "uid": 10001}
     key = {**db, "bytes": len(marker), "inode": 11}
     valid = validate_storage("./notes.db", bytes(range(16)), marker, db, key, 10001)
     same_storage(valid, json.loads(json.dumps(valid)))
@@ -375,7 +399,7 @@ def self_test():
         except RuntimeError:
             continue
         raise AssertionError("Unsafe storage observation passed")
-    for change in ({"identityHash": "changed"}, {"database": {**db, "inode": 12}}, {"database": {**db, "bytes": 0}}):
+    for change in ({"identityHash": "changed"}, {"database": {**db, "device": 9}}, {"database": {**db, "inode": 12}}, {"database": {**db, "bytes": 0}}):
         try:
             same_storage(valid, {**valid, **change})
         except RuntimeError:
@@ -383,26 +407,94 @@ def self_test():
         raise AssertionError("Replaced/truncated storage passed")
     assert storage_failures("AndroidKeyStore is unavailable")
     assert not storage_failures("Unrelated frontend syntax error")
-    require_open_database("/data/user/0/app/notes.db", "/data/user/0/app/notes.db\n")
-    for links in ("", "/data/user/0/app/notes.db-wal\n", "Permission denied\n"):
+    require_open_database(db, "8:10\n")
+    for links in ("", "8:11\n", "9:10\n", "Permission denied\n", "prefix 8:10 suffix\n"):
         try:
-            require_open_database("/data/user/0/app/notes.db", links)
+            require_open_database(db, links)
         except RuntimeError:
             continue
         raise AssertionError("Unavailable native database descriptor passed")
     # Exercise the actual two-shell boundary on a held disposable file, not
     # an Android/product substitute. Missing quoting must fail before reading.
-    with tempfile.NamedTemporaryFile(prefix="inkism-fd-quote-") as held:
+    with tempfile.TemporaryDirectory(prefix="inkism-fd-quote-") as directory:
+        original, alias = Path(directory) / "notes.db", Path(directory) / "database-alias"
+        original.touch()
+        os.link(original, alias)
+        expected = {"device": original.stat().st_dev, "inode": original.stat().st_ino}
         argv = descriptor_command(os.getpid())
         prelude = 'run_as() { shift; "$@"; }; '
         quoted = " ".join(["run_as", *argv[1:]])
         unquoted = " ".join(["run_as", *argv[1:-1], shlex.split(argv[-1])[0]])
-        bad = command(["/bin/sh", "-c", prelude + unquoted], check=False)
-        good = command(["/bin/sh", "-c", prelude + quoted], check=False)
+        with alias.open("rb"):
+            bad = command(["/bin/sh", "-c", prelude + unquoted], check=False)
+            good = command(["/bin/sh", "-c", prelude + quoted], check=False)
         assert bad.returncode != 0 and "syntax error" in bad.stderr.lower()
-        require_open_database(held.name, good.stdout)
+        require_open_database(expected, good.stdout)
+    checkout = Path(__file__).resolve().parents[2]
+    head = command(["git", "-C", str(checkout), "rev-parse", "HEAD"]).stdout.strip()
+    environment = {"GITHUB_SHA": head, "GITHUB_RUN_ID": "12345", "GITHUB_REPOSITORY": "FelixBaek/inkism"}
+    context = source_context(checkout, environment)
+    try:
+        source_context(checkout, {**environment, "GITHUB_SHA": "0" * 40})
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("Wrong workflow checkout source passed")
+    with tempfile.TemporaryDirectory(prefix="inkism-apk-receipt-") as directory:
+        root = Path(directory)
+        apk = root / APK_PATH
+        apk.parent.mkdir(parents=True)
+        native = bytearray(20)
+        native[:6] = b"\x7fELF\x02\x01"
+        native[18:20] = (183).to_bytes(2, "little")
+        with zipfile.ZipFile(apk, "w") as bundle:
+            bundle.writestr("AndroidManifest.xml", b"synthetic manifest")
+            bundle.writestr("classes.dex", b"dex\n039\0")
+            bundle.writestr("lib/arm64-v8a/libinkism_mobile.so", native)
+        receipt = {"schemaVersion": 1, "recipe": BUILD_RECIPE, **context, **inspect_apk(apk, root)}
+        validate_receipt(receipt, apk, root, context)
+        for change in ({"sourceSha": "0" * 40}, {"sourceRunId": "67890"},
+                       {"recipe": "other build"}, {"apkPath": "../foreign.apk"}, {"apkSha256": "0" * 64}):
+            try:
+                validate_receipt({**receipt, **change}, apk, root, context)
+            except RuntimeError:
+                continue
+            raise AssertionError("Foreign/stale APK build receipt passed")
+        for foreign in (root / "foreign.apk", root / "../foreign.apk"):
+            try:
+                inspect_apk(foreign, root)
+            except RuntimeError:
+                continue
+            raise AssertionError("APK outside the generated build path passed")
+        # A changed APK still parses, but its previous receipt must fail.
+        with zipfile.ZipFile(apk, "a") as bundle:
+            bundle.writestr("changed-resource", b"changed")
+        try:
+            validate_receipt(receipt, apk, root, context)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("Changed APK binary passed its old checksum")
+        apk.write_bytes(b"not an APK")
+        try:
+            inspect_apk(apk, root)
+        except (RuntimeError, zipfile.BadZipFile):
+            pass
+        else:
+            raise AssertionError("Non-APK binary passed")
+        apk.unlink()
+        foreign = root / "foreign.apk"
+        foreign.touch()
+        apk.symlink_to(foreign)
+        try:
+            inspect_apk(apk, root)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("Symlinked foreign APK passed")
     print("PASS: storage oracle rejects plaintext, unsafe paths/markers/permissions/UIDs, replaced keys/inodes and truncated databases")
-    print("PASS: actual held-file descriptor survives correctly quoted remote sh -c; unquoted loop fails")
+    print("PASS: actual same-file alias matches device/inode through quoted remote sh -c; unquoted loop and foreign DB/WAL identities fail")
+    print("PASS: current checkout/run/recipe/APK path/binary hash receipt; foreign source/run/path/recipe/changed binary rejected")
 
 
 if __name__ == "__main__":
