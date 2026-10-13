@@ -38,15 +38,15 @@ try {
  const openEditor=async()=>{if(!lazy){const html=page.getByRole('button',{name:'HTML',exact:true});await html.waitFor();if(await html.getAttribute('aria-pressed')!=='true')await html.click();}await editor.waitFor();};
  const expected=suffix=>lazy?content.slice(0,-4)+suffix+'</p>':content+suffix;
  // Editing a block gives it an identity (BlockIdentity), so the lazily edited last paragraph gains an id.
- const durable=body=>lazy?body.replace(/<p id="ink-block-[0-9a-f-]{36}">([^<]*)<\/p>$/,'<p>$1</p>'):body;
+ const stripEditedId=body=>lazy?body.replace(/<p id="ink-block-[0-9a-f-]{36}">([^<]*)<\/p>$/,'<p>$1</p>'):body;
  const stored=async suffix=>{
   const deadline=Date.now()+10000;
   while(Date.now()<deadline){
-   if(durable((await rpc('get',{id:active.id})).content)===expected(suffix))return;
+   if(stripEditedId((await rpc('get',{id:active.id})).content)===expected(suffix))return;
    await new Promise(resolve=>setTimeout(resolve,25));
   }
   const actual=(await rpc('get',{id:active.id})).content;
-  assert.ok(durable(actual)===expected(suffix),'exact durable body; tail='+actual.slice(-180));
+  assert.ok(stripEditedId(actual)===expected(suffix),'exact durable body; tail='+actual.slice(-180));
  };
  const append=async text=>{
   if(lazy){
@@ -106,7 +106,7 @@ try {
  await blockedActions.getByRole('button',{name:'알림 해제',exact:true}).waitFor();await page.waitForFunction(title=>document.querySelector(`[aria-label="${title} 알림 처리"] button`)?.matches(':enabled'),blocked.title);
  assert.equal(patches,0);assert.equal((await rpc('get',{id:blocked.id})).reminder_at,blocked.reminder_at);
  assert.ok((await editor.innerText()).includes('실패 중 초안'));
- assert.equal((await rpc('get',{id:active.id})).content,expected(' 동시 입력 보존'),'failed persistence preserves durable body');
+ assert.equal(stripEditedId((await rpc('get',{id:active.id})).content),expected(' 동시 입력 보존'),'failed persistence preserves durable body');
  denySave=false;await page.keyboard.press('Control+s');
  await page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
  await stored(' 동시 입력 보존 실패 중 초안');
