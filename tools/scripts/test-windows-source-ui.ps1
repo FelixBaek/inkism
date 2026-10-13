@@ -130,6 +130,7 @@ $body = '닫기 직전에도 이 문장을 보존합니다'
 $app = $null
 $launch = 0
 $windowed = $false
+$uiLanguageReady = $false
 
 # Do not depend on PowerShell module discovery in a child Windows PowerShell process.
 # GitHub's pwsh environment may expose only PowerShell 7 module paths.
@@ -173,14 +174,21 @@ function Open-Inkism([bool]$remembered = $false) {
         if ($app.MainWindowHandle -ne [IntPtr]::Zero) {
             [InkismInput]::ShowWindow($app.MainWindowHandle, 9) | Out-Null
             [InkismInput]::SetForegroundWindow($app.MainWindowHandle) | Out-Null
+            if (-not $script:uiLanguageReady) { Set-KoreanTestLanguage }
             return
         }
         Start-Sleep -Milliseconds 100
     }
     throw 'Native Inkism window did not appear'
 }
-function Find-Element([string]$name, $controlType = $null) {
-    $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $name)
+function Find-AnyElement([string[]]$names, $controlType = $null) {
+    $conditions = @($names | ForEach-Object {
+        New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $_)
+    })
+    $condition = $conditions[0]
+    if ($conditions.Count -gt 1) {
+        $condition = [System.Windows.Automation.OrCondition]::new([System.Windows.Automation.Condition[]]$conditions)
+    }
     if ($null -ne $controlType) {
         $typeCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, $controlType)
         $condition = [System.Windows.Automation.AndCondition]::new($condition, $typeCondition)
@@ -188,7 +196,7 @@ function Find-Element([string]$name, $controlType = $null) {
     $deadline = [DateTime]::UtcNow.AddSeconds(20)
     while ([DateTime]::UtcNow -lt $deadline) {
         $app.Refresh()
-        if ($app.HasExited) { throw "Inkism exited while finding $name" }
+        if ($app.HasExited) { throw "Inkism exited while finding $($names -join ', ')" }
         try {
             $window = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
             $element = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
@@ -202,7 +210,39 @@ function Find-Element([string]$name, $controlType = $null) {
         if ($null -ne $element) { return $element }
         Start-Sleep -Milliseconds 100
     }
-    throw "Accessible element not found: $name"
+    throw "Accessible element not found: $($names -join ', ')"
+}
+function Find-Element([string]$name, $controlType = $null) {
+    return Find-AnyElement @($name) $controlType
+}
+function Set-KoreanTestLanguage {
+    # A fresh WebView2 profile follows the real Windows browser locale. Select
+    # the fixture's Korean UI through normal settings, persisting the user's
+    # language choice in this disposable profile. No test flags/storage hooks.
+    $settingsNames = @('설정 열기', '설정 열기 (새 버전 있음)')
+    $languageNames = @('언어')
+    foreach ($locale in @('en', 'zh', 'ja')) {
+        $dictionary = Get-Content -LiteralPath (Join-Path $root "frontend/src/locales/$locale.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+        $settingsNames += $dictionary.PSObject.Properties['설정 열기'].Value
+        $settingsNames += $dictionary.PSObject.Properties['설정 열기 (새 버전 있음)'].Value
+        $languageNames += $dictionary.PSObject.Properties['언어'].Value
+    }
+    Click-Element (Find-AnyElement $settingsNames ([System.Windows.Automation.ControlType]::Button))
+    $language = Find-AnyElement $languageNames ([System.Windows.Automation.ControlType]::ComboBox)
+    $initialLabel = $language.Current.Name
+    if ($initialLabel -eq '언어') {
+        [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+    } else {
+        # The shipped language menu starts with 한국어. Open its native popup,
+        # then use real keyboard selection; change triggers the app's reload.
+        Click-Element $language
+        [System.Windows.Forms.SendKeys]::SendWait('{HOME}{ENTER}')
+    }
+    # Reacquire UIA elements after the reload. Initialize only the first launch:
+    # later launches may deliberately open a locked vault without a sidebar.
+    Find-Element '새 노트 만들기' ([System.Windows.Automation.ControlType]::Button) | Out-Null
+    $script:uiLanguageReady = $true
+    Write-Output "PASS: native settings initialize Korean UI in disposable profile (initial language control: $initialLabel)"
 }
 function Wait-BlockNumber([string]$expected) {
     $deadline = [DateTime]::UtcNow.AddSeconds(15)
