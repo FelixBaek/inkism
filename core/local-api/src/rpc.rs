@@ -56,13 +56,13 @@ const RENDERER_OPS: &[&str] = &[
     "stats",
     "trash_retention_get", "trash_retention_set", "trash_times", "trash_purge",
     "history", "history_name_current", "history_rename", "history_delete_named", "history_body", "history_changes",
+    "history_sealed",
     "revision_body",
     "restore",
     "health",
     "backlinks", "reference_preview", "reference_candidates", "outgoing_references", "unlinked_mentions", "backlink_location", "backlink_blocks", "outgoing_links",
     "index_status",
     "wait_index",
-    "collaboration_binding_get", "collaboration_binding_set",
     "workspace_tools_get", "workspace_tools_set", "font_resources", "font_resource_set",
     "workspace_get",
     "workspace_set",
@@ -285,7 +285,7 @@ mod tests {
     fn trash_and_folder_count_operations_reach_renderer_engine() {
         let engine = Arc::new(FakeEngine::default());
         let h = Handler { engine: Some(engine.clone()), ..Handler::default() };
-        for op in ["trash_retention_get", "trash_retention_set", "trash_times", "trash_purge"] {
+        for op in ["notebook_counts", "history_changes", "history_sealed", "trash_retention_get", "trash_retention_set", "trash_times", "trash_purge"] {
             let body = format!(r#"{{"op":"{op}"}}"#);
             let out = h.handle(&request("POST", "inkism.local", "/api/rpc", &body, &[("Content-Type", "application/json")]));
             assert_eq!(out.status, 200, "renderer rejected {op}");

@@ -1,7 +1,7 @@
 import {waitForAsync} from './async-browser-condition.ts';
 // Real mouse drag across a virtualized window in the shipped React/Go/Rust app.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {historyKey} from './history-keys.ts';
 const base=process.env.INKISM_URL;assert.ok(base);
 const rpc=async(op,args={})=>{const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const value=await response.json();assert.ok(value.ok,value.error);return value.data;};
@@ -63,17 +63,19 @@ try{
   await page.keyboard.type('z');await saved();
   const actualBody=(await rpc('get',{id:note.id})).content;
   let expectedBody=oracle.html+html(texts.slice(100));
-  if(process.env.INKISM_MOUSE_RESELECT==='1'){
-   // A normal local edit assigns an identity to its touched block. The native
-   // node/mark-only oracle deliberately has no identity plugin: verify exactly
-   // one generated ID at the edited paragraph, then include that ID in the
-   // byte-for-byte oracle instead of stripping attributes from the saved body.
+  {
+   // A local edit, and equally input committed over a document selection,
+   // assigns an identity to its touched block. The native node/mark-only
+   // oracle deliberately has no identity plugin: verify exactly one generated
+   // ID at the edited paragraph, then include that ID in the byte-for-byte
+   // oracle instead of stripping attributes from the saved body.
    const ids=[...actualBody.matchAll(/ id="([^"]*)"/g)];
    assert.equal(ids.length,1,'only the locally edited paragraph acquires an ID');
    assert.match(ids[0][1],/^ink-block-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-   const blockOpening='<p>문단 '+origin.block+' ';
+   // The replacement joins into the first selected paragraph (either direction).
+   const edited=Math.min(origin.block,destination.block),blockOpening='<p>문단 '+edited+' ';
    assert.equal(expectedBody.split(blockOpening).length,2,'the edited paragraph has one exact source location');
-   expectedBody=expectedBody.replace(blockOpening,'<p id="'+ids[0][1]+'">문단 '+origin.block+' ');
+   expectedBody=expectedBody.replace(blockOpening,'<p id="'+ids[0][1]+'">문단 '+edited+' ');
   }
   equalBody(actualBody,expectedBody,'replacement uses the exact native range');
   await historyKey(page,'undo');await saved();assert.equal((await rpc('get',{id:note.id})).content,source,'undo preserves all outside paragraphs');

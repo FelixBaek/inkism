@@ -26,7 +26,7 @@ function openSettingsSection(section: "lock" | "about") {
 }
 
 /** 금고 키 대기·새 버전 변경 보관 안내. 다른 노트의 동기화는 그대로 계속된다. */
-function SyncHeldNotices({ status, onNavigate }: Readonly<{ status: Status; onNavigate: () => void }>) {
+function SyncHeldNotices({ status }: Readonly<{ status: Status }>) {
   const waiting = status.vault_key_required ?? [];
   const newer = status.unsupported_records ?? 0;
   const [titles, setTitles] = useState<Record<string, string>>({});
@@ -63,7 +63,7 @@ function SyncHeldNotices({ status, onNavigate }: Readonly<{ status: Status; onNa
   return (
     <>
       {waiting.length > 0 && (
-        <section className="sync-held" role="status" aria-label={t("금고 열기를 기다리는 변경")}>
+        <section className="sync-held" aria-live="polite" aria-label={t("금고 열기를 기다리는 변경")}>
           <strong>
             <LockKeyhole size={14} aria-hidden /> {t("금고 열기를 기다리는 노트 {n}개", { n: waiting.length })}
           </strong>
@@ -81,7 +81,6 @@ function SyncHeldNotices({ status, onNavigate }: Readonly<{ status: Status; onNa
             type="button"
             className="btn btn-secondary"
             onClick={() => {
-              onNavigate();
               openSettingsSection("lock");
             }}
           >
@@ -90,7 +89,7 @@ function SyncHeldNotices({ status, onNavigate }: Readonly<{ status: Status; onNa
         </section>
       )}
       {newer > 0 && (
-        <section className="sync-held" role="status" aria-label={t("새 버전 앱의 변경")}>
+        <section className="sync-held" aria-live="polite" aria-label={t("새 버전 앱의 변경")}>
           <strong>{t("새 버전 앱에서 만든 변경 {n}개 보관 중", { n: newer })}</strong>
           <p className="sync-hint">
             {t(
@@ -101,7 +100,6 @@ function SyncHeldNotices({ status, onNavigate }: Readonly<{ status: Status; onNa
             type="button"
             className="btn btn-secondary"
             onClick={() => {
-              onNavigate();
               openSettingsSection("about");
             }}
           >
@@ -372,7 +370,7 @@ export function SyncSettings({ part = "sync" }: Readonly<{ part?: "sync" | "stor
                 </label>
                 <button type="button" className="btn" disabled={busy || status.running} onClick={() => void saveScope()}>{t("동기화 범위 저장")}</button>
               </section>
-              <SyncHeldNotices status={status} onNavigate={() => window.dispatchEvent(new Event("inkism-close-settings"))} />
+              <SyncHeldNotices status={status} />
               {status.paused && (
                 <p className="sync-hint">{t("이 기기의 변경은 보관됩니다. 다시 시작하면 그때 보냅니다.")}</p>
               )}
@@ -605,6 +603,9 @@ export function SyncIndicator() {
     ok: status.last_sync ? t("연결됨") : t("동기화 대기"),
   }[state];
   const Icon = STATE_ICONS[state];
+  let actionLabel = t("{status} — 지금 동기화", { status: text });
+  if (state === "vault") actionLabel = t("{status} — 금고 열기", { status: text });
+  else if (state === "newer") actionLabel = t("{status} — 업데이트 확인", { status: text });
   return (
     <button
       type="button"
@@ -618,13 +619,8 @@ export function SyncIndicator() {
         (state === "newer" ? t("앱을 업데이트하면 보관 중인 변경을 적용합니다.") : undefined) ??
         (status.last_sync ? t("최근 동기화: {time}", { time: formatRelative(status.last_sync) }) : undefined)
       }
-      aria-label={
-        state === "vault"
-          ? t("{status} — 금고 열기", { status: text })
-          : state === "newer"
-            ? t("{status} — 업데이트 확인", { status: text })
-            : t("{status} — 지금 동기화", { status: text })
-      }
+      aria-label={actionLabel}
+
       onClick={() =>
         state === "vault" || state === "newer"
           ? openSettingsSection(state === "vault" ? "lock" : "about")

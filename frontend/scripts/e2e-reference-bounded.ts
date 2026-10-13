@@ -1,4 +1,5 @@
-import {chromium} from 'playwright-core';import {libraryTool} from './library-tools.ts';import assert from 'node:assert/strict';
+import {chromium} from './browser-env.ts';import {libraryTool} from './library-tools.ts';import assert from 'node:assert/strict';
+
 const base=process.env.INKISM_URL!;const rpc=async(op:string,args={})=>{const e=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(e.ok,true,JSON.stringify(e));return e.data;};
 const targetBody='<p>Previous Target block text</p><p>'+'padding '.repeat(300000)+'</p><h2 id="section">Exact section</h2><p id="block">Target block text</p><h2>Following section</h2><p>Must not appear in section preview</p>';
 const target=await rpc('save',{note:{title:'Huge preview destination',content:targetBody,content_format:'html'}});const sourceBody='<p>'+'padding '.repeat(300000)+'</p><p>![[note://'+target.id+'#^block|Block embed]]</p><p>![[note://'+target.id+'#Exact%20section|Section embed]]</p><p>![[note://'+target.id+'|Whole embed]]</p><p><a href="note://'+target.id+'#^block">Precise block link</a></p>';

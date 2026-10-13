@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 import {createServer} from 'vite';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 
 const server=await createServer({root:fileURLToPath(new URL('..',import.meta.url)),server:{port:0,strictPort:false,host:'127.0.0.1',hmr:false}});
 let browser;
@@ -52,7 +52,9 @@ try{
    const result=changeSelection(prepared,pending.operation()),raw=original.join(''),bytes=enc.encode(raw),dec=new TextDecoder();
    const assembled=dec.decode(bytes.subarray(0,result.start))+result.replacement+dec.decode(bytes.subarray(result.start+enc.encode(result.expected).length));
    const whole=all.state.tr.replaceWith(prepared.blockOffset===0?0:all.state.doc.child(0).nodeSize+all.state.doc.child(1).nodeSize,all.state.doc.content.size,expected.doc.content).doc;
-   if(canonicalRichHTML(assembled)!==serializeModel(whole.content))throw Error('pending replay differs: '+html+' cross='+cross+' rich='+rich);
+   const ids=[...assembled.matchAll(/ id="(ink-block-[0-9a-f-]{36})"/g)];
+   if(!ids.length||new Set(ids.map(v=>v[1])).size!==ids.length)throw Error('missing or duplicate replay identities');
+   if(canonicalRichHTML(assembled.replace(/ id="ink-block-[0-9a-f-]{36}"/g,''))!==serializeModel(whole.content))throw Error('pending replay differs: '+html+' cross='+cross+' rich='+rich);
    const shownRegion={ordinal:0,byte_offset:result.previewWindow.byteStart,source:result.previewWindow.raw,start_context:result.previewWindow.internal?.start_context??[],end_context:result.previewWindow.internal?.end_context??[]};
    const point=segmentPositionMap(shownRegion,schema).point(result.selection.head);
    const global=segmentPositionMap({ordinal:0,byte_offset:0,source:assembled,start_context:[],end_context:[]},schema).position(point.byte,point.within);

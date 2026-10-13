@@ -1,6 +1,6 @@
 // A local document-edge shortcut must commit the caret before the next input.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 const base=process.env.INKISM_URL;assert.ok(base);
 const rpc=async(op,args={})=>{const v=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.ok(v.ok,v.error);return v.data;};
 const source=Array.from({length:4500},(_,i)=>`<p>구간 원문 ${i} 한글 😀 &amp; 본문</p>`).join('');

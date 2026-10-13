@@ -1,17 +1,19 @@
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
+import {waitSaved} from './save-state.ts';
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47846';
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 const page=await browser.newPage();
-await page.addInitScript(()=>{localStorage.setItem('inkism.lang','ko');localStorage.setItem('inkism.inspector','false');});
+// Same isolated profile as the other UI tests: Korean UI and the note inspector closed (at 1280px it opens as a modal overlay over the editor).
+await page.addInitScript(()=>{if(window.top!==window||!/^https?:$/.test(location.protocol))return;localStorage.setItem('inkism.lang','ko');if(localStorage.getItem('inkism.inspector')===null)localStorage.setItem('inkism.inspector','false');});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
 const title='선택 도구 검증 '+Date.now();
 const root=page.locator('.tiptap-prose');
-const menu=page.getByRole('toolbar',{name:'선택한 글자 서식'});
+const menu=page.getByRole('toolbar',{name:'선택한 글자 서식'});// the selection menu is an ARIA toolbar now
 try {
- await page.goto(base);await page.locator('.topbar-new-note').click();
+ await page.goto(base);await page.getByRole('button',{name:'새 노트 만들기',exact:true}).first().click();
  await page.getByLabel('노트 제목',{exact:true}).fill(title);
  await root.click();await page.keyboard.insertText('한글 선택 서식');
  await page.keyboard.press('Control+a');
@@ -23,7 +25,7 @@ try {
  assert.equal(await root.locator('strong em, em strong').textContent(),'한글 선택 서식');
  await page.keyboard.press('ArrowRight');
  await menu.waitFor({state:'hidden'});
- await page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
+ await waitSaved(page);
  await page.reload();await page.getByRole('button',{name:'노트 열기: '+title,exact:true}).click();
  assert.equal(await root.locator('strong em, em strong').textContent(),'한글 선택 서식');
  await root.click();await page.keyboard.press('Control+a');await menu.waitFor({state:'visible'});

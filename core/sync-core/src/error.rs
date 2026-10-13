@@ -32,6 +32,11 @@ pub enum SyncError {
     /// The relay returned a response that violates the v1 contract.
     #[error("sync protocol error: {0}")]
     Protocol(String),
+
+    /// An authenticated record uses a payload schema newer than this client.
+    /// Keep its original bytes pending; do not resolve or acknowledge it.
+    #[error("unsupported sync payload version {version} (supported through {supported})")]
+    UnsupportedPayloadVersion { version: u32, supported: u32 },
 }
 
 impl From<rusqlite::Error> for SyncError {

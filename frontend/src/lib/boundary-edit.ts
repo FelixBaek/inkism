@@ -3,7 +3,7 @@ import { EditorState, NodeSelection, Selection, TextSelection } from "@tiptap/pm
 import type { DocumentBlockPage, DocumentSegment, DocumentSegmentPage } from "../types";
 import { contentExtensions } from "../extensions/content-schema";
 import { inspectRichHTML } from "./rich-document";
-import { projectSegment, renderSegment } from "./rich-segment";
+import { contextIdentifiable, contextIdentity, projectSegment, renderSegment } from "./rich-segment";
 import { segmentPositionMap } from "./segment-selection";
 import { joinSegmentModels, modelSourceSegments } from "./segment-model";
 import type { WindowPreview } from "./window-history";
@@ -330,12 +330,13 @@ export function changeBoundary(prepared: PreparedBoundary, direction: BoundaryDi
   prepared.check();
   const editor = new Editor({
     element: document.createElement("div"),
-    // A complete joined block receives its identity just like a native edit.
-    // Partial segments cannot change an opening tag outside their source span.
-    extensions: contentExtensions({
-      trailingNode: false,
-      automaticIds: !prepared.region.start_context.length && !prepared.region.end_context.length,
-    }),
+    // A region that starts inside an open block (an internal segment of a huge
+    // paragraph, list or table) has the opening tags of the touched block and
+    // its ancestors outside the bounded source. The segment cache reports where
+    // each of those tags is, so a new identity is written as an exact splice of
+    // that tag alone (contextIdentity). Without those offsets (an old cache),
+    // the edit stays without new identities, as before.
+    extensions: contentExtensions({ trailingNode: false, automaticIds: contextIdentifiable(prepared.region) }),
     content: prepared.state.doc.toJSON(),
     parseOptions: { preserveWhitespace: "full" },
     injectCSS: false,
@@ -360,8 +361,12 @@ export function changeBoundary(prepared: PreparedBoundary, direction: BoundaryDi
     }
     if (before.eq(editor.state.doc) && originalSelection.eq(editor.state.selection)) return null;
     prepared.check();
-    const replacement = projectSegment(prepared.region, editor.getHTML());
-    const afterRegion = { ...prepared.region, source: replacement };
+    const html = editor.getHTML();
+    // Tags outside the region that gained an identity, and the region as it
+    // reads after those splices (shifted offsets, new opening tags).
+    const identity = contextIdentity(prepared.region, html);
+    const replacement = projectSegment(identity.segment, html);
+    const afterRegion = { ...identity.segment, source: replacement };
     const beforeKind = String(originalSelection.toJSON().type),
       afterKind = String(editor.state.selection.toJSON().type);
     const beforePoint = segmentPositionMap(prepared.region).point(
@@ -373,9 +378,13 @@ export function changeBoundary(prepared: PreparedBoundary, direction: BoundaryDi
     const beforePreview = preview(prepared, prepared.region, beforePoint, beforeKind),
       afterPreview = preview(prepared, afterRegion, afterPoint, afterKind);
     return {
-      start: prepared.region.byte_offset,
+      /** Region start after the `tags` splices (they all precede it). */
+      start: afterRegion.byte_offset,
+      beforeStart: prepared.region.byte_offset,
       expected: prepared.region.source,
       replacement,
+      /** Sequential splices of outside opening tags, applied before the region edit. */
+      tags: identity.tags,
       offset: prepared.blockOffset,
       beforeCount: prepared.blockCount,
       count: editor.state.doc.childCount,

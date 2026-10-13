@@ -18,9 +18,6 @@ struct Input {
     token: String,
     days: i64,
     revision: i64,
-    version: u64,
-    page_id: String,
-    markdown: Option<String>,
     publication_id: String,
     role: String,
     password: Option<String>,
@@ -207,11 +204,6 @@ fn action(
 ) -> Result<(reqwest::Method, String, Vec<u8>), Response> {
     match input.action.as_str() {
         "list" => Ok((reqwest::Method::GET, endpoint, Vec::new())),
-        "snapshot" | "reconcile" if publication_id(&input.id) => Ok((
-            reqwest::Method::GET,
-            format!("{endpoint}/{}", input.id),
-            Vec::new(),
-        )),
         "revoke" if publication_id(&input.id) => Ok((
             reqwest::Method::DELETE,
             format!("{endpoint}/{}", input.id),
@@ -247,7 +239,8 @@ fn action(
         )),
         "share_create" => {
             if !publication_id(&input.publication_id)
-                || !matches!(input.role.as_str(), "viewer" | "editor")
+                // Invitations are read-only.
+                || input.role != "viewer"
                 || input.password.as_ref().is_some_and(|p| p.len() > 512)
             {
                 return Err(Response::fail(
@@ -290,40 +283,6 @@ fn action(
         }
         _ => Err(Response::fail(400, "unknown publication action")),
     }
-}
-
-// Compare canonical sanitized markup, normalizing only insignificant gaps at
-// block boundaries. Inline spaces and pre/code whitespace stay byte-exact.
-fn canonical_blocks(html: &str) -> String {
-    let closing = regex::Regex::new(
-        r"(</(?:p|h[1-6]|ul|ol|li|blockquote|pre|table|thead|tbody|tr|td|th)>)[ \t\r\n]+<",
-    )
-    .unwrap();
-    let opening =
-        regex::Regex::new(r"(<(?:ul|ol|blockquote|table|thead|tbody|tr)(?: [^>]*)?>)[ \t\r\n]+<")
-            .unwrap();
-    let html = closing.replace_all(html.trim(), "${1}<");
-    opening.replace_all(&html, "${1}<").into_owned()
-}
-fn lossless_markdown(markdown: &str, html: &str) -> bool {
-    if markdown.len() > inkism_web_content::MAX_BYTES {
-        return false;
-    }
-    let parser = pulldown_cmark::Parser::new_ext(markdown, pulldown_cmark::Options::all());
-    // Markdown sources should not become opaque HTML fallbacks.
-    let events: Vec<_> = parser.collect();
-    if events.iter().any(|event| {
-        matches!(
-            event,
-            pulldown_cmark::Event::Html(_) | pulldown_cmark::Event::InlineHtml(_)
-        )
-    }) {
-        return false;
-    }
-    let mut rendered = String::new();
-    pulldown_cmark::html::push_html(&mut rendered, events.into_iter());
-    inkism_web_content::clean(&rendered)
-        .is_ok_and(|clean| canonical_blocks(&clean.html) == canonical_blocks(html))
 }
 
 pub(crate) fn serve(h: &Handler, r: &Request) -> Response {
@@ -393,73 +352,6 @@ fn publish(h: &Handler, r: &Request) -> Result<Response, Response> {
     }
     let parsed: Value =
         serde_json::from_slice(&data).map_err(|_| Response::fail(502, "invalid relay response"))?;
-    if input.action == "reconcile" {
-        if input.revision < 1
-            || input.version == 0
-            || parsed["version"].as_u64() != Some(input.version)
-        {
-            return Err(Response::fail(
-                409,
-                "publication changed; reload before applying",
-            ));
-        }
-        let original = call(h, deadline, &json!({"op":"get","id":input.note_id}))
-            .map_err(|_| Response::fail(400, "source unavailable"))?;
-        let note = &original["data"];
-        if original["ok"] != true
-            || note["readonly"] == true
-            || note["locked"] == true
-            || note["trashed"] == true
-        {
-            return Err(Response::fail(400, "source is unavailable or protected"));
-        }
-        if note["revision"].as_i64() != Some(input.revision) {
-            return Err(Response::fail(
-                409,
-                "source changed; preserve both versions",
-            ));
-        }
-        let page = if input.page_id.is_empty() {
-            &parsed
-        } else {
-            parsed["pages"]
-                .as_array()
-                .and_then(|pages| {
-                    pages
-                        .iter()
-                        .find(|p| p["id"].as_str() == Some(input.page_id.as_str()))
-                })
-                .ok_or_else(|| {
-                    Response::fail(409, "shared page was removed; preserve the source")
-                })?
-        };
-        let html = page["html"]
-            .as_str()
-            .ok_or_else(|| Response::fail(502, "invalid publication"))?;
-        let clean = inkism_web_content::clean(html).map_err(|e| Response::fail(502, e))?;
-        let format = note["content_format"].as_str().unwrap_or("html");
-        let content=match format {
-            "html"=>clean.html.clone(),
-            "markdown"=>{
-                let markdown=input.markdown.as_deref().ok_or_else(||Response::fail(409,"lossless Markdown conversion required"))?;
-                if !lossless_markdown(markdown,&clean.html) {return Err(Response::fail(409,"format cannot be preserved; save a separate copy"));}
-                markdown.to_owned()
-            },
-            _=>return Err(Response::fail(409,"rich publication requires an HTML or lossless Markdown source; save a separate copy")),
-        };
-        let saved = call(h, deadline, &json!({"op":"save","note":{"id":input.note_id,"title":note["title"],"content":content,"text":if format=="html" {&clean.text} else {&content},"content_format":format,"revision":input.revision,"require_existing":true}}))
-            .map_err(|_|Response::fail(500,"source save failed"))?;
-        if saved["ok"] != true {
-            return Err(Response::fail(
-                409,
-                "source changed; preserve both versions",
-            ));
-        }
-        return Ok(Response::json(
-            200,
-            &json!({"ok":true,"data":{"note":saved["data"],"version":input.version}}),
-        ));
-    }
     let domain = if input.action.starts_with("domain_") {
         Some(parsed.clone())
     } else {
@@ -540,254 +432,6 @@ mod tests {
             body: body.as_bytes().to_vec(),
         };
         serve(&h, &r)
-    }
-
-    #[test]
-    fn reconcile_updates_real_markdown_database_and_preserves_conflicts() {
-        struct RealSource {
-            db: Mutex<inkism_engine::Engine>,
-            url: String,
-        }
-        impl Engine for RealSource {
-            fn call(&self, _: Deadline, raw: &[u8]) -> crate::Result<Vec<u8>> {
-                let q: Value = serde_json::from_slice(raw)?;
-                let v = if q["op"] == "sync_status" {
-                    json!({"ok":true,"data":{"configured":true,"server_url":self.url}})
-                } else {
-                    self.db.lock().unwrap().execute(q)
-                };
-                Ok(serde_json::to_vec(&v)?)
-            }
-        }
-        use std::sync::atomic::{AtomicBool, Ordering};
-        let revoked = Arc::new(AtomicBool::new(false));
-        let server_revoked = revoked.clone();
-        let url = mock::serve(move |_| {
-            if server_revoked.load(Ordering::SeqCst) {
-                mock::Reply {
-                    status: 404,
-                    headers: vec![],
-                    body: vec![],
-                }
-            } else {
-                mock::Reply{status:200,headers:vec![],body:br#"{"version":2,"title":"Root","html":"<p>root</p>","pages":[{"id":"child","title":"Child","html":"<h1>Collaborative</h1>"}]}"#.to_vec()}
-            }
-        });
-        let dir = tempfile::tempdir().unwrap();
-        let db =
-            inkism_engine::Engine::open(dir.path().join("library.db").to_str().unwrap()).unwrap();
-        let made=db.execute(json!({"op":"save","note":{"id":"original","title":"My original title","content":"# Original\n","content_format":"markdown","tags":["keep"]}}));
-        assert_eq!(made["ok"], true, "{made}");
-        let revision = made["data"]["revision"].as_i64().unwrap();
-        let source = Arc::new(RealSource {
-            db: Mutex::new(db),
-            url,
-        });
-        let h = Handler {
-            engine: Some(source.clone()),
-            ..Default::default()
-        };
-        let binding_request=Request{method:"POST".into(),path:"/api/rpc".into(),query:None,headers:vec![("content-type".into(),"application/json".into())],host:"localhost".into(),body:serde_json::to_vec(&json!({"op":"collaboration_binding_set","publication_id":"a".repeat(64),"page_id":"child","expected_updated_at":0,"binding":{"id":"original","revision":revision,"version":1,"format":"markdown"}})).unwrap()};
-        let connected = crate::rpc::renderer(
-            &h,
-            &binding_request,
-            Instant::now() + Duration::from_secs(5),
-        );
-        assert_eq!(
-            connected.status,
-            200,
-            "{}",
-            String::from_utf8_lossy(&connected.body)
-        );
-        let request = |revision| {
-            Request{method:"POST".into(),path:"/api/publications".into(),query:None,headers:vec![],host:"localhost".into(),body:serde_json::to_vec(&json!({"action":"reconcile","id":"a".repeat(64),"token":"a".repeat(32),"note_id":"original","revision":revision,"version":2,"page_id":"child","markdown":"# Collaborative\n"})).unwrap()}
-        };
-        let out = serve(&h, &request(revision));
-        assert_eq!(out.status, 200, "{}", String::from_utf8_lossy(&out.body));
-        let saved = source
-            .db
-            .lock()
-            .unwrap()
-            .execute(json!({"op":"get","id":"original"}));
-        assert_eq!(saved["data"]["content"], "# Collaborative\n");
-        assert_eq!(saved["data"]["content_format"], "markdown");
-        assert_eq!(saved["data"]["title"], "My original title");
-        assert_eq!(saved["data"]["tags"], json!(["keep"]));
-        assert_eq!(
-            serve(&h, &request(revision)).status,
-            409,
-            "stale source overwrote DB"
-        );
-        revoked.store(true, Ordering::SeqCst);
-        assert_eq!(
-            serve(&h, &request(saved["data"]["revision"].as_i64().unwrap())).status,
-            502,
-            "revoked publication imported"
-        );
-        let after = source
-            .db
-            .lock()
-            .unwrap()
-            .execute(json!({"op":"get","id":"original"}));
-        assert_eq!(after["data"]["revision"], saved["data"]["revision"]);
-        assert_eq!(after["data"]["content"], saved["data"]["content"]);
-    }
-
-    #[test]
-    fn markdown_comparison_preserves_structure_and_pre_whitespace() {
-        assert!(lossless_markdown(
-            "# Heading\n\nOne **bold** paragraph.\n\nSecond.",
-            "<h1>Heading</h1><p>One <strong>bold</strong> paragraph.</p><p>Second.</p>"
-        ));
-        assert!(!lossless_markdown("one two", "<p>one  two</p>"));
-        assert!(!lossless_markdown(
-            "```\na b\n```",
-            "<pre><code>a  b\n</code></pre>"
-        ));
-        assert!(!lossless_markdown("<p>opaque</p>", "<p>opaque</p>"));
-        assert!(!lossless_markdown("plain", "<h2>plain</h2>"));
-    }
-
-    #[test]
-    fn reconcile_checks_versions_protection_and_engine_cas() {
-        struct Source {
-            url: String,
-            revision: i64,
-            protected: bool,
-            race: bool,
-            format: &'static str,
-            saves: Arc<Mutex<Vec<Value>>>,
-        }
-        impl Engine for Source {
-            fn call(&self, _: Deadline, raw: &[u8]) -> crate::Result<Vec<u8>> {
-                let q: Value = serde_json::from_slice(raw)?;
-                let response = match q["op"].as_str().unwrap() {
-                    "sync_status" => {
-                        json!({"ok":true,"data":{"configured":true,"server_url":self.url}})
-                    }
-                    "get" => {
-                        json!({"ok":true,"data":{"id":"source","revision":self.revision,"title":"Local title","content_format":self.format,"readonly":self.protected}})
-                    }
-                    "save" => {
-                        self.saves.lock().unwrap().push(q.clone());
-                        if self.race {
-                            json!({"ok":false,"error":"revision conflict"})
-                        } else {
-                            json!({"ok":true,"data":{"id":"source","revision":5}})
-                        }
-                    }
-                    _ => panic!("unexpected operation"),
-                };
-                Ok(serde_json::to_vec(&response)?)
-            }
-        }
-        let target = mock::serve(|hit| {
-            assert!(hit.path().starts_with("/v1/publications/"));
-            mock::Reply{status:200,headers:vec![],body:br#"{"version":2,"title":"Remote","html":"<p>edited</p><script>bad()</script>","pages":[{"id":"child","title":"Child","html":"<h1>child</h1>"}]}"#.to_vec()}
-        });
-        for (
-            revision,
-            protected,
-            race,
-            version,
-            status,
-            count,
-            format,
-            page,
-            markdown,
-            expected_content,
-        ) in [
-            (
-                4,
-                false,
-                false,
-                2,
-                200,
-                1,
-                "html",
-                "",
-                None,
-                "<p>edited</p>",
-            ),
-            (5, false, false, 2, 409, 0, "html", "", None, ""),
-            (4, true, false, 2, 400, 0, "html", "", None, ""),
-            (4, false, true, 2, 409, 1, "html", "", None, "<p>edited</p>"),
-            (4, false, false, 1, 409, 0, "html", "", None, ""),
-            (
-                4,
-                false,
-                false,
-                2,
-                200,
-                1,
-                "html",
-                "child",
-                None,
-                "<h1>child</h1>",
-            ),
-            (4, false, false, 2, 409, 0, "html", "removed", None, ""),
-            (
-                4,
-                false,
-                false,
-                2,
-                200,
-                1,
-                "markdown",
-                "child",
-                Some("# child\n"),
-                "# child\n",
-            ),
-            (
-                4,
-                false,
-                false,
-                2,
-                409,
-                0,
-                "markdown",
-                "child",
-                Some("child\n"),
-                "",
-            ),
-            (
-                4,
-                false,
-                false,
-                2,
-                409,
-                0,
-                "markdown",
-                "child",
-                Some("<h1>child</h1>"),
-                "",
-            ),
-        ] {
-            let saves = Arc::new(Mutex::new(vec![]));
-            let h = Handler {
-                engine: Some(Arc::new(Source {
-                    url: target.clone(),
-                    revision,
-                    protected,
-                    race,
-                    format,
-                    saves: saves.clone(),
-                })),
-                ..Default::default()
-            };
-            let r=Request{method:"POST".into(),path:"/api/publications".into(),query:None,headers:vec![],host:"localhost".into(),body:serde_json::to_vec(&json!({"action":"reconcile","id":"a".repeat(64),"token":"a".repeat(32),"note_id":"source","revision":4,"version":version,"page_id":page,"markdown":markdown})).unwrap()};
-            let out = serve(&h, &r);
-            assert_eq!(out.status, status, "{}", String::from_utf8_lossy(&out.body));
-            let saved = saves.lock().unwrap();
-            assert_eq!(saved.len(), count);
-            if let Some(q) = saved.first() {
-                assert_eq!(q["note"]["revision"], 4);
-                assert_eq!(q["note"]["require_existing"], true);
-                assert_eq!(q["note"]["content"], expected_content);
-                assert_eq!(q["note"]["content_format"], format);
-                assert_eq!(q["note"]["title"], "Local title");
-            }
-        }
     }
 
     #[test]

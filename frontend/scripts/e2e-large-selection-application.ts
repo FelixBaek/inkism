@@ -1,7 +1,9 @@
 // Shipped React/Go/Rust, isolated profile. No personal desktop automation.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
+import {waitSaved} from './save-state.ts';
 import {historyKey} from './history-keys.ts';
+import {assertBlockBytes} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL;
 assert.ok(base,'isolated application URL required');
 const rpc=async(op,args={})=>{const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const value=await response.json();assert.equal(value.ok,true,JSON.stringify(value));return value.data;};
@@ -17,7 +19,7 @@ const page=await browser.newPage({viewport:{width:1440,height:960}}),errors=[],s
 page.on('pageerror',error=>errors.push(error.message));
 const editor=page.locator('.tiptap-prose');
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized&&Array.from(document.querySelectorAll<any>('.window-controls button')).some(button=>button.textContent==='이동'&&!button.disabled));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
+const saved=()=>waitSaved(page);
 const body=async()=>(await rpc('get',{id:note.id})).content;
 const idle=()=>page.waitForFunction(()=>!document.querySelector('.document-selection-status')&&!document.querySelector('.window-error'));
 try{
@@ -52,14 +54,16 @@ try{
  },{source,html,seam});
  await editor.evaluate((el: any,html)=>{el.editor.view.focus();el.editor.view.pasteHTML(html);},html);await idle();await saved();
  const expected=reference.paste;
- assert.equal(await body(),expected,'large rich paste keeps exact outside bytes and formatting');
+ const pasteIds=assertBlockBytes(await body(),expected,{added:1,message:'large rich paste keeps exact outside bytes and formatting'});
  assert.ok((await editor.textContent()).length<33000);assert.ok(await page.locator('*').count()<1500,'bounded mounted display after paste');
  await page.keyboard.insertText('후속');await saved();
- assert.equal(await body(),reference.follow,'follow-up typing lands at inserted end with inherited format');
+ // Typing in the internal window identifies the giant paragraph enclosing it
+ // (one splice of its opening tag); the native reference has no identity plugin.
+ assertBlockBytes(await body(),reference.follow,{added:1,ids:pasteIds,message:'follow-up typing lands at inserted end with inherited format'});
  await page.reload();await ready();
- await historyKey(page,'undo');await saved();assert.equal(await body(),expected,'restart undo follow-up');
+ await historyKey(page,'undo');await saved();assertBlockBytes(await body(),expected,{added:1,ids:pasteIds,message:'restart undo follow-up'});
  await historyKey(page,'undo');await saved();assert.equal(await body(),source,'restart undo large paste');
- await historyKey(page,'redo');await saved();assert.equal(await body(),expected,'restart redo large paste');
+ await historyKey(page,'redo');await saved();assertBlockBytes(await body(),expected,{added:1,ids:pasteIds,message:'restart redo large paste'});
  assert.deepEqual(errors,[]);
  console.log('PASS large rich paste, exact outside source and marks, bounded mounted display, follow-up caret/marks, restart undo/redo; lazy='+(process.env.INKISM_LAZY!=='0'));
 }finally{await browser.close();}

@@ -1,4 +1,4 @@
-//! Port of desktop/internal/webcontent/sanitize_test.go.
+//! Port of the former Go implementation's sanitizer tests.
 
 use inkism_web_content::{clean, clean_export, source_url, MAX_BYTES};
 

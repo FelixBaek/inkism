@@ -1,7 +1,10 @@
 // Chromium's actual composition events through CDP, with the real Go/Rust backend.
 // This is browser-engine coverage, not a physical Windows IME acceptance test.
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
+import {trackSaves} from './save-state.ts';
 import assert from 'node:assert/strict';
+import {assertBlockBytes} from './block-identity-bytes.ts';
+import {historyKey} from './history-keys.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48415';
 const rpc=async(op,args={})=>{
  const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});
@@ -15,8 +18,8 @@ const title='범위 조합 검사 '+Date.now();
 // above that threshold as well as the lazy path's UTF-8/block threshold.
 const suffix=process.env.INKISM_LAZY==='0'?' 길이 확보 본문':'';
 const content=Array.from({length:10000},(_,i)=>`<p>문단 ${i} 한글😀${suffix}</p>`).join('');
-let note;
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'),undefined,{timeout:30000});
+let note,closeRequests=0;
+const saves=trackSaves(page),saved=()=>saves.saved({timeout:30000});
 const focus=()=>page.locator('.tiptap-prose').evaluate((el: any)=>el.editor.view.focus());
 try{
  note=await rpc('save',{note:{title,content,content_format:'html'}});await rpc('wait_index');
@@ -32,11 +35,15 @@ try{
  assert.equal((await rpc('get',{id:note.id})).content,content,'provisional composition must not save a partial window');
  await cdp.send('Input.insertText',{text:'한글😀'});
  await page.waitForFunction(()=>!document.querySelector('.document-selection-status'),undefined,{timeout:30000});await saved();
- assert.equal((await rpc('get',{id:note.id})).content,'<p>한글😀</p>','composition must replace all selected offscreen content exactly once');
+ // The committed composition is the one edited block: it gains its identity
+ // in the same commit as the replacement, never during the composition.
+ const composedIds=assertBlockBytes((await rpc('get',{id:note.id})).content,'<p>한글😀</p>',{added:1,message:'composition must replace all selected offscreen content exactly once'});
  assert.equal(await page.locator('.window-error').count(),0,'composition must not be refused');
  assert.equal(await page.locator('.tiptap-prose').evaluate((el: any)=>el.editor===(window as any).composingEditor),true,'committing input must keep the native composing editor mounted');
  await focus();await page.keyboard.press('Control+z');await saved();
  assert.equal((await rpc('get',{id:note.id})).content,content,'one undo restores the whole original');
+ await historyKey(page,'redo');await saved();assertBlockBytes((await rpc('get',{id:note.id})).content,'<p>한글😀</p>',{added:1,ids:composedIds,message:'redo restores the same identity'});
+ await focus();await page.keyboard.press('Control+z');await saved();assert.equal((await rpc('get',{id:note.id})).content,content,'undo after redo');
  assert.equal(await page.locator('.tiptap-prose p').count(),32);
  // The full-draft range worker can finish during a new composition. Its result
  // must be located before taking the latest slice, with no later async gap.
@@ -60,7 +67,7 @@ try{
   assert.equal((await rpc('get',{id:note.id})).content,content,'range worker completion must not commit an older word during a new candidate');
   await cdp.send('Input.insertText',{text:'번째'});
   await page.waitForFunction(()=>!document.querySelector('.document-selection-status'));await saved();
-  assert.equal((await rpc('get',{id:note.id})).content,'<p>첫번째</p>');
+  assertBlockBytes((await rpc('get',{id:note.id})).content,'<p>첫번째</p>',{added:1});
   await page.evaluate(()=>{window.Worker=(window as any).nativeRangeWorker;});
   await focus();await page.keyboard.press('Control+z');await saved();
   assert.equal((await rpc('get',{id:note.id})).content,content);
@@ -82,7 +89,7 @@ try{
  await cdp.send('Input.imeSetComposition',{text:'ㅎ',selectionStart:1,selectionEnd:1});
  await cdp.send('Input.insertText',{text:'한글😀'});
  await page.waitForFunction(()=>!document.querySelector('.document-selection-status'));await saved();
- assert.equal((await rpc('get',{id:note.id})).content,'<p>문단 0한글😀</p>');
+ assertBlockBytes((await rpc('get',{id:note.id})).content,'<p>문단 0한글😀</p>',{added:1});
  await focus();await page.keyboard.press('Control+z');await saved();
  assert.equal((await rpc('get',{id:note.id})).content,content);
  // Continue composing while an offscreen read is delayed. Switching/closing
@@ -111,7 +118,7 @@ try{
  assert.equal(await page.getByLabel('노트 제목',{exact:true}).inputValue(),title,'note switch waits for the selected input');
  release();
  await page.waitForFunction(title=>document.querySelector<any>('[aria-label="노트 제목"]')?.value===title,other.title);
- assert.equal((await rpc('get',{id:note.id})).content,'<p>첫번째</p>');
+ assertBlockBytes((await rpc('get',{id:note.id})).content,'<p>첫번째</p>',{added:1});
  await page.unroute('**/api/rpc');
  await page.getByRole('searchbox',{name:'노트 검색',exact:true}).fill(title);
  await page.getByRole('button',{name:'노트 열기: '+title,exact:true}).click();await focus();
@@ -147,7 +154,6 @@ try{
  await page.locator('.window-error').waitFor();
  assert.equal(await page.locator('.tiptap-prose').textContent(),'미전송');
  assert.equal(await page.locator('.split-primary .cm-content').count(),0);
- let closeRequests=0;
  await page.route('**/api/close',route=>{closeRequests++;return route.fulfill({status:200,body:'{}'});});
  await page.evaluate(()=>window.dispatchEvent(new Event('native-close-request')));
  await page.waitForFunction(()=>document.querySelector<any>('.window-error') && !document.querySelector<any>('.window-controls button:last-child')?.disabled);
@@ -158,7 +164,7 @@ try{
  // that retry has actually failed, rather than racing its pending request.
  fail=false;await page.locator('.window-error').getByRole('button',{name:'다시 시도'}).click();
  await page.waitForFunction(()=>!document.querySelector('.document-selection-status'));await saved();
- assert.equal((await rpc('get',{id:note.id})).content,'<p>미전송</p>');
+ assertBlockBytes((await rpc('get',{id:note.id})).content,'<p>미전송</p>',{added:1});
  await page.unroute('**/api/rpc');
  const closed=page.waitForResponse('**/api/close');
  await page.evaluate(()=>window.dispatchEvent(new Event('native-close-request')));await closed;
@@ -182,8 +188,12 @@ try{
  await page.waitForTimeout(1800);
  assert.equal((await rpc('get',{id:note.id})).content,content,'a long-lived provisional candidate must not save');
  await cdp.send('Input.insertText',{text:'일반'});await saved();
- assert.equal((await rpc('get',{id:note.id})).content,'<p>일반'+content.slice(3));
+ // Exactly one committed word (an identity redraw during the composition used
+ // to drop it, insert it twice and leave autosave stuck); the edited block
+ // receives its identity only after the composition ended.
+ assertBlockBytes((await rpc('get',{id:note.id})).content,'<p>일반'+content.slice(3),{added:1,message:'held composition commit'});
+ assert.equal(await page.locator('.tiptap-prose').evaluate((el: any)=>el.editor.view.composing),false,'composition ended');
  assert.deepEqual(errors,[]);
  console.log('PASS: Chromium IME over 10k blocks; all/range selection, cancellation, continued composition, delayed note switch/close, failed-read input retention/retry, exact save/undo and bounded DOM; lazy='+ (process.env.INKISM_LAZY!=='0'));
-}catch(error){console.error(await page.evaluate(()=>({error:document.querySelector('.window-error')?.textContent,selection:document.querySelector('.document-selection-status')?.textContent,save:document.querySelector('.status-save')?.textContent,body:document.querySelector('.tiptap-prose')?.textContent?.slice(0,100)})));throw error;}
+}catch(error){console.error({closeRequests,errors,...await page.evaluate(()=>({error:document.querySelector('.window-error')?.textContent,selection:document.querySelector('.document-selection-status')?.textContent,saveState:document.querySelector('.status-save')?.getAttribute('data-save-state'),save:document.querySelector('.status-save')?.textContent,composing:document.querySelector<any>('.tiptap-prose')?.editor?.view.composing,body:document.querySelector('.tiptap-prose')?.textContent?.slice(0,100)}))});throw error;}
 finally{await browser.close();}

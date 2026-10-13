@@ -2,6 +2,7 @@ import SourceScanWorker from "../workers/source-segments.worker?worker";
 import type { SourceScanRequest, SourceSegmentSpan } from "../workers/source-segments.worker";
 import type { DocumentSegment } from "../types";
 import { t } from "../i18n";
+import { workerErrorMessage, type WorkerFailure } from "./error-messages";
 
 /** A task owns its worker: stale edits terminate it without delaying the next
  * edit. Return source offsets/context only; no DOM or full source comes back. */
@@ -36,11 +37,11 @@ export function scanSourceInWorker(request: SourceScanRequest, check: () => void
       worker.onerror = () => fail(new Error(t("문서 구간 계산을 시작하지 못했습니다. 입력과 원문을 유지합니다.")));
       worker.onmessageerror = () =>
         fail(new Error(t("문서 구간 계산 결과를 읽지 못했습니다. 입력과 원문을 유지합니다.")));
-      worker.onmessage = (event: MessageEvent<{ spans?: SourceSegmentSpan[]; error?: string }>) => {
+      worker.onmessage = (event: MessageEvent<{ spans?: SourceSegmentSpan[] } & WorkerFailure>) => {
         if (done) return;
         try {
           check();
-          if (event.data.error) throw new Error(event.data.error);
+          if (event.data.error || event.data.error_code) throw new Error(workerErrorMessage(event.data));
           const spans = event.data.spans;
           if (!Array.isArray(spans)) throw new Error(t("잘못된 문서 구간 계산 결과입니다."));
           let previous = 0;

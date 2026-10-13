@@ -10,7 +10,7 @@ description = "Inkism integrated runtime: host change journal, background sync w
 # drives. It owns the storage engine, the durable host journal that makes
 # local edits visible to sync, and the background sync worker. The lib exposes
 # `AppCore`; the bin is the JSONL
-# adapter the Go shell launches.
+# adapter the Tauri desktop shell launches.
 
 [lib]
 name = "inkism_runtime"

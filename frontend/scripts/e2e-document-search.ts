@@ -1,4 +1,4 @@
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47914';
 const rpc=async(op,args={})=>{const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const value=await response.json();assert.equal(value.ok,true,JSON.stringify(value));return value.data;};

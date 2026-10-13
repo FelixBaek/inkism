@@ -1,6 +1,7 @@
 /** plaintext 워커 래퍼. 대용량 원문 저장 시 메인 스레드 대신 텍스트를 추출한다. */
 import StripWorker from "../workers/plaintext.worker?worker";
 import { t } from "../i18n";
+import { workerErrorMessage, type WorkerFailure } from "./error-messages";
 
 let worker: Worker | null = null;
 let sequence = 0;
@@ -35,10 +36,10 @@ function ensureWorker(): Worker {
       failWorker(created, event.error ?? new Error(event.message || t("알 수 없는 오류")));
     };
     created.onmessageerror = () => failWorker(created, new Error(t("알 수 없는 오류")));
-    created.onmessage = (event: MessageEvent<{ id: number; text: string; error?: string }>) => {
+    created.onmessage = (event: MessageEvent<{ id: number; text: string } & WorkerFailure>) => {
       const request = takePending(event.data.id);
       if (!request) return;
-      if (event.data.error) request.reject(new Error(event.data.error));
+      if (event.data.error || event.data.error_code) request.reject(new Error(workerErrorMessage(event.data)));
       else request.resolve(event.data.text);
     };
   }

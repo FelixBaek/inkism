@@ -1,6 +1,7 @@
 //! Differential test: every fixture in tests/fixtures/cases.json must give
-//! exactly the Go output recorded in go-expected.json (html, text, error).
-//! Regenerate the Go side with tests/oracle/regen.sh.
+//! exactly the output the former Go implementation recorded in go-expected.json
+//! (html, text, error). The Go generator was removed with the Go tree; the
+//! oracle script is in git history (tests/oracle/ at commit 3ca693d).
 
 use inkism_web_content::{clean, clean_export, source_url, Cleaned, Error};
 use serde_json::{json, Value};
@@ -38,10 +39,16 @@ fn sanitizer_matches_go() {
                 want["clean"]
             ));
         }
-        if got_export != want["export"] {
+        // Export now retains scientific super/subscripts. Keep the historical
+        // Go snapshot intact and spell out this intentional policy extension.
+        let mut want_export = want["export"].clone();
+        if name == "ruby and others" {
+            want_export["html"] = json!("漢kan<sup>1</sup><sub>2</sub>mk");
+        }
+        if got_export != want_export {
             failures.push(format!(
                 "{name} [export]\n  go:   {}\n  rust: {got_export}",
-                want["export"]
+                want_export
             ));
         }
     }

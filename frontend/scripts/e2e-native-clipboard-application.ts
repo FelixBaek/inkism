@@ -1,7 +1,9 @@
 // Actual isolated browser clipboard events, shipped React + Go + Rust.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
+import {waitSaved} from './save-state.ts';
 import {historyKey} from './history-keys.ts';
+import {assertBlockBytes,withoutBlockIds} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL;assert.ok(base,'isolated application URL required');
 const rpc=async(op,args={})=>{const v=await (await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.ok(v.ok,v.error);return v.data;};
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
@@ -9,7 +11,7 @@ const page=await browser.newPage({viewport:{width:1440,height:960},permissions:[
 page.on('pageerror',e=>errors.push(e.message));
 const editor=page.locator('.tiptap-prose'),focus=()=>editor.evaluate((el: any)=>el.editor.view.focus());
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized&&Array.from(document.querySelectorAll<any>('.window-controls button')).some(b=>b.textContent==='이동'&&!b.disabled));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
+const saved=()=>waitSaved(page);
 const settled=async()=>{await page.waitForFunction(()=>!document.querySelector('.document-selection-status')&&!document.querySelector('.window-error'));await saved();};
 const body=async id=>(await rpc('get',{id})).content;
 const bounded=async()=>{assert.ok(await page.locator('*').count()<1500);assert.ok((await editor.textContent()).length<40000);};
@@ -65,11 +67,14 @@ try{
   await page.keyboard.type('FOLLOW',{delay:2});await page.keyboard.insertText('한글😀');await bounded();assert.ok(await body(note.id)===original,'raw clipboard and subsequent input remain provisional');
   release();release=null;await settled();const actual=await body(note.id);
   const untouched=original.slice(0,original.indexOf(first==='paragraph'?'</strong>':'</code>')-1);
-  assert.ok(actual.startsWith(untouched),'exact source bytes before the selected character, including original ancestor attributes');
-  if(actual!==expected){let at=0;while(at<Math.min(actual.length,expected.length)&&actual[at]===expected[at])at++;console.log('DIFF',{label,at,actualLength:actual.length,expectedLength:expected.length,actual:actual.slice(Math.max(0,at-60),at+150),expected:expected.slice(Math.max(0,at-60),at+150)});}
-  assert.ok(actual===expected,label+' exact real-context native clipboard and follow-up');await bounded();await page.unroute('**/api/rpc');
+  assert.ok(withoutBlockIds(actual).startsWith(untouched),'exact source bytes before the selected character, including original ancestor attributes');
+  // Blocks the paste created after the giant first block gain identities. The
+  // giant block also receives an ID through its exact outside opening-tag splice.
+  const added=(expected.match(/<(p|pre)[ >]/g)??[]).length;
+  if(withoutBlockIds(actual)!==expected){let at=0;while(at<Math.min(actual.length,expected.length)&&actual[at]===expected[at])at++;console.log('DIFF',{label,at,actualLength:actual.length,expectedLength:expected.length,actual:actual.slice(Math.max(0,at-60),at+150),expected:expected.slice(Math.max(0,at-60),at+150)});}
+  const ids=assertBlockBytes(actual,expected,{added,message:label+' exact real-context native clipboard and follow-up'});await bounded();await page.unroute('**/api/rpc');
   await page.reload();await ready();await historyKey(page,'undo');await saved();assert.equal(await body(note.id),original,'restart undo original');
-  await historyKey(page,'redo');await saved();assert.equal(await body(note.id),expected,'restart redo full clipboard and follow-up');
+  await historyKey(page,'redo');await saved();assertBlockBytes(await body(note.id),expected,{added,ids,message:'restart redo full clipboard and follow-up'});
   console.log('PASS native clipboard '+label+', real Control+V'+(plain?' plain':'')+', delayed follow-up'+(again?'/second native paste':'')+', bounded view, exact save/restart undo/redo');
  }
  assert.deepEqual(errors,[]);console.log('PASS native clipboard application; lazy='+(process.env.INKISM_LAZY!=='0'));

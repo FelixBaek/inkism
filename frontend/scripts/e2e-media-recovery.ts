@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';import {chromium} from 'playwright-core';
+import assert from 'node:assert/strict';import {chromium} from './browser-env.ts';
 const base=process.env.INKISM_URL!;const rpc=async(op:string,args:any={})=>{const r=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(r.ok,true,JSON.stringify(r));return r.data;};
 const wav=Buffer.alloc(44+16000);wav.write('RIFF');wav.writeUInt32LE(wav.length-8,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(8000,24);wav.writeUInt32LE(16000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(16000,40);
 const source='<p>Preserve</p><div data-type="inkism-audio" data-src="https://media-test.invalid/audio.wav" data-title="audio.wav"></div><div data-type="inkism-video" data-src="https://media-test.invalid/video.mp4" data-kind="url" data-title="video.mp4"></div><div data-type="inkism-video" data-src="https://www.youtube.com/watch?v=dQw4w9WgXcQ" data-kind="youtube" data-title="Embedded"></div>';

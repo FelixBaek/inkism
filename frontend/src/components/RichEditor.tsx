@@ -15,6 +15,7 @@ import type { EditorView } from "@tiptap/pm/view";
 import { Extension, type Editor } from "@tiptap/core";
 import { windowSelection, type DocumentSelection, type BlockFormatOperation } from "../lib/document-selection";
 import { normalizeBlockquoteSelection } from "../lib/native-block-format";
+import { mountedBlockFormat } from "../lib/mounted-block-format";
 import { BlockTools, type DocumentBlockAction, type DocumentBlockDrag } from "./BlockTools";
 import { contentExtensions } from "../extensions/content-schema";
 import { markdownContentExtensions } from "../lib/markdown-compatible";
@@ -68,9 +69,13 @@ interface Props {
   embedded?: boolean;
   /** Internal source spans must not acquire an artificial trailing paragraph. */
   internalWindow?: boolean;
+  /** An internal window whose enclosing opening tags have known source
+   * offsets: edits may give those blocks identities (written as tag splices). */
+  internalIdentity?: boolean;
   onChange: (content: string, text: string, change: RichChange) => void;
 }
 
+type HeadingLevel = 1 | 2 | 3;
 type BoundaryCallback = NonNullable<Props["onBoundary"]>;
 
 /** Ctrl/⌘+Home/End: move to the document (or window) edge. */
@@ -207,6 +212,7 @@ export function RichEditor({
   onChange,
   embedded = false,
   internalWindow = false,
+  internalIdentity = false,
   editable = true,
   readOnly = false,
   history,
@@ -305,22 +311,29 @@ export function RichEditor({
               if (!(markdownCompatible ? [1,2,3,4,5,6] : [1,2,3]).includes(attributes.level)) return false;
               return (
                 intercept(
-                  { kind: "block", type: "heading", level: attributes.level as 1 | 2 | 3, toggle: false },
+                  { kind: "block", type: "heading", level: attributes.level as HeadingLevel, toggle: false },
                   props,
-                ) || props.commands.setNode("heading", attributes)
+                ) ||
+                (canEdit.current && mountedBlockFormat(props, {
+                  kind: "block", type: "heading", level: attributes.level as HeadingLevel, toggle: false,
+                }))
               );
             },
             toggleHeading: (attributes) => (props) => {
               if (!(markdownCompatible ? [1,2,3,4,5,6] : [1,2,3]).includes(attributes.level)) return false;
               return (
                 intercept(
-                  { kind: "block", type: "heading", level: attributes.level as 1 | 2 | 3, toggle: true },
+                  { kind: "block", type: "heading", level: attributes.level as HeadingLevel, toggle: true },
                   props,
-                ) || props.commands.toggleNode("heading", "paragraph", attributes)
+                ) ||
+                (canEdit.current && mountedBlockFormat(props, {
+                  kind: "block", type: "heading", level: attributes.level as HeadingLevel, toggle: true,
+                }))
               );
             },
             setParagraph: () => (props) =>
-              intercept({ kind: "block", type: "paragraph" }, props) || props.commands.setNode("paragraph"),
+              intercept({ kind: "block", type: "paragraph" }, props) ||
+              (canEdit.current && mountedBlockFormat(props, { kind: "block", type: "paragraph" })),
             toggleBulletList: () => (props) =>
               intercept({ kind: "block", type: "bulletList" }, props) ||
               props.commands.toggleList("bulletList", "listItem"),
@@ -342,7 +355,9 @@ export function RichEditor({
                 .run(),
             toggleCodeBlock: (attributes) => (props) =>
               intercept({ kind: "block", type: "codeBlock", language: attributes?.language }, props) ||
-              props.commands.toggleNode("codeBlock", "paragraph", attributes),
+              (canEdit.current && mountedBlockFormat(props, {
+                kind: "block", type: "codeBlock", language: attributes?.language,
+              })),
           };
         },
       }),
@@ -358,7 +373,7 @@ export function RichEditor({
           ];
         },
       }),
-      ...(markdownCompatible ? markdownContentExtensions() : contentExtensions({ trailingNode: !(internalWindow || embedded), automaticIds: !internalWindow })),
+      ...(markdownCompatible ? markdownContentExtensions() : contentExtensions({ trailingNode: !(internalWindow || embedded), automaticIds: !internalWindow || internalIdentity })),
       SlashMenu.configure({ markdownCompatible }),
       FindAndReplace.configure({ injectCSS: false }),
       Placeholder.configure({ placeholder: t("내용을 입력하세요…") }),

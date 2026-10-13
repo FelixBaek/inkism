@@ -1,4 +1,4 @@
-import {chromium} from 'playwright-core';import assert from 'node:assert/strict';
+import {chromium} from './browser-env.ts';import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL!;const rpc=async(op:string,args={})=>{const e=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(e.ok,true,JSON.stringify(e));return e.data;};
 const target=await rpc('save',{note:{title:'Backlink destination',content:'<p>Destination</p>',content_format:'html'}});
 const html='<p>Exact HTML caption elsewhere</p><p id="real-html"><a href="note://'+target.id+'">Exact HTML caption</a> backlink paragraph</p>';

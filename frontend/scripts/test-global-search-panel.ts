@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const app=await build({absWorkingDir:root,stdin:{contents:`import {searchDocument} from './src/lib/search-document';window.searchDocument=searchDocument;import {searchInWorker} from './src/lib/global-search';window.searchInWorker=searchInWorker;import React from 'react';import{createRoot}from'react-dom/client';import{GlobalSearchPanel}from'./src/components/GlobalSearchPanel';const notes=Array.from({length:8},(_,i)=>({id:String(i),title:'Note '+i,tags:i%2?['odd']:['even'],content_format:'markdown',preview:'',trashed:false}));window.calls=[];createRoot(document.getElementById('root')).render(<GlobalSearchPanel notes={notes} loadText={async n=>{window.calls.push(n.id);await new Promise(r=>setTimeout(r,300));return 'needle';}}/>);`,resolveDir:root,loader:'tsx'},bundle:true,write:false,format:'esm',outdir:'out',loader:{'.css':'empty'}});

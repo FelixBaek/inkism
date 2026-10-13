@@ -488,7 +488,7 @@ mod tests {
     #[test]
     fn original_and_encrypted_copy_keep_both_concurrent_edits() {
         use sync_core::{Entity, EntityKind, SyncConfig, SyncEngine};
-        let relay = crate::test_relay::Relay::start().expect("real Go relay");
+        let relay = crate::test_relay::Relay::start().expect("real Rust relay");
         let dir = tempfile::tempdir().unwrap();
         let source = dir.path().join("original.db");
         let source = source.to_str().unwrap();

@@ -1,4 +1,4 @@
-import {chromium} from 'playwright-core';import assert from 'node:assert/strict';
+import {chromium} from './browser-env.ts';import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:49295';
 const rpc=async(op:string,args:any={})=>{const v=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
 const bytes=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5WQAAAAASUVORK5CYII=','base64');const form=new FormData();form.append('file',new Blob([bytes],{type:'image/png'}),'cover.png');form.append('size',String(bytes.length));const upload=await(await fetch(base+'/api/attachments',{method:'POST',body:form})).json();assert.equal(upload.ok,true,JSON.stringify(upload));
