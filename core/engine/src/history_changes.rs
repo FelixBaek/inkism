@@ -42,17 +42,18 @@ pub fn changes(conn: &Connection, args: &Value) -> Result<Value> {
     let limit = args.get("limit").and_then(Value::as_i64).unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
     // One extra row so the oldest shown entry still has something to compare with.
     let mut stmt = conn.prepare(
-        "SELECT id, text FROM history WHERE note_id = ?1 ORDER BY created_at DESC, row_seq DESC LIMIT ?2",
+        "SELECT id, CASE WHEN length(CAST(text AS BLOB))<=?3 THEN text END
+         FROM history WHERE note_id = ?1 ORDER BY created_at DESC, row_seq DESC LIMIT ?2",
     )?;
-    let rows: Vec<(String, String)> = stmt
-        .query_map(params![note, limit + 1], |r| Ok((r.get(0)?, r.get(1)?)))?
+    let rows: Vec<(String, Option<String>)> = stmt
+        .query_map(params![note, limit + 1, MAX_TEXT_BYTES as i64], |r| Ok((r.get(0)?, r.get(1)?)))?
         .collect::<std::result::Result<_, _>>()?;
     let items: Vec<Value> = rows
         .iter()
         .take(limit as usize)
         .enumerate()
-        .map(|(i, (id, text))| match rows.get(i + 1) {
-            Some((_, older)) if text.len() <= MAX_TEXT_BYTES && older.len() <= MAX_TEXT_BYTES => {
+        .map(|(i, (id, text))| match (text, rows.get(i + 1)) {
+            (Some(text), Some((_, Some(older)))) => {
                 let (added, removed) = word_changes(older, text);
                 json!({"id": id, "added": added, "removed": removed})
             }
@@ -60,4 +61,26 @@ pub fn changes(conn: &Connection, args: &Value) -> Result<Value> {
         })
         .collect();
     Ok(json!({ "items": items }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn oversized_history_is_unknown_and_small_versions_keep_exact_counts() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::schema::init_main(&conn).unwrap();
+        conn.execute_batch("INSERT INTO notes_meta(id,created_at,updated_at) VALUES('note',1,1);
+            INSERT INTO notes_body(note_id) VALUES('note');
+            INSERT INTO history(id,note_id,title,content,text,created_at,row_seq) VALUES
+            ('old','note','','','one two',1,1),('new','note','','','two three four',2,2);").unwrap();
+        let out = changes(&conn, &json!({"id":"note"})).unwrap();
+        assert_eq!(out["items"][0], json!({"id":"new","added":2,"removed":1}));
+        let large = "한".repeat(MAX_TEXT_BYTES / 3 + 1);
+        conn.execute("UPDATE history SET text=?1 WHERE id='old'", [&large]).unwrap();
+        let out = changes(&conn, &json!({"id":"note"})).unwrap();
+        assert_eq!(out["items"][0], json!({"id":"new","added":null,"removed":null}));
+        assert_eq!(out["items"][1], json!({"id":"old","added":null,"removed":null}));
+    }
 }
