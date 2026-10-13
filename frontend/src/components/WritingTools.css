@@ -1,1 +1,35 @@
-.writing-tools{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.writing-tools .btn{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 8px}.writing-tools-dialog{width:min(560px,calc(100vw - 32px));max-height:80vh;padding:16px;border:1px solid var(--border);border-radius:var(--radius-lg);color:var(--text);background:var(--raised);box-shadow:var(--shadow-modal)}.writing-tools-dialog::backdrop{background:rgba(0,0,0,.35)}.writing-tools-dialog>header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}.writing-tools-dialog>input{width:100%;box-sizing:border-box;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);background:var(--canvas)}.writing-tools-list{max-height:48vh;overflow:auto;display:flex;flex-direction:column;gap:3px}.writing-tools-list>button,.writing-template-row>button:first-child{border:0;border-radius:var(--radius-sm);padding:10px 12px;text-align:start;color:var(--text);background:transparent;cursor:pointer;overflow-wrap:anywhere}.writing-tools-list>button:hover,.writing-tools-list>button[aria-selected=true],.writing-template-row>button:first-child:hover{background:var(--surface);color:var(--green)}.writing-tools-hint{font-size:12px;color:var(--muted);line-height:1.6}.writing-template-row{display:flex;align-items:center;gap:8px}.writing-template-row>button:first-child{flex:1;min-width:0}.writing-tools-daily{display:flex;align-items:center;gap:12px;margin:16px 0;font-size:13px}.writing-tools-daily select{max-width:65%;padding:6px;background:var(--canvas);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm)}.writing-heading-level{font-size:10px;color:var(--muted);margin-inline-end:8px}.writing-tools-error{font-size:12px;color:var(--danger)}@media(max-width:700px){.writing-tools .btn span{display:none}.writing-tools .btn{padding:6px}}
+.writing-tools{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.writing-tools .btn{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 8px;border:0;background:transparent;color:var(--text);font-size:var(--fs-caption);font-weight:500}.writing-tools .btn:hover:not(:disabled){background:var(--hover)}.writing-heading-level{font-size:10px;color:var(--muted);margin-inline-end:8px}.writing-tools-error{font-size:var(--fs-small);color:var(--danger)}@media(max-width:700px){.writing-tools .btn span{display:none}.writing-tools .btn{padding:6px}}
+
+/* 템플릿·빠른 전환·합치기·목차 팝업 (nocturne 24) */
+.writing-tools-dialog{width:min(460px,calc(100vw - 32px));max-height:80vh;padding:20px;border:1px solid var(--border-strong);border-radius:0;color:var(--text);background:var(--raised);box-shadow:var(--shadow-modal);font-size:var(--fs-caption);line-height:1.5}
+.writing-tools-dialog[open]{display:flex;flex-direction:column;gap:12px}
+.writing-tools-dialog::backdrop{background:var(--scrim)}
+.writing-tools-dialog>header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.writing-tools-dialog>header strong{font-size:var(--fs-body);font-weight:500;line-height:1.6}
+.writing-tools-dialog>header .btn{width:30px;min-height:30px;padding:0;justify-content:center;border:0;border-radius:0;background:transparent;color:var(--muted)}
+.writing-tools-dialog>header .btn:hover:not(:disabled){background:var(--hover);color:var(--text)}
+.writing-tools-dialog p{margin:0}
+.writing-tools-dialog .btn{align-self:flex-start;min-height:30px;padding:0 12px;border:1px solid var(--border);border-radius:0;background:var(--hover);color:var(--text);font-size:var(--fs-caption);font-weight:500}
+.writing-tools-dialog .btn:hover:not(:disabled){background:var(--active)}
+.writing-tools-dialog .btn-small{min-height:26px;padding:0 8px}
+.writing-tools-dialog :is(input:not([type=checkbox]),select){width:100%;box-sizing:border-box;height:32px;padding:0 14px;border:1px solid var(--border);border-radius:0;color:var(--text);background:var(--hover);font-size:var(--fs-caption)}
+.writing-tools-dialog label{display:flex;flex-direction:column;gap:5px;font-size:var(--fs-small);color:var(--muted)}
+.writing-tools-dialog label:has(>input[type=checkbox]){flex-direction:row;align-items:center;gap:8px;font-size:var(--fs-caption);color:var(--text)}
+.writing-tools-list{max-height:48vh;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.writing-tools-list>button,.writing-outline-row>button{border:0;border-radius:0;padding:6px 8px;text-align:start;color:var(--text);background:transparent;cursor:pointer;overflow-wrap:anywhere;font-size:var(--fs-caption)}
+.writing-tools-list>button:hover,.writing-outline-row>button:hover{background:var(--hover)}
+.writing-tools-list>button[aria-selected=true]{background:var(--active);color:var(--accent-text)}
+.writing-tools-hint{font-size:var(--fs-small);color:var(--muted);line-height:1.5}
+.writing-outline-row{display:flex;align-items:center;gap:6px}.writing-outline-row>button{flex:1;min-width:0}
+.writing-tools-merge{display:flex;flex-direction:column;gap:12px}
+.merge-preview{display:flex;flex-direction:column;gap:8px;padding:10px;background:var(--hover)}
+.writing-tools-dialog .writing-tools-field{display:flex;flex-direction:column;gap:5px}
+.writing-tools-divided{padding-top:12px;border-top:1px solid var(--border)}
+.writing-tools-actions{display:flex;flex-wrap:wrap;gap:8px}
+.writing-tools-dialog .btn-primary{border-color:var(--green);background:var(--green);color:var(--on-accent)}
+.writing-tools-dialog .btn-primary:hover:not(:disabled){background:var(--green-hover)}
+.writing-tools-inline{display:flex;gap:8px}.writing-tools-inline input{flex:1;min-width:0}.writing-tools-inline .btn{align-self:auto;min-height:32px;white-space:nowrap}
+.writing-template-row{display:grid;grid-template-columns:128px 1fr;gap:10px;align-items:baseline;padding:2px 0;color:var(--text);font-size:var(--fs-caption)}
+.writing-template-row>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:var(--fs-small)}
+.writing-link{padding:0;border:0;background:none;color:var(--text);font:inherit;cursor:pointer}
+.writing-link:hover:not(:disabled){color:var(--accent-text);text-decoration:underline}

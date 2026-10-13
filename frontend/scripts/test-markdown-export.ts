@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {fileURLToPath} from 'node:url';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 const src=fileURLToPath(new URL('../src/',import.meta.url));
 const bundle=await build({stdin:{contents:`
  export {htmlToMarkdown,markdownToHTML,sourceToMarkdown} from './lib/markdown';

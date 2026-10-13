@@ -127,11 +127,13 @@ test('WindowHistory.restore: 선택 영역 좌표 검증', () => {
   }
 });
 
-// 여러 교체를 가진 기록은 정확히 두 개의 안전한 좌표·문자열 교체만 허용한다.
+// 여러 교체를 가진 기록은 2~130개의 안전한 좌표·문자열 교체만 허용한다
+// (블록 이동 2개, 큰 블록 안 편집은 바깥 여는 태그마다 1개 + 구간 1개).
 test('WindowHistory.restore: 다중 교체 입력 검증', () => {
   const splice = { start: 0, expected: 'a', replacement: 'b' };
   assert.equal(restore(edit({ edits: [splice, splice] })).canUndo, true);
-  for (const edits of [null, {}, [], [splice], [splice, splice, splice], [null, splice],
+  assert.equal(restore(edit({ edits: [splice, splice, splice] })).canUndo, true);
+  for (const edits of [null, {}, [], [splice], Array(131).fill(splice), [null, splice],
     ...[{ start: -1 }, { start: Infinity }, { start: Number.MAX_SAFE_INTEGER + 1 }, { expected: null }, { replacement: 1 }]
       .map(patch => [{ ...splice, ...patch }, splice])]) {
     assert.equal(restore({ ...edit(), edits }).canUndo, false);
@@ -254,4 +256,32 @@ test('edit-work: 작업 실패·취소·완료 직전 취소', async (t) => {
   }
   await assert.rejects(scheduleEditWork(canceledWork(), () => { if (canceled) throw failure; }), error => error === failure);
   assert.equal(recovered, false);
+});
+
+// 큰 블록 안 편집이 바깥 여는 태그에 식별자를 붙인 기록(edits)은 같은 입력
+// 묶음(IME 조합 직후 부여)의 직전 편집을 흡수해 실행 취소 한 번으로 둘 다 되돌린다.
+test('WindowHistory.recordSpliced: 조합 직후 식별자 부여를 한 단계로 합친다', () => {
+  const tag = { start: 0, expected: '<p>', replacement: '<p id="x">' };
+  const spliced = (overrides: Partial<WindowEdit> = {}) => ({
+    ...edit({ from: 0, before: '', after: '', time: 100, beforePreview: { html: 'b', count: 1, relativeFrom: 10 }, ...overrides }),
+    edits: [tag, { start: 18, expected: 'b', replacement: 'b' }],
+  });
+  const merged = new WindowHistory();
+  merged.record(edit({ from: 11, before: 'a', after: 'b', time: 0, beforePreview: { html: 'a', count: 1 }, beforeSelection: { anchor: 1 } }));
+  merged.recordSpliced(spliced(), 11);
+  const step = merged.prepare('undo')!;
+  assert.equal(merged.serialize().done.length, 1, 'the composition and its identity are one undo step');
+  assert.deepEqual(step.edits, [{ start: 18, expected: 'b', replacement: 'a' }, { start: 0, expected: '<p id="x">', replacement: '<p>' }]);
+  assert.deepEqual(step.preview, { html: 'a', count: 1, raw: 'a', relativeFrom: 10 });
+  assert.deepEqual(step.selection, { anchor: 1 });
+  // Another group, a stale time, another window or a changed window keep separate steps.
+  for (const [previous, from] of [
+    [{ group: 2 }, 11], [{ time: -1000 }, 11], [{}, 12], [{ after: 'c' }, 11],
+  ] as const) {
+    const history = new WindowHistory();
+    history.record(edit({ from: 11, before: 'a', after: 'b', time: 0, ...previous }));
+    history.recordSpliced(spliced(), from);
+    assert.equal(history.serialize().done.length, 2);
+    assert.deepEqual(history.prepare('undo')!.edits?.at(0), { start: 18, expected: 'b', replacement: 'b' });
+  }
 });

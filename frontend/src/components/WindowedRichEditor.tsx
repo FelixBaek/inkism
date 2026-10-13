@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useReducer, useRef, use
 import { editorLocation, rememberLocation } from "../lib/editor-location";
 import { api, RpcError } from "../api";
 import type { Draft, DocumentSegment } from "../types";
-import { renderSegment, projectSegment } from "../lib/rich-segment";
+import { renderSegment, projectSegment, contextIdentifiable, contextIdentity } from "../lib/rich-segment";
 import { projectWindowSource } from "../lib/window-source";
 import {
   saveSegmentSelection,
@@ -12,12 +12,14 @@ import {
   segmentPositionMap,
 } from "../lib/segment-selection";
 import { locateBlockRange } from "../lib/block-range";
+import type { BodySplice } from "../lib/body-splice";
 import { scrollSpace } from "../lib/scroll-space";
 import { BlockHeights } from "../lib/block-heights";
 import { windowHistory, retainWindowHistory, nextHistorySession } from "../lib/window-history-cache";
+import type { WindowPreview } from "../lib/window-history";
 import { DocumentSearch } from "./DocumentSearch";
 import { DocumentCopy } from "./DocumentCopy";
-import { RichEditor } from "./RichEditor";
+import { RichEditor, type RichChange } from "./RichEditor";
 import { canonicalRichHTML, inspectRichHTML } from "../lib/rich-document";
 import "./WindowedRichEditor.css";
 import type { Editor } from "@tiptap/core";
@@ -49,6 +51,7 @@ import { visualRowStart } from "../lib/visual-cursor";
 import { prepareBlockAction, type BlockCommand } from "../lib/document-block-action";
 import type { DocumentBlockAction, DocumentBlockDrag } from "./BlockTools";
 import { t } from "../i18n";
+import { blockIdentityTransaction } from "../extensions/block-identity";
 
 const WINDOW = 32;
 type Edge = "start" | "end";
@@ -457,6 +460,31 @@ const BOUNDARY_DIRECTION = {
 /** UTF-16 length of the first `bytes` UTF-8 bytes of `text`. */
 const utf8PrefixLength = (text: string, bytes: number) =>
   new TextDecoder().decode(new TextEncoder().encode(text).subarray(0, bytes)).length;
+/** The body after outside opening tags and one region splice at `range` (the
+ * located UTF-16 span before the tags; unused for paged drafts). Multi-splice
+ * history replays every splice; non-paged previews need their own UTF-16 starts
+ * relative to the first splice (they differ by the tags). */
+function regionSplice(
+  draft: Draft,
+  tags: { edits: BodySplice[]; source: string; shift: number },
+  result: { start: number; expected: string; replacement: string },
+  range: { from: number; to: number },
+) {
+  const regionFrom = draft.paged ? result.start : range.from + tags.shift;
+  const source = draft.paged
+    ? ""
+    : tags.source.slice(0, regionFrom) + result.replacement + tags.source.slice(range.to + tags.shift);
+  const edits = tags.edits.length
+    ? [...tags.edits, { start: regionFrom, expected: result.expected, replacement: result.replacement }]
+    : undefined;
+  let historyFrom = draft.paged ? result.start : range.from;
+  if (edits) historyFrom = edits[0].start;
+  const relative = <P extends WindowPreview>(preview: P, at: number, text: string, byte: number) =>
+    edits && !draft.paged
+      ? { ...preview, relativeFrom: at + utf8PrefixLength(text, (preview.byteStart ?? byte) - byte) - edits[0].start }
+      : preview;
+  return { regionFrom, source, edits, historyFrom, relative };
+}
 /** Staged behind ?virtual=1 until cross-window selection/history is complete. */
 export function WindowedRichEditor({
   id,
@@ -772,6 +800,107 @@ export function WindowedRichEditor({
       animateMouseSelection();
     });
   };
+  /** First edit of an internal window that gave its enclosing block(s) an
+   * identity: splice each outside opening tag (bounded: the tag alone), then the
+   * window, as one undo step. The mounted window stays; its source position and
+   * contexts move to the rewritten tags so later edits project as usual. */
+  const commitWindowIdentity = (
+    state: WindowState,
+    identity: ReturnType<typeof contextIdentity>,
+    before: string,
+    raw: string,
+    html: string,
+    change: RichChange,
+  ) => {
+    const draft = callbacks.current.readDraft();
+    if (!draft || !state.segment) throw new Error(t("편집 구간이 닫혔습니다."));
+    const paged = Boolean(draft.paged),
+      bytes = (text: string) => new TextEncoder().encode(text).length;
+    let source = state.source;
+    const tags: BodySplice[] = [];
+    for (const tag of identity.tags) {
+      const at = paged ? tag.start : utf8PrefixLength(source, tag.start);
+      if (!paged && source.slice(at, at + tag.expected.length) !== tag.expected)
+        throw new Error(t("블록 식별자를 붙일 위치를 찾지 못했습니다. 원문을 유지했습니다."));
+      tags.push({ ...tag, start: at });
+      if (!paged) source = source.slice(0, at) + tag.replacement + source.slice(at + tag.expected.length);
+    }
+    const growth = identity.tags.reduce((n, tag) => n + bytes(tag.replacement) - bytes(tag.expected), 0),
+      shift = source.length - state.source.length;
+    const byteStart = state.byteStart! + growth,
+      from = state.from + shift;
+    const edits = [...tags, { start: paged ? byteStart : from, expected: before, replacement: raw }];
+    if (paged) for (const edit of edits) callbacks.current.changeRange(edit);
+    const preview = (segment: DocumentSegment, value: string, text: string, count: number, at: number) => {
+      const { source: _, ...context } = { ...segment, byte_count: bytes(text), total: state.segmentTotal! };
+      // Multi-splice history has no single before/after string: keep the raw window.
+      return { html: value, count, raw: text, internal: context, ...(paged ? {} : { relativeFrom: at - edits[0].start }) };
+    };
+    history.current.recordSpliced(
+      {
+        from: edits[0].start,
+        offset: state.offset,
+        before: "",
+        after: "",
+        edits,
+        beforeCount: edited.current.count,
+        afterCount: change.count,
+        beforeSelection: change.beforeSelection,
+        beforePreview: preview(state.segment, edited.current.html, before, edited.current.count, state.from),
+        afterPreview: preview(identity.segment, html, raw, change.count, from),
+        afterSelection: change.afterSelection,
+        session: state.session,
+        group: change.group,
+        time: Date.now(),
+      },
+      paged ? state.byteStart! : state.from,
+    );
+    // The active window record moves with its source (same mounted editor).
+    state.segment = { ...identity.segment, source: state.segment.source };
+    state.byteStart = byteStart;
+    state.source = source;
+    state.from = from;
+    state.to += shift;
+    total.current += change.count - edited.current.count;
+    heights.current.resize(total.current, state.offset);
+    edited.current = { html, raw, count: change.count };
+    projectionError.current = null;
+    setError(null);
+    retainHistory();
+    refreshHistory();
+    if (!paged)
+      callbacks.current.change(source.slice(0, state.from) + raw + source.slice(state.to), {
+        source,
+        from: state.from,
+        to: state.to,
+        byteStart,
+        html: raw,
+      });
+  };
+  /** Exact splices of outside opening tags (UTF-8 for paged drafts, located
+   * UTF-16 ranges otherwise), the body after them and their UTF-16 growth. */
+  const boundaryTagEdits = async (draft: Draft, tags: BodySplice[], check: () => void) => {
+    if (draft.paged || !tags.length) return { edits: tags, source: draft.content, shift: 0 };
+    const edits: BodySplice[] = [];
+    let source = draft.content;
+    for (const tag of tags) {
+      const located = await locateBlockRange(source, tag.start, tag.expected);
+      check();
+      edits.push({ ...tag, start: located.from });
+      source = source.slice(0, located.from) + tag.replacement + source.slice(located.to);
+    }
+    return { edits, source, shift: source.length - draft.content.length };
+  };
+  /** Paged drafts replay every splice; others replace the body once. */
+  const applyRegionSplice = (
+    draft: Draft,
+    edits: BodySplice[] | undefined,
+    edit: { start: number; expected: string; replacement: string },
+    source: string,
+  ) => {
+    if (draft.paged && edits) for (const splice of edits) callbacks.current.changeRange(splice);
+    else applySourceChange(draft, edit, source);
+  };
   const applySourceChange = (
     draft: Draft,
     edit: { start: number; expected: string; replacement: string },
@@ -854,26 +983,30 @@ export function WindowedRichEditor({
         capture.editor.state === snapshot,
     };
   };
-  const commitSelection = (
+  const commitSelection = async (
     draft: Draft,
     range: { from: number; to: number },
     prepared: PreparedSelection,
     result: ReturnType<typeof changeSelection>,
     selection: DocumentSelection,
+    inputCurrent: () => boolean,
   ) => {
-    const source = draft.paged
-      ? ""
-      : draft.content.slice(0, range.from) + result.replacement + draft.content.slice(range.to);
-    applySourceChange(draft, result, source);
+    const tags = await boundaryTagEdits(draft, result.tags, prepared.check);
+    prepared.check();
+    // The tag lookup also yields: input accepted while it waits must be replayed.
+    if (!inputCurrent()) return false;
+    const { regionFrom, source, edits, historyFrom, relative } = regionSplice(draft, tags, result, range);
+    applyRegionSplice(draft, edits, result, source);
     history.current.record({
-      from: draft.paged ? result.start : range.from,
+      from: historyFrom,
       offset: prepared.blockOffset,
-      before: result.expected,
-      after: result.replacement,
+      before: edits ? "" : result.expected,
+      after: edits ? "" : result.replacement,
+      edits,
       beforeCount: prepared.blockCount,
       afterCount: result.count,
-      beforePreview: prepared.previewWindow,
-      afterPreview: result.previewWindow,
+      beforePreview: relative(prepared.previewWindow, range.from, result.expected, prepared.byteStart),
+      afterPreview: relative(result.previewWindow, regionFrom, result.replacement, result.start),
       beforeDocumentSelection: selection,
       afterDocumentSelection: result.documentSelection ?? undefined,
       beforeSelection: result.beforeSelection,
@@ -886,7 +1019,7 @@ export function WindowedRichEditor({
     heights.current.resize(total.current, prepared.blockOffset);
     const committed = composition.current;
     const previewByte = result.previewWindow.byteStart ?? result.start;
-    const previewFrom = draft.paged ? 0 : range.from + utf8PrefixLength(result.replacement, previewByte - result.start);
+    const previewFrom = draft.paged ? 0 : regionFrom + utf8PrefixLength(result.replacement, previewByte - result.start);
     const next: WindowState = {
       offset: result.previewWindow.offset ?? prepared.blockOffset,
       count: result.previewCount,
@@ -910,7 +1043,9 @@ export function WindowedRichEditor({
     // Keep the composing editor mounted across commit. Otherwise the next
     // native composition can target the old view before React replaces it.
     if (committed && !committed.editor.isDestroyed) {
-      committed.editor.commands.setContent(next.html, { emitUpdate: false });
+      // A projection of the committed source, not a user edit: it must not
+      // enter native history or give the mounted blocks new identities.
+      committed.editor.chain().setContent(next.html, { emitUpdate: false }).setMeta("addToHistory", false).run();
       const selected = Selection.fromJSON(committed.editor.state.doc, result.selection);
       committed.editor.view.dispatch(committed.editor.state.tr.setSelection(selected).setMeta("addToHistory", false));
     }
@@ -926,6 +1061,7 @@ export function WindowedRichEditor({
     retainHistory();
     refreshHistory();
     if (scroll.current) layoutScroll.current = geometry().before;
+    return true;
   };
   const failSelectionRun = (e: unknown) => {
     if (composition.current?.pending) composition.current.failed = true;
@@ -976,6 +1112,31 @@ export function WindowedRichEditor({
       { completeBlocks },
     );
   };
+  const commitLatestSelection = async (
+    operation: SelectionOperation | "cut" | (() => Promise<SelectionOperation>),
+    prepared: PreparedSelection, draft: Draft, range: { from: number; to: number },
+    selection: DocumentSelection, check: () => void,
+  ) => {
+      const deadline = Date.now() + 30000;
+      for (;;) {
+        const capture = composition.current, inputState = capture?.editor.state;
+        const inputCurrent = () => composition.current === capture && !composing.current &&
+          (!capture || (!capture.editor.isDestroyed && capture.editor.state === inputState));
+        let result: ReturnType<typeof changeSelection>;
+        if (typeof operation === "function") {
+          result = await changeProvisionalSelection(prepared, operation);
+        } else {
+          const resolved = resolvedSelectionOperation(operation as SelectionOperation | "cut");
+          result = resolved.kind === "block"
+            ? await changeBlockSelectionAsync(prepared, resolved, () => followingBlockInput(check))
+            : changeSelection(prepared, resolved);
+        }
+        prepared.check();
+        if (await commitSelection(draft, range, prepared, result, selection, inputCurrent)) break;
+        if (Date.now() > deadline)
+          throw new Error(t("계속 입력 중이어서 반영을 중단했습니다. 입력과 원문을 유지합니다. 잠시 후 다시 시도해 주세요."));
+      }
+  };
   const runSelection = async (operation: SelectionOperation | "copy" | "cut" | (() => Promise<SelectionOperation>)) => {
     if (operation !== "copy" && isReadOnly()) return false;
     const selection = documentSelected.current;
@@ -1010,18 +1171,7 @@ export function WindowedRichEditor({
         ? { from: 0, to: 0 }
         : await locateBlockRange(draft.content, prepared.byteStart, prepared.before);
       prepared.check();
-      let result: ReturnType<typeof changeSelection>;
-      if (typeof operation === "function") {
-        result = await changeProvisionalSelection(prepared, operation);
-      } else {
-        const resolved = resolvedSelectionOperation(operation as SelectionOperation | "cut");
-        result =
-          resolved.kind === "block"
-            ? await changeBlockSelectionAsync(prepared, resolved, () => followingBlockInput(check))
-            : changeSelection(prepared, resolved);
-      }
-      prepared.check();
-      commitSelection(draft, range, prepared, result, selection);
+      await commitLatestSelection(operation, prepared, draft, range, selection, check);
       return true;
     } catch (e) {
       failSelectionRun(e);
@@ -1304,14 +1454,16 @@ export function WindowedRichEditor({
       releaseDragElement.current?.();
       const rect = element.getBoundingClientRect();
       event.dataTransfer.setDragImage(element, 0, 0);
-      scroll.current.appendChild(element);
+      const host = scroll.current;
       const opacity = element.style.opacity,
         pointer = element.style.pointerEvents,
         width = element.style.width,
         height = element.style.height;
       element.style.width = rect.width + "px";
       element.style.height = rect.height + "px";
+      // Chromium aborts a native drag whose source moves during dragstart.
       const frame = requestAnimationFrame(() => {
+        host.appendChild(element);
         element.style.opacity = "0";
         element.style.pointerEvents = "none";
       });
@@ -1537,19 +1689,25 @@ export function WindowedRichEditor({
       return;
     }
     check();
-    const source = draft.paged
-      ? ""
-      : draft.content.slice(0, range.from) + result.replacement + draft.content.slice(range.to);
-    if (result.expected !== result.replacement) applySourceChange(draft, result, source);
+    // Opening tags outside the region that received a block identity precede
+    // it: splice them first (bounded: the tags alone), then the region.
+    const tags = await boundaryTagEdits(draft, result.tags, check);
+    check();
+    const { regionFrom, source, edits, historyFrom, relative } = regionSplice(draft, tags, result, {
+      from: range.from,
+      to: range.from + result.expected.length,
+    });
+    if (edits || result.expected !== result.replacement) applyRegionSplice(draft, edits, result, source);
     history.current.record({
-      from: draft.paged ? result.start : range.from,
+      from: historyFrom,
       offset: result.offset,
-      before: result.expected,
-      after: result.replacement,
+      before: edits ? "" : result.expected,
+      after: edits ? "" : result.replacement,
+      edits,
       beforeCount: result.beforeCount,
       afterCount: result.count,
-      beforePreview: result.beforePreview,
-      afterPreview: result.afterPreview,
+      beforePreview: relative(result.beforePreview, range.from, result.expected, result.beforeStart),
+      afterPreview: relative(result.afterPreview, regionFrom, result.replacement, result.start),
       beforeSelection: result.beforeSelection,
       afterSelection: result.selection,
       session: nextHistorySession(),
@@ -1563,7 +1721,7 @@ export function WindowedRichEditor({
       segment = preview.internal ? { ...preview.internal, source: raw } : undefined;
     const from = draft.paged
       ? 0
-      : range.from + utf8PrefixLength(result.replacement, (preview.byteStart ?? result.start) - result.start);
+      : regionFrom + utf8PrefixLength(result.replacement, (preview.byteStart ?? result.start) - result.start);
     const next: WindowState = {
       offset: preview.offset ?? result.offset,
       count: preview.count,
@@ -1830,6 +1988,9 @@ export function WindowedRichEditor({
     return true;
   };
   const acceptPendingTransaction = (capture: NonNullable<typeof composition.current>, tr: Transaction) => {
+    // Plugin follow-ups (e.g. block IDs) start from the not-yet-shown state; they
+    // must not rewrite the provisional projection.
+    if (tr.before !== capture.editor.state.doc) return true;
     try {
       capture.pending!.accept(capture.editor.state, tr);
       // Reproject before an accepted transaction could grow the visible DOM.
@@ -1916,6 +2077,14 @@ export function WindowedRichEditor({
   const documentTransaction = (tr: Transaction) => {
     if (tr.docChanged && isReadOnly()) return true;
     const capture = composition.current;
+    // Provisional input over a document selection (keys, IME, paste) is
+    // committed from its captured slice or replayed steps, never from these
+    // attribute-only transactions. Block identities requested for it are not
+    // user input: they would fall outside the captured range or be compared with
+    // a view state that is not updated yet, and refusing them as edits would
+    // stop the input. The commit itself gives the blocks that input touched
+    // their identities (changeSelection, same rule as the editor).
+    if (blockIdentityTransaction(tr) && (capture || documentSelected.current)) return true;
     if (capture)
       return capture.pending ? acceptPendingTransaction(capture, tr) : rejectCompositionTransaction(capture, tr);
     if (!documentSelected.current) return false;
@@ -3155,6 +3324,7 @@ export function WindowedRichEditor({
                 readOnly={readOnly}
                 embedded
                 internalWindow={Boolean(windowState.segment)}
+                internalIdentity={Boolean(windowState.segment && contextIdentifiable(windowState.segment))}
                 initialContent={windowState.html}
                 findTarget={findTarget?.session === windowState.session ? findTarget : undefined}
                 initialSelection={windowState.selection}
@@ -3274,10 +3444,19 @@ export function WindowedRichEditor({
                   const paged = callbacks.current.readDraft()?.paged;
                   const before = edited.current.raw;
                   let raw: string;
+                  let identity: ReturnType<typeof contextIdentity> | undefined;
                   try {
-                    raw = state.segment
-                      ? projectSegment({ ...state.segment, source: before }, html)
+                    // An internal window's enclosing block (outside the window)
+                    // may have just received an identity: its opening tag is
+                    // spliced on its own, the window projects as usual.
+                    if (state.segment) identity = contextIdentity({ ...state.segment, source: before }, html);
+                    raw = identity
+                      ? projectSegment(identity.segment, html)
                       : projectWindowSource(before, edited.current.html, html);
+                    if (identity?.tags.length) {
+                      commitWindowIdentity(state, identity, before, raw, html, change);
+                      return;
+                    }
                   } catch (e) {
                     projectionError.current = messageOf(e);
                     setError(projectionError.current);

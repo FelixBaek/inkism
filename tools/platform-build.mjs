@@ -16,6 +16,22 @@ function tauri(args){run(process.platform==='win32'?'npm.cmd':'npm',['run','taur
 if(!existsSync(path.join(root,'frontend/dist/index.html')))throw new Error('Build frontend first: npm --prefix frontend ci && npm --prefix frontend run build');
 if(target==='android'||target==='ios') {
  if(target==='ios'&&process.platform!=='darwin')throw new Error('iOS builds require macOS and Xcode');
+ if(target==='android') {
+  const ndk=process.env.NDK_HOME||process.env.ANDROID_NDK_HOME;
+  if(!ndk)throw new Error('Android builds require NDK_HOME pointing to the installed Android NDK');
+  const host={linux:'linux-x86_64',darwin:'darwin-x86_64',win32:'windows-x86_64'}[process.platform];
+  if(!host)throw new Error('Android NDK host is unsupported: '+process.platform);
+  const tools=path.join(ndk,'toolchains/llvm/prebuilt',host,'bin');
+  const ranlib='llvm-ranlib'+(process.platform==='win32'?'.exe':'');
+  if(!existsSync(path.join(tools,ranlib)))throw new Error('Android NDK llvm-ranlib is missing from '+tools);
+  // openssl-src asks cc for RANLIB separately from Tauri's CC/AR settings.
+  // The NDK replaced the old target-prefixed GNU tool with llvm-ranlib.
+  // Use its basename on this process's PATH so OpenSSL's make command also
+  // handles NDK installation paths containing spaces.
+  process.env.PATH=tools+path.delimiter+(process.env.PATH||'');
+  process.env.RANLIB_aarch64_linux_android=ranlib;
+ }
+
  tauri(['icon','src-tauri/icons/icon.png']);
  tauri([target,'init','--ci','--skip-targets-install','--config','src-tauri/tauri.mobile.conf.json']);
  if(target==='android') {

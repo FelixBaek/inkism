@@ -1,6 +1,9 @@
 import {TagChangeDialog} from "./components/TagChangeDialog";
 import {requestTagChange} from "./lib/tag-change";
-import { api } from "./api";
+import { api, rpc } from "./api";
+import { DailyList, ReminderBanner, ReminderList, type ShellPanel } from "./components/ShellLists";
+import { localDate, localTime } from "./lib/writing-tools";
+import { defaultEditor } from "./lib/editor-settings";
 import {flushWorkspaceForClose} from "./lib/workspace";
 import {Whiteboard} from "./components/Whiteboard";
 import {LibraryMoreTools} from "./components/LibraryMoreTools";
@@ -8,7 +11,7 @@ import {loadFontResources} from "./lib/font-resources";
 import {registerCommands,listenCommandShortcuts} from "./lib/app-commands";
 import React, { useEffect, useRef, useState } from "react";
 import { SecurityBoundary } from "./components/AppSecurity";
-import { StoreProvider, useStore } from "./store";
+import { StoreProvider, useStore, viewTitle } from "./store";
 import { Sidebar } from "./components/Sidebar";
 import { NoteList } from "./components/NoteList";
 import { SplitWorkspace } from "./components/SplitWorkspace";
@@ -16,12 +19,14 @@ import { DueReminders } from "./components/Reminders";
 import { DialogHost } from "./components/DialogHost";
 import { StatusBar } from "./components/EditorPane";
 import { CommandPalette } from "./components/CommandPalette";
-import { TerminalIcon as Terminal } from "@phosphor-icons/react";
+import { DotsThreeIcon, FolderIcon } from "@phosphor-icons/react";
+import { Menu as MenuButton, type MenuItemSpec } from "./components/Menu";
+import { NoteShareDialog } from "./components/NoteShareDialog";
 import { NoteTabs } from "./components/NoteTabs";
 import { PreviewExport } from "./components/PreviewExport";
 import { IconButton } from "./components/IconButton";
 import { WindowControls } from "./components/WindowControls";
-import { Menu, ArrowLeft, X, Plus, PanelRight } from "./icons";
+import { Menu, ArrowLeft, X, Plus, PanelRight, History, Bell } from "./icons";
 import "./components/WorkspaceTopbar.css";
 import { t } from "./i18n";
 import { installPluginFontStyles, subscribePlugins } from "./lib/plugins";
@@ -30,6 +35,39 @@ import { NoteLinkNavigation } from "./components/NoteLinkNavigation";
 import { KnowledgeTools } from "./components/KnowledgeTools";
 import { WritingTools } from "./components/WritingTools";
 import "./mobile.css";
+
+type ShellStore = ReturnType<typeof useStore>;
+function notebookPath(note: ShellStore["note"], notebooks: ShellStore["notebooks"]) {
+  const path: string[] = [];
+  const seen = new Set<string>();
+  for (let id = note?.notebook_id ?? null; id && !seen.has(id); ) {
+    seen.add(id);
+    const notebook = notebooks.find((n) => n.id === id);
+    if (!notebook) break;
+    path.unshift(notebook.name);
+    id = notebook.parent_id ?? null;
+  }
+  return path;
+}
+function shellViewName(panel: ShellPanel | null, view: ShellStore["view"], notebooks: ShellStore["notebooks"]) {
+  if (panel === "reminders") return t("알림");
+  if (panel === "daily") return t("오늘의 노트");
+  if (view.type === "notebook") return notebooks.find((n) => n.id === view.id)?.name ?? t("폴더");
+  return viewTitle(view);
+}
+function mobileTitle(selected: boolean, path: string[], navigation: boolean, viewName: string) {
+  if (selected) return path.at(-1) ?? "inkism";
+  return navigation ? "inkism" : viewName;
+}
+function ShellNoteList({ panel }: Readonly<{ panel: ShellPanel | null }>) {
+  if (panel === "reminders") return <ReminderList />;
+  if (panel === "daily") return <DailyList />;
+  return <NoteList />;
+}
+
+function shellClassName(selected: boolean, navigation: boolean) {
+  return "app" + (selected ? " has-selection" : "") + (navigation ? " navigation-open" : "");
+}
 
 function Shell() {
   const s = useStore();
@@ -85,10 +123,60 @@ function Shell() {
         target.focus({ preventScroll: true });
     });
   };
-  useEffect(() => setNavigation(false), [s.view]);
+  // 받은 알림·오늘의 노트는 노트 목록 자리를 잠시 대신한다. 다른 목록을 고르면 닫힌다.
+  const [panel, setPanel] = useState<ShellPanel | null>(null);
+  useEffect(() => {
+    setNavigation(false);
+    setPanel(null);
+  }, [s.view]);
+  const showPanel = (next: ShellPanel) => {
+    setPanel(next);
+    setNavigation(false);
+  };
+  const openDaily = async () => {
+    showPanel("daily");
+    try {
+      if (!(await latest.current.flushNow())) return;
+      const now = new Date();
+      const note = await rpc<{ id: string }>("daily_note", { date: localDate(now), time: localTime(now), content_format: defaultEditor() });
+      latest.current.refreshList();
+      await latest.current.refreshMeta();
+      await latest.current.selectNote(note.id);
+    } catch (e) {
+      await latest.current.showError(t("오늘의 노트"), String(e));
+    }
+  };
+  const [sharing, setSharing] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const tools = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!toolsOpen) return;
+    // 도구가 연 대화상자 안의 클릭·Esc는 그 대화상자 몫이다. 패널을 남겨 두어야 닫힌 뒤 초점이 단추로 돌아온다.
+    const close = (e: Event) => {
+      if (document.querySelector("dialog[open]")) return;
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !tools.current?.contains(e.target as Node)) setToolsOpen(false);
+    };
+    document.addEventListener("pointerdown", close, true);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close, true);
+      document.removeEventListener("keydown", close);
+    };
+  }, [toolsOpen]);
+  // 상단 경로: 열린 노트의 폴더를 상위부터 잇는다. 노트가 없으면 지금 보는 목록 이름.
+  const path = notebookPath(s.note, s.notebooks);
+  const viewName = shellViewName(panel, s.view, s.notebooks);
+  const inspectorLabel = inspectorOpen ? t("노트 속성 닫기") : t("노트 속성 열기");
+  const moreItems = (compact: boolean): MenuItemSpec[] => [
+    ...(compact ? [{ label: t("공유"), disabled: !s.note, onSelect: () => setSharing(true) }] : []),
+    { label: t("분할 편집 열기"), disabled: !s.note, onSelect: () => window.dispatchEvent(new Event("inkism-open-split")) },
+    { label: t("명령창 열기"), onSelect: () => setCommandsOpen(true) },
+    ...(compact ? [] : [{ label: inspectorLabel, disabled: !s.draft, onSelect: inspectorOpen ? closeInspector : openInspector }]),
+    { label: t("라이브러리 도구"), separatorBefore: true, onSelect: () => setToolsOpen(true) },
+  ];
   return (
     <div
-      className={"app" + (s.selectedId ? " has-selection" : "") + (navigation ? " navigation-open" : "")}
+      className={shellClassName(Boolean(s.selectedId), navigation)}
       data-theme-wrapper="true"
     >
       <header className="mobile-header">
@@ -101,7 +189,17 @@ function Shell() {
             {navigation ? <X size={21} /> : <Menu size={21} />}
           </button>
         )}
-        <strong>inkism</strong>
+        <strong>{mobileTitle(Boolean(s.selectedId), path, navigation, viewName)}</strong>
+        {s.selectedId ? (
+          <IconButton label={inspectorLabel} active={inspectorOpen} disabled={!s.draft} onClick={inspectorOpen ? closeInspector : openInspector}>
+            <PanelRight size={18} aria-hidden />
+          </IconButton>
+        ) : (
+          <IconButton label={t("새 노트 만들기")} onClick={() => s.newNote()}>
+            <Plus size={18} aria-hidden />
+          </IconButton>
+        )}
+        <MoreMenu items={moreItems(true)} />
       </header>
       {s.connError && (
         <div className="conn-banner" role="alert">
@@ -113,23 +211,15 @@ function Shell() {
       )}
       <NoteLinkNavigation />
       <DueReminders />
-      <div className="library-tools" aria-label={t("라이브러리 도구")}><WritingTools /><KnowledgeTools /><LibraryMoreTools /><Whiteboard /></div>
       <div className="app-row">
-        <Sidebar />
-        <NoteList />
-        <div className="workspace-column">
-          <header className="workspace-topbar" aria-label={t("노트 상단바")} data-tauri-drag-region="deep">
-            <NoteTabs />
-            <IconButton className="topbar-new-note" label={t("새 노트 만들기")} onClick={()=>s.newNote()}>
-              <Plus size={15} aria-hidden />
-            </IconButton>
-            <div className="workspace-topbar-actions" data-tauri-drag-region="false">
-              <IconButton label={t("분할 편집 열기")} disabled={!s.note} onClick={()=>window.dispatchEvent(new Event("inkism-open-split"))}><PanelRight size={15} aria-hidden /></IconButton>
-              <IconButton label={t("명령창 열기")} onClick={() => setCommandsOpen(true)}>
-                <Terminal size={16} />
-              </IconButton>
+        <Sidebar panel={panel} onPanel={showPanel} onDaily={() => void openDaily()} />
+        <div className="app-main">
+          <header className="app-topbar" aria-label={t("노트 상단바")} data-tauri-drag-region="deep">
+            {panel === "reminders" ? <Bell size={16} aria-hidden /> : <FolderIcon size={16} aria-hidden />}
+            <span className="app-topbar-path">{(panel !== "reminders" && path.length ? path : [viewName]).join("  /  ")}</span>
+            <div className="app-topbar-actions" data-tauri-drag-region="false">
               <IconButton
-                label={inspectorOpen ? t("노트 속성 닫기") : t("노트 속성 열기")}
+                label={inspectorLabel}
                 active={inspectorOpen}
                 disabled={!s.draft}
                 aria-expanded={inspectorOpen}
@@ -137,15 +227,39 @@ function Shell() {
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={inspectorOpen ? closeInspector : openInspector}
               >
-                <PanelRight size={15} aria-hidden />
+                <History size={16} aria-hidden />
               </IconButton>
+              <button type="button" className="app-topbar-share" disabled={!s.note} onClick={() => setSharing(true)}>
+                {t("공유")}
+              </button>
+              <MoreMenu items={moreItems(false)} />
             </div>
             <WindowControls />
           </header>
-          <SplitWorkspace inspectorOpen={inspectorOpen} openInspector={openInspector} closeInspector={closeInspector} />
+          {/* 라이브러리 도구는 늘 붙어 있어야 단축키와 대화상자가 동작한다. 닫혀 있을 때는 보이지만 않게 둔다. */}
+          <div ref={tools} className={"library-tools" + (toolsOpen ? " is-open" : "")} aria-label={t("라이브러리 도구")}>
+            <WritingTools />
+            <KnowledgeTools />
+            <LibraryMoreTools />
+            <Whiteboard />
+          </div>
+          <div className="app-content">
+            <ShellNoteList panel={panel} />
+            <div className="workspace-column">
+              <div className="workspace-topbar" data-tauri-drag-region="deep">
+                <NoteTabs />
+                <IconButton className="topbar-new-note" label={t("새 노트 만들기")} onClick={() => s.newNote()}>
+                  <Plus size={16} aria-hidden />
+                </IconButton>
+              </div>
+              <ReminderBanner />
+              <SplitWorkspace inspectorOpen={inspectorOpen} openInspector={openInspector} closeInspector={closeInspector} />
+            </div>
+          </div>
+          <StatusBar />
         </div>
       </div>
-      <StatusBar />
+      {sharing && s.note && <NoteShareDialog noteID={s.note.id} onClose={() => setSharing(false)} />}
       <PreviewExport hiddenTrigger />
       <CommandPalette open={commandsOpen} onClose={() => setCommandsOpen(false)} />
       <DialogHost />
@@ -153,6 +267,11 @@ function Shell() {
     </div>
   );
 }
+
+function MoreMenu({ items }: Readonly<{ items: MenuItemSpec[] }>) {
+  return <MenuButton buttonLabel={t("노트 메뉴")} icon={<DotsThreeIcon size={16} aria-hidden />} items={items} />;
+}
+
 export default function App() {
   return (
     <SecurityBoundary>

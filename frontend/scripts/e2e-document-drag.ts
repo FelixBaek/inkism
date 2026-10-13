@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {waitForPredicate} from './wait-for-predicate.ts';
 import {historyKey} from './history-keys.ts';
+import {assertBlockBytes,withoutBlockIds} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL;assert.ok(base);
 const rpc=async(op,args={})=>{const r=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const v=await r.json();assert.ok(v.ok,v.error);return v.data;};
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
@@ -28,7 +29,9 @@ try{
  await waitForPredicate(async()=>((await rpc('workspace_get')).locations?.[note.id]?.selection?.headByte===Buffer.byteLength(moved.slice(0,4).join(''))),'whole mounted block selection was not persisted',10000);
  await page.reload();await ready();await root.evaluate((el: any)=>el.editor.view.focus());await page.keyboard.insertText('선택한 블록 교체');
  const replaced=[...moved];replaced[3]='<p><strong>선택한 블록 교체</strong></p>';
- await waitForPredicate(async()=>((await rpc('get',{id:note.id})).content===replaced.join('')),'restored block selection must replace that block and preserve its unselected neighbour',10000);await ready();
+ // The replaced block is the one edited block: it gains an identity, every other byte is exact.
+ await waitForPredicate(async()=>(withoutBlockIds((await rpc('get',{id:note.id})).content)===replaced.join('')),'restored block selection must replace that block and preserve its unselected neighbour',10000);await ready();
+ assertBlockBytes((await rpc('get',{id:note.id})).content,replaced.join(''),{added:1,message:'restored block replacement'});
  await historyKey(page,'undo');await waitForPredicate(async()=>((await rpc('get',{id:note.id})).content===moved.join('')),'restored block replacement undo failed');await ready();
  assert.ok(reads.every(v=>v.op==='document_block_window'?v.limit<=65536:(v.limit??1)<=32));await page.unroute('**/api/rpc');
  const huge='<p><b>'+('한글😀 &amp; '.repeat(30000))+'</b></p>',others=Array.from({length:70},(_,i)=>'<p><b>이웃 '+i+' &amp; 😀</b></p>'),original=huge+others.join(''),largeMoved=others.join('')+huge;
@@ -47,7 +50,9 @@ try{
  assert.ok((await root.textContent()).length<66000);assert.ok(await page.locator('*').count()<1500);
  await waitForPredicate(async()=>((await rpc('workspace_get')).locations?.[note.id]?.selection?.headByte===Buffer.byteLength(largeMoved)),'full block selection was not persisted',10000);
  await page.reload();await ready();await root.evaluate((el: any)=>el.editor.view.focus());await page.keyboard.insertText('이동한 전체 블록 교체');
- await stored(others.join('')+'<p><strong>이동한 전체 블록 교체</strong></p>');
+ // The replacing block gains its identity; every other byte is exact.
+ await waitForPredicate(async()=>(withoutBlockIds((await rpc('get',{id:note.id})).content)===others.join('')+'<p><strong>이동한 전체 블록 교체</strong></p>'),'complete paragraph replacement',10000);await ready();
+ assertBlockBytes((await rpc('get',{id:note.id})).content,others.join('')+'<p><strong>이동한 전체 블록 교체</strong></p>',{added:1,message:'moved block replacement'});
  await historyKey(page,'undo');await stored(largeMoved);
  await page.getByRole('textbox',{name:'이동할 블록 번호',exact:true}).fill('71');await page.getByRole('button',{name:'이동',exact:true}).click();await page.locator('[data-window-start="70"]').waitFor();await ready();
  await start();await page.locator('.window-scroll').evaluate((el: any)=>el.scrollTop=0);await page.locator('[data-window-start="0"]').waitFor();await ready();
@@ -67,7 +72,9 @@ try{
   await root.evaluate((el: any)=>{el.editor.commands.setTextSelection(2);el.editor.view.focus();});await page.keyboard.insertText('입력보존');
  }finally{release();}
  const withInput=[...raceBlocks];withInput[0]=withInput[0].replace('블록 0','블입력보존록 0');
- await stored(withInput.join(''));await page.locator('.window-error').waitFor();
+ // The typed block is the one edited block and gains an identity (since bd68519).
+ await waitForPredicate(async()=>(withoutBlockIds((await rpc('get',{id:note.id})).content)===withInput.join('')),'typing during a drag is kept',10000);await ready();
+ assertBlockBytes((await rpc('get',{id:note.id})).content,withInput.join(''),{added:1,message:'typing during a drag'});await page.locator('.window-error').waitFor();
  assert.match(await page.locator('.window-error').textContent(),/변경|충돌|revision|version/i);
  await page.unroute('**/api/rpc');assert.deepEqual(errors,[]);console.log('PASS real pointer block drag across windows, giant paragraph both directions, exact HTML, restart selection/input, undo/redo, self drop, typing cancellation and bounded reads; lazy='+process.env.INKISM_LAZY);
 }catch(e){console.error(await page.evaluate(()=>({error:document.querySelector('.window-error')?.textContent,selection:document.querySelector<any>('.tiptap-prose')?.editor?.state.selection.toJSON(),events:(window as any).dragEvents})));if(note){const saved=await rpc('get',{id:note.id});console.error(saved.content.slice(0,250));}throw e;}finally{await browser.close();}

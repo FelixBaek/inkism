@@ -6,7 +6,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createServer} from 'vite';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 const root=fileURLToPath(new URL('..',import.meta.url));
 const cacheDir=await mkdtemp(join(tmpdir(),'inkism-reminder-contract-'));
 // Only the unrelated note store is stubbed; the shipped settings component is unchanged.
@@ -48,15 +48,15 @@ async function fixture(initial){
 }
 try{
  const absent=await fixture({available:false});
- assert.equal(await absent.page.getByRole('checkbox').count(),0,'unavailable controls must be hidden');
+ assert.equal(await absent.page.getByRole('switch').count(),0,'unavailable controls must be hidden');
  await absent.page.close();
  const limited=await fixture({available:true,enabled:false,background_available:false});
- await limited.page.getByRole('checkbox',{name:'시스템 알림 켜기',exact:true}).waitFor();
- assert.equal(await limited.page.getByRole('checkbox').count(),1,'unsupported background control hidden');
+ await limited.page.getByRole('switch',{name:'시스템 알림 켜기',exact:true}).waitFor();
+ assert.equal(await limited.page.getByRole('switch').count(),1,'unsupported background control hidden');
  await limited.page.close();
  const f=await fixture({available:true,enabled:false,background:false,background_available:true});
- const master=f.page.getByRole('checkbox',{name:'시스템 알림 켜기',exact:true});
- const background=f.page.getByRole('checkbox',{name:'앱이 닫히거나 잠겨 있어도 알림 받기',exact:true});
+ const master=f.page.getByRole('switch',{name:'시스템 알림 켜기',exact:true});
+ const background=f.page.getByRole('switch',{name:'앱이 닫히거나 잠겨 있어도 알림 받기',exact:true});
  await master.waitFor();assert.equal(await master.isChecked(),false);assert.equal(await background.isChecked(),false);assert.equal(await background.isDisabled(),true);
  await master.click();await waitFor(()=>master.isChecked(),'enable master confirmed');
  await waitFor(async()=>!await background.isDisabled(),'dependent control enabled');

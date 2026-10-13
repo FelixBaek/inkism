@@ -1,4 +1,4 @@
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47984';
 const rpc=async(op,args={})=>{
@@ -8,7 +8,7 @@ const rpc=async(op,args={})=>{
 const stamp=Date.now(),old='이전'+stamp,target='통합'+stamp,title='태그 '+stamp;
 const html=Array.from({length:10000},(_,i)=>'<p>태그 본문 '+i+'</p>').join('');
 const a=await rpc('save',{note:{title,content:html,text:'태그',tags:[old,target]}});
-const b=await rpc('save',{note:{title:title+' 휴지통',content:'<p>보존</p>',text:'보존',tags:[old]}});
+const b=await rpc('save',{note:{title:title+' 지운 노트',content:'<p>보존</p>',text:'보존',tags:[old]}});
 await rpc('patch',{id:b.id,changes:{trashed:true}});await rpc('wait_index');
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 const page=await browser.newPage({viewport:{width:1440,height:960}});

@@ -1,7 +1,7 @@
 import {useDialogVisibility} from '../lib/dialog-visibility';
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
-import { Scissors } from "../icons";
+import { Scissors, X } from "../icons";
 import { useStore } from "../store";
 import "./SharingDialogs.css";
 import { t } from "../i18n";
@@ -90,62 +90,54 @@ export function WebClipperDialog() {
           if (!busy) close();
         }}
       >
-        <h2 id="clipper-title">{t("웹 클리퍼")}</h2>
-        <p>
-          {t(
-            "확장에서 선택한 영역 또는 페이지를 받아 미리 본 뒤 저장합니다. 이미지·첨부·스크립트는 가져오지 않습니다. 연결을 종료하면 아직 저장하지 않은 클리핑은 버립니다.",
-          )}
-        </p>
+        <div className="dialog-title-row">
+          <h2 id="clipper-title" className="dialog-title">{t("웹 클리퍼")}</h2>
+          <button type="button" className="icon-btn" aria-label={t("대화상자 닫기")} disabled={busy} onClick={close}>
+            <X size={16} aria-hidden />
+          </button>
+        </div>
         <label>
           {t("확장 프로그램 ID")}
-          <input
-            aria-label={t("클리퍼 확장 ID")}
-            value={extension}
-            onChange={(e) => setExtension(e.target.value)}
-            placeholder={t("Chrome/Edge 확장 관리 화면의 32자 ID")}
-          />
+          <span className="sharing-field-row">
+            <input
+              aria-label={t("클리퍼 확장 ID")}
+              value={extension}
+              onChange={(e) => setExtension(e.target.value)}
+              placeholder={t("Chrome/Edge 확장 관리 화면의 32자 ID")}
+            />
+            <button
+              className="btn btn-primary"
+              disabled={busy || !!pending}
+              onClick={() => void run(async () => setAccess(await command({ action: "pair", extension })))}
+            >
+              {t("15분 연결 시작")}
+            </button>
+          </span>
         </label>
-        <button
-          className="btn"
-          disabled={busy || !!pending}
-          onClick={() => void run(async () => setAccess(await command({ action: "pair", extension })))}
-        >
-          {t("15분 연결 시작")}
-        </button>
         {access && (
-          <fieldset>
-            <legend>{t("확장 팝업에 입력 (앱 종료·연결 종료 시 폐기)")}</legend>
+          <div>
             <label>
               {t("수신 주소")}
               <input readOnly aria-label={t("클리퍼 수신 주소")} value={access.url} />
             </label>
             <label>
               {t("일회 연결 토큰")}
-              <input readOnly type="password" aria-label={t("클리퍼 연결 토큰")} value={access.token} />
+              <span className="sharing-field-row">
+                <input readOnly type="password" aria-label={t("클리퍼 연결 토큰")} value={access.token} />
+                <button className="btn" onClick={() => void run(async () => navigator.clipboard.writeText(access.token))}>
+                  {t("토큰 복사")}
+                </button>
+              </span>
             </label>
-            <button className="btn" onClick={() => void run(async () => navigator.clipboard.writeText(access.token))}>
-              {t("토큰 복사")}
-            </button>
-          </fieldset>
+            <p className="dialog-note">{t("확장 팝업에 입력 (앱 종료·연결 종료 시 폐기)")}</p>
+          </div>
         )}
         {pending && (
-          <section>
+          <section className="sharing-preview">
             <h3>{pending.title}</h3>
             <p className="sharing-source">{pending.url}</p>
-            <div className="sharing-preview" dangerouslySetInnerHTML={{ __html: pending.html }} />
-            <div className="dialog-actions">
-              <button
-                className="btn"
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    await command({ action: "discard", id: pending.id });
-                    setPending(null);
-                  })
-                }
-              >
-                {t("클리핑 버리기")}
-              </button>
+            <div className="sharing-preview-body" dangerouslySetInnerHTML={{ __html: pending.html }} />
+            <div className="dialog-actions sharing-preview-actions">
               <button
                 className="btn btn-primary"
                 disabled={busy}
@@ -162,9 +154,26 @@ export function WebClipperDialog() {
               >
                 {t("새 노트로 저장")}
               </button>
+              <button
+                className="btn"
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    await command({ action: "discard", id: pending.id });
+                    setPending(null);
+                  })
+                }
+              >
+                {t("클리핑 버리기")}
+              </button>
             </div>
           </section>
         )}
+        <p className="dialog-note">
+          {t(
+            "확장에서 선택한 영역 또는 페이지를 받아 미리 본 뒤 저장합니다. 이미지·첨부·스크립트는 가져오지 않습니다. 연결을 종료하면 아직 저장하지 않은 클리핑은 버립니다.",
+          )}
+        </p>
         {error && <p role="alert">{error}</p>}
         <div className="dialog-actions">
           <button className="btn" disabled={busy} onClick={close}>

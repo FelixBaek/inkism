@@ -1,11 +1,11 @@
-/* 노트북 표지 사진: 머리말 배너, 고치기 대화상자의 고르기 칸, 설정 > 사진 검색 */
+/* 폴더 표지 사진: 머리말 배너, 고치기 대화상자의 고르기 칸, 설정 > 사진 검색 */
 .notebook-header.has-cover {
   padding-top: 0;
 }
 .cover-banner {
   position: relative;
   height: 140px;
-  margin: 0 -14px 4px;
+  margin: 0 -12px 4px;
   overflow: hidden;
   background: var(--hover);
 }
@@ -23,7 +23,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(to bottom, transparent 55%, color-mix(in srgb, var(--surface) 85%, transparent) 100%);
+  background: linear-gradient(to bottom, transparent 55%, color-mix(in srgb, var(--raised) 85%, transparent) 100%);
 }
 .cover-banner__credit {
   position: absolute;
@@ -31,12 +31,12 @@
   bottom: 6px;
   z-index: 1;
   padding: 1px 6px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--raised) 78%, transparent);
 }
 
 .cover-credit {
-  font-size: 11px;
+  font-size: var(--fs-small);
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -84,7 +84,7 @@
   gap: 6px;
   height: 100%;
   color: var(--faint);
-  font-size: 12.5px;
+  font-size: var(--fs-small);
 }
 .cover-row {
   display: flex;
@@ -100,7 +100,7 @@
 }
 .cover-note {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-small);
   line-height: 1.5;
   color: var(--muted);
 }
@@ -152,7 +152,7 @@
 }
 /* 선택: accent 테두리(강조선이 아니라 둘레 전체). */
 .cover-thumb.is-selected {
-  outline: 2px solid var(--green);
+  outline: var(--focus-ring);
   outline-offset: 1px;
 }
 .cover-pager {
@@ -160,7 +160,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--muted);
 }
 
@@ -181,12 +181,12 @@
   width: auto;
 }
 .unsplash-key__state {
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--muted);
   padding: 0 8px 0 0;
 }
 .unsplash-key small {
   flex-basis: 100%;
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--muted);
 }

@@ -15,7 +15,7 @@
 // document_blocks/document_segments는 limit<=32, document_block_window는
 // limit<=65536으로만 읽히는지 확인한다. 문서 전체 DOM은 만들지 않는다.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {waitForPredicate} from './wait-for-predicate.ts';
 import {historyKey} from './history-keys.ts';
 const base=process.env.INKISM_URL;assert.ok(base);
@@ -36,7 +36,11 @@ const action=async(name)=>{
  await page.getByRole('button',{name:'블록 동작',exact:true}).click();await page.getByRole('menuitem',{name:{'블록 복제':'복제','블록 삭제':'삭제'}[name]??name,exact:true}).click();
 };
 const undo=()=>historyKey(page,'undo');
-const stored=async(id,expected)=>{await waitForPredicate(async()=>((await rpc('get',{id})).content===expected),'블록 동작이 원문을 정확히 보존하지 않았습니다',15000);await ready();};
+// 편집한 블록은 영구 블록 ID를 얻는다. ID를 뺀 나머지 원문은 정확히 같아야 한다.
+const withoutIds=html=>html.replace(/ id="ink-block-[0-9a-f-]{36}"/g,'');
+const stored=async(id,expected)=>{await waitForPredicate(async()=>(withoutIds((await rpc('get',{id})).content)===expected),'블록 동작이 원문을 정확히 보존하지 않았습니다',15000);await ready();};
+// 실행 취소로 돌아간 원문은 ID 없이 바이트 그대로여야 한다.
+const restored=async(id,expected)=>{await waitForPredicate(async()=>((await rpc('get',{id})).content===expected),'실행 취소가 원문을 정확히 되돌리지 않았습니다',15000);await ready();};
 const openWindow=async(note)=>{lastNote=note.id;await page.goto(base+'/?virtual=1'+(lazy?'&lazy=1':''));await page.getByRole('button',{name:'노트 열기: '+note.title,exact:true}).click();await ready();};
 const jump=async(ordinal)=>{await page.getByRole('textbox',{name:'이동할 블록 번호',exact:true}).fill(String(ordinal+1));await page.getByRole('button',{name:'이동',exact:true}).click();await page.locator('[data-window-start="'+ordinal+'"]').waitFor();await ready();};
 try{
@@ -58,14 +62,16 @@ try{
   canonical[kind]=await root.evaluate((el: any,code)=>{
    const editor=el.editor;
    if(!editor.commands.setContent(code))throw new Error('스니펫을 스키마로 해석하지 못했습니다: '+code);
-   const full=editor.getHTML();
+   // setContent도 편집이라 블록 ID가 붙는다. fixture는 ID 없는 원문으로 만든다.
+   const strip=html=>html.replace(/ id="ink-block-[0-9a-f-]{36}"/g,'');
+   const full=strip(editor.getHTML());
    const last=editor.state.doc.lastChild;
    // 전체 모드 편집기의 trailing node가 문서 끝에 붙인 빈 문단만 떼어 블록 하나로 만든다.
    const tail=last&&last.type.name==='paragraph'&&!last.content.size&&full.endsWith('<p></p>')?'<p></p>':'';
    if(!tail)throw new Error('trailing 빈 문단이 없어 블록 경계를 확정할 수 없습니다');
    const target=full.slice(0,full.length-tail.length);
    // 같은 문자열을 다시 넣어도 getHTML 결과가 불변이어야 캐노니컬하다.
-   if(!editor.commands.setContent(target)||editor.getHTML()!==full)throw new Error('캐노니컬 HTML이 안정적이지 않습니다: '+editor.getHTML());
+   if(!editor.commands.setContent(target)||strip(editor.getHTML())!==full)throw new Error('캐노니컬 HTML이 안정적이지 않습니다: '+editor.getHTML());
    return target;
   },snippet);
  }
@@ -97,13 +103,13 @@ try{
   // 표 플러그인은 전체 표의 NodeSelection을 CellSelection으로 정규화한다.
   assert.ok(selection==='node'||(kind==='table'&&selection==='cell'),'대상 블록이 선택되어야 합니다: '+selection);
   await action('블록 복제');await stored(note.id,expectations.duplicate);
-  await undo();await stored(note.id,source);
+  await undo();await restored(note.id,source);
   await action('아래로 이동');await stored(note.id,expectations.movedDown);
-  await undo();await stored(note.id,source);
+  await undo();await restored(note.id,source);
   await action('블록 삭제');await stored(note.id,expectations.removed);
-  await undo();await stored(note.id,source);
+  await undo();await restored(note.id,source);
   await action('아래에 문단 추가');await stored(note.id,expectations.inserted);
-  await undo();await stored(note.id,source);
+  await undo();await restored(note.id,source);
   assert.ok(reads.length>0,'블록 원문 읽기가 기록되어야 합니다');
   assert.ok(reads.every(v=>v.op==='document_block_window'?v.limit<=65536:(v.limit??1)<=32),JSON.stringify(reads.slice(0,4)));
   await page.unroute('**/api/rpc');

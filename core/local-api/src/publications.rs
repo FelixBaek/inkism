@@ -18,14 +18,13 @@ struct Input {
     token: String,
     days: i64,
     revision: i64,
-    version: u64,
-    page_id: String,
-    markdown: Option<String>,
     publication_id: String,
     role: String,
     password: Option<String>,
     hosts: Vec<String>,
     pages: Option<Vec<PageInput>>,
+    /// Use the library's saved sync relay token instead of a typed one.
+    use_sync_token: bool,
     #[serde(skip)]
     wiki_ids: Vec<String>,
 }
@@ -48,6 +47,7 @@ fn decode(body: &[u8]) -> Result<Input, Response> {
     }
     let mut values = serde_json::Deserializer::from_slice(body).into_iter::<Input>();
     let input = match values.next() {
+        Some(Ok(i)) if i.use_sync_token && i.token.is_empty() => i,
         Some(Ok(i)) if (32..=1024).contains(&i.token.len()) && !i.token.contains(['\r', '\n']) => i,
         _ => return Err(bad()),
     };
@@ -60,6 +60,17 @@ fn decode(body: &[u8]) -> Result<Input, Response> {
 fn call(h: &Handler, deadline: Instant, request: &Value) -> crate::Result<Value> {
     let raw = h.engine()?.call(deadline, &serde_json::to_vec(request)?)?;
     Ok(serde_json::from_slice(&raw)?)
+}
+
+/// The sync token saved with the configured relay. Host-only engine op; the
+/// renderer never sees it, it only goes into this request's Authorization.
+fn saved_token(h: &Handler, deadline: Instant) -> Result<String, Response> {
+    let reply = call(h, deadline, &json!({"op": "sync_relay_token"}))
+        .map_err(|_| Response::fail(503, "relay configuration unavailable"))?;
+    match reply["data"]["token"].as_str() {
+        Some(t) if reply["ok"] == true && (32..=1024).contains(&t.len()) && !t.contains(['\r', '\n']) => Ok(t.to_owned()),
+        _ => Err(Response::fail(400, "no saved sync token; enter the relay token")),
+    }
 }
 
 /// The library's configured relay origin, without a trailing slash.
@@ -193,11 +204,6 @@ fn action(
 ) -> Result<(reqwest::Method, String, Vec<u8>), Response> {
     match input.action.as_str() {
         "list" => Ok((reqwest::Method::GET, endpoint, Vec::new())),
-        "snapshot" | "reconcile" if publication_id(&input.id) => Ok((
-            reqwest::Method::GET,
-            format!("{endpoint}/{}", input.id),
-            Vec::new(),
-        )),
         "revoke" if publication_id(&input.id) => Ok((
             reqwest::Method::DELETE,
             format!("{endpoint}/{}", input.id),
@@ -233,7 +239,8 @@ fn action(
         )),
         "share_create" => {
             if !publication_id(&input.publication_id)
-                || !matches!(input.role.as_str(), "viewer" | "editor")
+                // Invitations are read-only.
+                || input.role != "viewer"
                 || input.password.as_ref().is_some_and(|p| p.len() > 512)
             {
                 return Err(Response::fail(
@@ -278,40 +285,6 @@ fn action(
     }
 }
 
-// Compare canonical sanitized markup, normalizing only insignificant gaps at
-// block boundaries. Inline spaces and pre/code whitespace stay byte-exact.
-fn canonical_blocks(html: &str) -> String {
-    let closing = regex::Regex::new(
-        r"(</(?:p|h[1-6]|ul|ol|li|blockquote|pre|table|thead|tbody|tr|td|th)>)[ \t\r\n]+<",
-    )
-    .unwrap();
-    let opening =
-        regex::Regex::new(r"(<(?:ul|ol|blockquote|table|thead|tbody|tr)(?: [^>]*)?>)[ \t\r\n]+<")
-            .unwrap();
-    let html = closing.replace_all(html.trim(), "${1}<");
-    opening.replace_all(&html, "${1}<").into_owned()
-}
-fn lossless_markdown(markdown: &str, html: &str) -> bool {
-    if markdown.len() > inkism_web_content::MAX_BYTES {
-        return false;
-    }
-    let parser = pulldown_cmark::Parser::new_ext(markdown, pulldown_cmark::Options::all());
-    // Markdown sources should not become opaque HTML fallbacks.
-    let events: Vec<_> = parser.collect();
-    if events.iter().any(|event| {
-        matches!(
-            event,
-            pulldown_cmark::Event::Html(_) | pulldown_cmark::Event::InlineHtml(_)
-        )
-    }) {
-        return false;
-    }
-    let mut rendered = String::new();
-    pulldown_cmark::html::push_html(&mut rendered, events.into_iter());
-    inkism_web_content::clean(&rendered)
-        .is_ok_and(|clean| canonical_blocks(&clean.html) == canonical_blocks(html))
-}
-
 pub(crate) fn serve(h: &Handler, r: &Request) -> Response {
     if r.method != "POST" {
         return Response {
@@ -325,10 +298,34 @@ pub(crate) fn serve(h: &Handler, r: &Request) -> Response {
     }
 }
 
+fn publication_response_body(response: reqwest::blocking::Response) -> Result<Vec<u8>, Response> {
+    let status = response.status().as_u16();
+    let mut data = Vec::new();
+    let limit = inkism_web_content::MAX_BYTES;
+    if response
+        .take(limit as u64 + 1)
+        .read_to_end(&mut data)
+        .is_err()
+        || data.len() > limit
+    {
+        return Err(Response::fail(502, "invalid relay response"));
+    }
+    if !(200..=299).contains(&status) {
+        return Err(Response::fail(
+            502,
+            format!("relay rejected publication action (HTTP {status})"),
+        ));
+    }
+    Ok(data)
+}
+
 fn publish(h: &Handler, r: &Request) -> Result<Response, Response> {
-    let input = decode(&r.body)?;
+    let mut input = decode(&r.body)?;
     let deadline = Instant::now() + Duration::from_secs(30);
     let base = relay(h, deadline)?;
+    if input.use_sync_token {
+        input.token = saved_token(h, deadline)?;
+    }
     let (method, endpoint, body) = action(h, deadline, &input, format!("{base}/v1/publications"))?;
     let client = reqwest::blocking::Client::builder()
         .no_proxy()
@@ -349,95 +346,12 @@ fn publish(h: &Handler, r: &Request) -> Result<Response, Response> {
                 "relay unavailable; check the published list before retrying",
             )
         })?;
-    let status = response.status().as_u16();
-    let mut data = Vec::new();
-    let limit = inkism_web_content::MAX_BYTES;
-    if response
-        .take(limit as u64 + 1)
-        .read_to_end(&mut data)
-        .is_err()
-        || data.len() > limit
-    {
-        return Err(Response::fail(502, "invalid relay response"));
-    }
-    if !(200..=299).contains(&status) {
-        return Err(Response::fail(
-            502,
-            format!("relay rejected publication action (HTTP {status})"),
-        ));
-    }
+    let data = publication_response_body(response)?;
     if delete {
         return Ok(Response::json(200, &json!({"ok": true})));
     }
     let parsed: Value =
         serde_json::from_slice(&data).map_err(|_| Response::fail(502, "invalid relay response"))?;
-    if input.action == "reconcile" {
-        if input.revision < 1
-            || input.version == 0
-            || parsed["version"].as_u64() != Some(input.version)
-        {
-            return Err(Response::fail(
-                409,
-                "publication changed; reload before applying",
-            ));
-        }
-        let original = call(h, deadline, &json!({"op":"get","id":input.note_id}))
-            .map_err(|_| Response::fail(400, "source unavailable"))?;
-        let note = &original["data"];
-        if original["ok"] != true
-            || note["readonly"] == true
-            || note["locked"] == true
-            || note["trashed"] == true
-        {
-            return Err(Response::fail(400, "source is unavailable or protected"));
-        }
-        if note["revision"].as_i64() != Some(input.revision) {
-            return Err(Response::fail(
-                409,
-                "source changed; preserve both versions",
-            ));
-        }
-        let page = if input.page_id.is_empty() {
-            &parsed
-        } else {
-            parsed["pages"]
-                .as_array()
-                .and_then(|pages| {
-                    pages
-                        .iter()
-                        .find(|p| p["id"].as_str() == Some(input.page_id.as_str()))
-                })
-                .ok_or_else(|| {
-                    Response::fail(409, "shared page was removed; preserve the source")
-                })?
-        };
-        let html = page["html"]
-            .as_str()
-            .ok_or_else(|| Response::fail(502, "invalid publication"))?;
-        let clean = inkism_web_content::clean(html).map_err(|e| Response::fail(502, e))?;
-        let format = note["content_format"].as_str().unwrap_or("html");
-        let content=match format {
-            "html"=>clean.html.clone(),
-            "markdown"=>{
-                let markdown=input.markdown.as_deref().ok_or_else(||Response::fail(409,"lossless Markdown conversion required"))?;
-                if !lossless_markdown(markdown,&clean.html) {return Err(Response::fail(409,"format cannot be preserved; save a separate copy"));}
-                markdown.to_owned()
-            },
-            _=>return Err(Response::fail(409,"rich publication requires an HTML or lossless Markdown source; save a separate copy")),
-        };
-        let saved = call(h, deadline, &json!({"op":"save","note":{"id":input.note_id,"title":note["title"],"content":content,"text":if format=="html" {&clean.text} else {&content},"content_format":format,"revision":input.revision,"require_existing":true}}))
-            .map_err(|_|Response::fail(500,"source save failed"))?;
-        if saved["ok"] != true {
-            return Err(Response::fail(
-                409,
-                "source changed; preserve both versions",
-            ));
-        }
-        return Ok(Response::json(
-            200,
-            &json!({"ok":true,"data":{"note":saved["data"],"version":input.version}}),
-        ));
-    }
     let domain = if input.action.starts_with("domain_") {
         Some(parsed.clone())
     } else {
@@ -521,254 +435,6 @@ mod tests {
     }
 
     #[test]
-    fn reconcile_updates_real_markdown_database_and_preserves_conflicts() {
-        struct RealSource {
-            db: Mutex<inkism_engine::Engine>,
-            url: String,
-        }
-        impl Engine for RealSource {
-            fn call(&self, _: Deadline, raw: &[u8]) -> crate::Result<Vec<u8>> {
-                let q: Value = serde_json::from_slice(raw)?;
-                let v = if q["op"] == "sync_status" {
-                    json!({"ok":true,"data":{"configured":true,"server_url":self.url}})
-                } else {
-                    self.db.lock().unwrap().execute(q)
-                };
-                Ok(serde_json::to_vec(&v)?)
-            }
-        }
-        use std::sync::atomic::{AtomicBool, Ordering};
-        let revoked = Arc::new(AtomicBool::new(false));
-        let server_revoked = revoked.clone();
-        let url = mock::serve(move |_| {
-            if server_revoked.load(Ordering::SeqCst) {
-                mock::Reply {
-                    status: 404,
-                    headers: vec![],
-                    body: vec![],
-                }
-            } else {
-                mock::Reply{status:200,headers:vec![],body:br#"{"version":2,"title":"Root","html":"<p>root</p>","pages":[{"id":"child","title":"Child","html":"<h1>Collaborative</h1>"}]}"#.to_vec()}
-            }
-        });
-        let dir = tempfile::tempdir().unwrap();
-        let db =
-            inkism_engine::Engine::open(dir.path().join("library.db").to_str().unwrap()).unwrap();
-        let made=db.execute(json!({"op":"save","note":{"id":"original","title":"My original title","content":"# Original\n","content_format":"markdown","tags":["keep"]}}));
-        assert_eq!(made["ok"], true, "{made}");
-        let revision = made["data"]["revision"].as_i64().unwrap();
-        let source = Arc::new(RealSource {
-            db: Mutex::new(db),
-            url,
-        });
-        let h = Handler {
-            engine: Some(source.clone()),
-            ..Default::default()
-        };
-        let binding_request=Request{method:"POST".into(),path:"/api/rpc".into(),query:None,headers:vec![("content-type".into(),"application/json".into())],host:"localhost".into(),body:serde_json::to_vec(&json!({"op":"collaboration_binding_set","publication_id":"a".repeat(64),"page_id":"child","expected_updated_at":0,"binding":{"id":"original","revision":revision,"version":1,"format":"markdown"}})).unwrap()};
-        let connected = crate::rpc::renderer(
-            &h,
-            &binding_request,
-            Instant::now() + Duration::from_secs(5),
-        );
-        assert_eq!(
-            connected.status,
-            200,
-            "{}",
-            String::from_utf8_lossy(&connected.body)
-        );
-        let request = |revision| {
-            Request{method:"POST".into(),path:"/api/publications".into(),query:None,headers:vec![],host:"localhost".into(),body:serde_json::to_vec(&json!({"action":"reconcile","id":"a".repeat(64),"token":"a".repeat(32),"note_id":"original","revision":revision,"version":2,"page_id":"child","markdown":"# Collaborative\n"})).unwrap()}
-        };
-        let out = serve(&h, &request(revision));
-        assert_eq!(out.status, 200, "{}", String::from_utf8_lossy(&out.body));
-        let saved = source
-            .db
-            .lock()
-            .unwrap()
-            .execute(json!({"op":"get","id":"original"}));
-        assert_eq!(saved["data"]["content"], "# Collaborative\n");
-        assert_eq!(saved["data"]["content_format"], "markdown");
-        assert_eq!(saved["data"]["title"], "My original title");
-        assert_eq!(saved["data"]["tags"], json!(["keep"]));
-        assert_eq!(
-            serve(&h, &request(revision)).status,
-            409,
-            "stale source overwrote DB"
-        );
-        revoked.store(true, Ordering::SeqCst);
-        assert_eq!(
-            serve(&h, &request(saved["data"]["revision"].as_i64().unwrap())).status,
-            502,
-            "revoked publication imported"
-        );
-        let after = source
-            .db
-            .lock()
-            .unwrap()
-            .execute(json!({"op":"get","id":"original"}));
-        assert_eq!(after["data"]["revision"], saved["data"]["revision"]);
-        assert_eq!(after["data"]["content"], saved["data"]["content"]);
-    }
-
-    #[test]
-    fn markdown_comparison_preserves_structure_and_pre_whitespace() {
-        assert!(lossless_markdown(
-            "# Heading\n\nOne **bold** paragraph.\n\nSecond.",
-            "<h1>Heading</h1><p>One <strong>bold</strong> paragraph.</p><p>Second.</p>"
-        ));
-        assert!(!lossless_markdown("one two", "<p>one  two</p>"));
-        assert!(!lossless_markdown(
-            "```\na b\n```",
-            "<pre><code>a  b\n</code></pre>"
-        ));
-        assert!(!lossless_markdown("<p>opaque</p>", "<p>opaque</p>"));
-        assert!(!lossless_markdown("plain", "<h2>plain</h2>"));
-    }
-
-    #[test]
-    fn reconcile_checks_versions_protection_and_engine_cas() {
-        struct Source {
-            url: String,
-            revision: i64,
-            protected: bool,
-            race: bool,
-            format: &'static str,
-            saves: Arc<Mutex<Vec<Value>>>,
-        }
-        impl Engine for Source {
-            fn call(&self, _: Deadline, raw: &[u8]) -> crate::Result<Vec<u8>> {
-                let q: Value = serde_json::from_slice(raw)?;
-                let response = match q["op"].as_str().unwrap() {
-                    "sync_status" => {
-                        json!({"ok":true,"data":{"configured":true,"server_url":self.url}})
-                    }
-                    "get" => {
-                        json!({"ok":true,"data":{"id":"source","revision":self.revision,"title":"Local title","content_format":self.format,"readonly":self.protected}})
-                    }
-                    "save" => {
-                        self.saves.lock().unwrap().push(q.clone());
-                        if self.race {
-                            json!({"ok":false,"error":"revision conflict"})
-                        } else {
-                            json!({"ok":true,"data":{"id":"source","revision":5}})
-                        }
-                    }
-                    _ => panic!("unexpected operation"),
-                };
-                Ok(serde_json::to_vec(&response)?)
-            }
-        }
-        let target = mock::serve(|hit| {
-            assert!(hit.path().starts_with("/v1/publications/"));
-            mock::Reply{status:200,headers:vec![],body:br#"{"version":2,"title":"Remote","html":"<p>edited</p><script>bad()</script>","pages":[{"id":"child","title":"Child","html":"<h1>child</h1>"}]}"#.to_vec()}
-        });
-        for (
-            revision,
-            protected,
-            race,
-            version,
-            status,
-            count,
-            format,
-            page,
-            markdown,
-            expected_content,
-        ) in [
-            (
-                4,
-                false,
-                false,
-                2,
-                200,
-                1,
-                "html",
-                "",
-                None,
-                "<p>edited</p>",
-            ),
-            (5, false, false, 2, 409, 0, "html", "", None, ""),
-            (4, true, false, 2, 400, 0, "html", "", None, ""),
-            (4, false, true, 2, 409, 1, "html", "", None, "<p>edited</p>"),
-            (4, false, false, 1, 409, 0, "html", "", None, ""),
-            (
-                4,
-                false,
-                false,
-                2,
-                200,
-                1,
-                "html",
-                "child",
-                None,
-                "<h1>child</h1>",
-            ),
-            (4, false, false, 2, 409, 0, "html", "removed", None, ""),
-            (
-                4,
-                false,
-                false,
-                2,
-                200,
-                1,
-                "markdown",
-                "child",
-                Some("# child\n"),
-                "# child\n",
-            ),
-            (
-                4,
-                false,
-                false,
-                2,
-                409,
-                0,
-                "markdown",
-                "child",
-                Some("child\n"),
-                "",
-            ),
-            (
-                4,
-                false,
-                false,
-                2,
-                409,
-                0,
-                "markdown",
-                "child",
-                Some("<h1>child</h1>"),
-                "",
-            ),
-        ] {
-            let saves = Arc::new(Mutex::new(vec![]));
-            let h = Handler {
-                engine: Some(Arc::new(Source {
-                    url: target.clone(),
-                    revision,
-                    protected,
-                    race,
-                    format,
-                    saves: saves.clone(),
-                })),
-                ..Default::default()
-            };
-            let r=Request{method:"POST".into(),path:"/api/publications".into(),query:None,headers:vec![],host:"localhost".into(),body:serde_json::to_vec(&json!({"action":"reconcile","id":"a".repeat(64),"token":"a".repeat(32),"note_id":"source","revision":4,"version":version,"page_id":page,"markdown":markdown})).unwrap()};
-            let out = serve(&h, &r);
-            assert_eq!(out.status, status, "{}", String::from_utf8_lossy(&out.body));
-            let saved = saves.lock().unwrap();
-            assert_eq!(saved.len(), count);
-            if let Some(q) = saved.first() {
-                assert_eq!(q["note"]["revision"], 4);
-                assert_eq!(q["note"]["require_existing"], true);
-                assert_eq!(q["note"]["content"], expected_content);
-                assert_eq!(q["note"]["content_format"], format);
-                assert_eq!(q["note"]["title"], "Local title");
-            }
-        }
-    }
-
-    #[test]
     fn locked_readonly_publications_never_reach_relay() {
         for (locked, readonly) in [(true, false), (false, true)] {
             let h = Handler {
@@ -793,6 +459,42 @@ mod tests {
                 400
             );
         }
+    }
+
+    #[test]
+    fn saved_sync_token_authorizes_publish_without_reaching_renderer() {
+        struct Saved(String);
+        impl Engine for Saved {
+            fn call(&self, _: Deadline, raw: &[u8]) -> crate::Result<Vec<u8>> {
+                let q: Value = serde_json::from_slice(raw)?;
+                let v = match q["op"].as_str() {
+                    Some("sync_status") => json!({"ok":true,"data":{"configured":true,"server_url":self.0}}),
+                    Some("sync_relay_token") => json!({"ok":true,"data":{"token":"saved".repeat(8)}}),
+                    _ => json!({"ok":true,"data":{"id":"note-id","revision":1,"title":"note","html":"<p>snapshot</p>","trashed":false,"readonly":false,"locked":false}}),
+                };
+                Ok(serde_json::to_vec(&v)?)
+            }
+        }
+        let auth = Arc::new(Mutex::new(String::new()));
+        let log = Arc::clone(&auth);
+        let target = mock::serve(move |hit| {
+            if hit.path() == "/v1/publications" {
+                *log.lock().unwrap() = hit.header("authorization").to_string();
+            }
+            mock::Reply {
+                status: 200,
+                headers: vec![("Content-Type".into(), "application/json".into())],
+                body: format!(r#"{{"id":"{}","hosts":[]}}"#, "a".repeat(64)).into_bytes(),
+            }
+        });
+        let h = Handler { engine: Some(Arc::new(Saved(target.clone()))), ..Default::default() };
+        let post = |body: &str| serve(&h, &Request { method: "POST".into(), path: "/api/publications".into(), query: None, headers: vec![], host: "wails.localhost".into(), body: body.as_bytes().to_vec() });
+        let out = post(r#"{"action":"publish","note_id":"note-id","token":"","use_sync_token":true,"days":7,"revision":1}"#);
+        assert_eq!(out.status, 200, "{}", String::from_utf8_lossy(&out.body));
+        assert_eq!(*auth.lock().unwrap(), format!("Bearer {}", "saved".repeat(8)));
+        assert!(!String::from_utf8_lossy(&out.body).contains("savedsaved"), "token echoed to renderer");
+        // An empty token without the saved-token choice is still rejected.
+        assert_eq!(post(r#"{"action":"publish","note_id":"note-id","token":"","days":7,"revision":1}"#).status, 400);
     }
 
     #[test]

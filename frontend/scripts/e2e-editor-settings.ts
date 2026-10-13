@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48131';
 const rpc=async(op:string,args={})=>{const res=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});
  const v=await res.json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
@@ -11,7 +11,7 @@ await page.addInitScript(()=>{
  // Deterministic browser font service. Native Windows enumeration is checked separately.
  Object.defineProperty(window,'queryLocalFonts',{configurable:true,value:async()=>[{family:'Arial'},{family:'Arial'},{family:'Georgia'}]});
 });
-const settings=async()=>{await page.getByRole('button',{name:'설정 열기',exact:true}).click();await page.getByRole('button',{name:'편집기 설정',exact:true}).click();};
+const settings=async()=>{await page.getByRole('button',{name:'설정 열기',exact:true}).click();await page.getByRole('button',{name:'편집기',exact:true}).click();};
 const close=()=>page.getByRole('button',{name:'설정 닫기',exact:true}).click();
 const until=async(fn:()=>Promise<boolean>)=>{for(let i=0;i<200;i++){if(await fn())return;await page.waitForTimeout(50);}throw new Error('condition timeout');};
 const find=async(title:string)=>(await rpc('list',{view:'all',limit:100})).items.find((n:any)=>n.title===title);
@@ -19,13 +19,13 @@ try {
  const existing=await rpc('save',{note:{title:'기존 HTML 보존',content:'<p><span style="color: rgb(1, 2, 3);">원본</span></p>',content_format:'html'}});
  await rpc('workspace_set',{ids:[existing.id],active:existing.id,locations:{}});await page.goto(base);await page.getByLabel('노트 제목',{exact:true}).waitFor();
  await settings();
- assert.equal(await page.getByLabel('기본 에디터',{exact:true}).inputValue(),'html');
+ assert.equal(await page.getByRole('radio',{name:'HTML 에디터',exact:true}).isChecked(),true);
  await page.getByRole('button',{name:'설치된 폰트 불러오기',exact:true}).click();
  await page.getByLabel('설치된 폰트',{exact:true}).selectOption('Arial');
  await page.getByLabel('등록할 폰트명',{exact:true}).fill('Comic Sans MS');await page.getByRole('button',{name:'직접 등록',exact:true}).click();
  await page.getByLabel('색 이름',{exact:true}).fill('사용자 포인트');await page.getByLabel('색상값',{exact:true}).fill('#123456');
  await page.getByRole('button',{name:'추가',exact:true}).click();
- await page.getByLabel('기본 에디터',{exact:true}).selectOption('markdown');
+ await page.getByRole('radio',{name:'MARKDOWN 에디터',exact:true}).click();
  await close();assert.deepEqual(await rpc('get',{id:existing.id}),existing,'default changed an existing note');
  await page.getByRole('button',{name:'새 노트 만들기',exact:true}).first().click();
  await page.getByRole('toolbar',{name:'Markdown 서식 도구',exact:true}).waitFor();
@@ -78,8 +78,8 @@ try {
  await page.getByRole('button',{name:'확인',exact:true}).click();
  // Settings and registered resources survive reopening the app.
  await page.reload();await page.getByLabel('노트 제목',{exact:true}).waitFor();await settings();
- assert.equal(await page.getByLabel('기본 에디터',{exact:true}).inputValue(),'markdown');
- await page.getByLabel('기본 에디터',{exact:true}).selectOption('html');
+ assert.equal(await page.getByRole('radio',{name:'MARKDOWN 에디터',exact:true}).isChecked(),true);
+ await page.getByRole('radio',{name:'HTML 에디터',exact:true}).click();
  await page.getByRole('button',{name:'Arial 삭제',exact:true}).waitFor();await page.getByRole('button',{name:'Comic Sans MS 삭제',exact:true}).waitFor();
  await page.getByRole('button',{name:'사용자 포인트 삭제',exact:true}).waitFor();
  await close();await page.getByRole('button',{name:'새 노트 만들기',exact:true}).first().click();

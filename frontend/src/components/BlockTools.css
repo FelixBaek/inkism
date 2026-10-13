@@ -74,15 +74,14 @@
   cursor: grabbing;
 }
 .tiptap-prose > .ProseMirror-selectednode {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 
-/* 손잡이가 들어갈 왼쪽 여백. 읽기 폭(704px)은 그대로 두고 왼쪽 안쪽 여백만 72px로 넓힌다.
-   여백은 ProseMirror 안쪽에 두어 손잡이로 가는 동안에도 마우스가 편집기 위에 있게 한다. */
+/* 손잡이가 들어갈 왼쪽 여백(72px). 여백은 ProseMirror 안쪽에 두어 손잡이로 가는 동안에도 마우스가 편집기 위에 있게 한다. */
 .block-gutter .rich-editor {
   position: relative;
-  max-width: 804px;
+  max-width: 1008px;
   padding-left: 0;
 }
 .block-gutter .tiptap-prose {
@@ -93,21 +92,11 @@
   z-index: 1000;
 }
 
-/* 본문 기둥(804px, 글은 왼쪽 72px 안쪽에서 시작)에 맞춰 노트 머리(정보 줄·제목·태그)와 툴바를 가운데로 모은다.
-   서식 편집(리치) 화면일 때만: 원문(HTML·Markdown) 편집기는 전체 폭을 쓴다. */
+/* 서식 편집(리치) 화면에서는 노트 머리(제목·분류·문서 구성)를 본문 글 시작선(72px)에 맞춘다.
+   원문(HTML·Markdown) 편집기는 기본 32px 여백을 쓴다. */
 .editor-pane:has(.block-gutter) {
-  --col-l: max(18px, calc((100% - 804px) / 2 + 72px));
-  --col-r: max(18px, calc((100% - 804px) / 2 + 28px));
+  --col-l: 72px;
 }
-.editor-pane:has(.block-gutter) > .editor-meta-row {
+.editor-pane:has(.block-gutter) > :is(.editor-meta-row, .note-classification, .document-tools) {
   padding-left: var(--col-l);
-  padding-right: var(--col-r);
-}
-.editor-pane:has(.block-gutter) > .title-input,
-.editor-pane:has(.block-gutter) > .tag-editor {
-  padding-left: var(--col-l);
-  padding-right: var(--col-r);
-}
-.editor-pane:has(.block-gutter) .editor-toolbar.tb-row {
-  justify-content: center;
 }

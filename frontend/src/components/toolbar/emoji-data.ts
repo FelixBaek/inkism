@@ -6,6 +6,8 @@
  * 라이선스: frontend/public/licenses/UNICODE-LICENSE.txt
  * 형식: 글자|한국어 이름|짧은 코드|검색어
  */
+import { t } from "../../i18n";
+
 export interface Emoji {
   char: string;
   name: string;
@@ -31,7 +33,7 @@ const parse = (rows: string) =>
 export const EMOJI_CATEGORIES: EmojiCategory[] = [
   {
     id: "face",
-    label: "표정",
+    label: t("표정"),
     icon: "😀",
     items: parse(`
 😀|웃는 얼굴|grinning|웃음 미소 기쁨 smile 활짝 웃는 얼굴 스마일 grinning face
@@ -163,7 +165,7 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   },
   {
     id: "people",
-    label: "사람",
+    label: t("사람과 신체"),
     icon: "👋",
     items: parse(`
 👋|손 흔들기|wave|안녕 인사 손 흔드는 펼친 waving hand
@@ -527,7 +529,7 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   },
   {
     id: "animal",
-    label: "동물",
+    label: t("동물"),
     icon: "🐶",
     items: parse(`
 🐶|강아지|dog|개 강아지 멍멍 얼굴 개띠 동물 dog face
@@ -678,7 +680,7 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   },
   {
     id: "food",
-    label: "음식",
+    label: t("음식"),
     icon: "🍎",
     items: parse(`
 🍎|사과|apple|사과 과일 빨간 red apple
@@ -815,7 +817,7 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   },
   {
     id: "activity",
-    label: "활동",
+    label: t("활동"),
     icon: "⚽",
     items: parse(`
 ⚽|축구공|soccer|축구 공 운동 축구공 soccer ball
@@ -913,7 +915,7 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   },
   {
     id: "travel",
-    label: "여행",
+    label: t("여행"),
     icon: "✈️",
     items: parse(`
 ✈️|비행기|airplane|비행기 여행 출장 비행 항공 airplane
@@ -1136,7 +1138,7 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   },
   {
     id: "object",
-    label: "사물",
+    label: t("사물"),
     icon: "💡",
     items: parse(`
 💡|전구|bulb|아이디어 생각 전구 기발한 아하 light bulb
@@ -1395,7 +1397,7 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   },
   {
     id: "symbol",
-    label: "기호",
+    label: t("기호"),
     icon: "❤️",
     items: parse(`
 ❤️|빨간 하트|heart|하트 사랑 좋아 빨간색 마음 red heart
@@ -1667,7 +1669,7 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   },
   {
     id: "flag",
-    label: "국기",
+    label: t("국기"),
     icon: "🏳️",
     items: parse(`
 🇦🇨|어센션섬|flag_ascension_island|국기 깃발 국가 나라 지역 깃발   깃발: 어센션섬 flag: Ascension Island ac

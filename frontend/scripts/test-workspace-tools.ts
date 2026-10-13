@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {fileURLToPath} from 'node:url';
 const bundle=await build({stdin:{contents:`export * from './lib/global-search-core';export * from './lib/pdf-references';export * from './lib/ai-provider';`,resolveDir:fileURLToPath(new URL('../src/',import.meta.url)),loader:'ts'},bundle:true,write:false,format:'iife',globalName:'workspace',platform:'browser',logLevel:'error'});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});

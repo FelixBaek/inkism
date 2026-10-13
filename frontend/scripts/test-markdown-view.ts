@@ -1,7 +1,7 @@
 // MARKDOWN view admission: tables and attachments open, unknown markup is refused with a plain message.
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 declare const md: any;
 const bundle=await build({stdin:{contents:"export {editableMarkdown,markdownToEditableHTML,MARKDOWN_UNSUPPORTED} from './lib/markdown'; export {canonicalRichHTML} from './lib/rich-document';",resolveDir:'frontend/src',loader:'ts'},
   bundle:true,write:false,format:'iife',globalName:'md',platform:'browser',loader:{'.css':'empty'},

@@ -28,7 +28,7 @@ export function DraftRecovery() {
   };
   return (
     <span className="draft-recovery">
-      <button type="button" className="btn btn-small" onClick={save}>
+      <button type="button" className="btn btn-ghost" onClick={save}>
         {t("미저장 편집 파일로 보관")}
       </button>
       {message && <span role={failed ? "alert" : "status"}>{message}</span>}

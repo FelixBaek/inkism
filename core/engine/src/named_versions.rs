@@ -89,6 +89,16 @@ pub fn body(conn: &Connection, args: &Value) -> Result<Value> {
     }
     conn.query_row("SELECT title,content,content_format FROM history WHERE id=?1 AND note_id=?2",params![hid,note],|r|Ok(json!({"title":r.get::<_,String>(0)?,"content":r.get::<_,String>(1)?,"content_format":r.get::<_,String>(2)?}))).optional()?.ok_or_else(||EngineError::NotFound("history".into()))
 }
+/// Ids of a note's named snapshots in [`backup`] order.
+pub fn named_ids(conn: &Connection, note: &str) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare("SELECT id FROM history WHERE note_id=?1 AND label IS NOT NULL ORDER BY row_seq")?;
+    let ids = stmt.query_map([note], |r| r.get(0))?.collect::<std::result::Result<Vec<String>, _>>()?;
+    Ok(ids)
+}
+/// One named snapshot of `note` in the [`backup`] row form.
+pub fn backup_row(conn: &Connection, note: &str, id: &str) -> Result<Option<Value>> {
+    Ok(conn.query_row("SELECT label,title,content,text,content_format,created_at,id FROM history WHERE id=?1 AND note_id=?2 AND label IS NOT NULL",params![id,note],|r|Ok(json!({"label":r.get::<_,String>(0)?,"title":r.get::<_,String>(1)?,"content":r.get::<_,String>(2)?,"text":r.get::<_,String>(3)?,"content_format":r.get::<_,String>(4)?,"created_at":r.get::<_,i64>(5)?,"id":r.get::<_,String>(6)?}))).optional()?)
+}
 pub fn backup(conn: &Connection, note: &str) -> Result<Value> {
     let mut stmt=conn.prepare("SELECT label,title,content,text,content_format,created_at,id FROM history WHERE note_id=?1 AND label IS NOT NULL ORDER BY row_seq")?;
     let rows=stmt.query_map([note],|r|Ok(json!({"label":r.get::<_,String>(0)?,"title":r.get::<_,String>(1)?,"content":r.get::<_,String>(2)?,"text":r.get::<_,String>(3)?,"content_format":r.get::<_,String>(4)?,"created_at":r.get::<_,i64>(5)?,"id":r.get::<_,String>(6)?})))?.collect::<std::result::Result<Vec<_>,_>>()?;

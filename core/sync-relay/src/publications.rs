@@ -49,17 +49,6 @@ struct Share {
     revoked: bool,
 }
 
-// Ephemeral, bounded session state: no document bodies or invitation secrets are
-// returned. A restart intentionally clears presence without migrating snapshots.
-pub(crate) struct Presence {
-    publication: String,
-    share: String,
-    client: String,
-    page: String,
-    role: String,
-    pub(crate) expires: i64,
-}
-
 fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -195,23 +184,11 @@ pub async fn serve_public<B>(r: &Relay, q: &Request<B>, path: &str) -> Response<
     res
 }
 
-// Revision bodies live outside public snapshots and contain no credentials.
-// The history bucket is created lazily by store::put; old DBs need no rewrite.
+// Older relays kept revision bodies here for shared editing; only removal of
+// that legacy data remains.
 const HISTORY: &str = "publication-merge-history-v1";
-fn history_key(id:&str,version:u64)->Vec<u8>{format!("{id}:{version:020}").into_bytes()}
 fn clear_history(tx:&rusqlite::Transaction,id:&str)->Result<(),store::Error>{
     let prefix=format!("{id}:");for(key,_)in store::scan(tx,HISTORY,prefix.as_bytes(),17)?{if !key.starts_with(prefix.as_bytes()){break;}store::delete(tx,HISTORY,&key)?;}Ok(())
-}
-fn remember_revision(tx:&rusqlite::Transaction,p:&Publication)->Result<(),store::Error>{
-    let raw=serde_json::to_vec(&serde_json::json!({"title":p.title,"html":p.html,"pages":p.pages}))?;
-    store::put(tx,HISTORY,&history_key(&p.id,p.version),&raw)?;
-    let prefix=format!("{}:",p.id);let entries:Vec<_>=store::scan(tx,HISTORY,prefix.as_bytes(),17)?.into_iter().take_while(|(k,_)|k.starts_with(prefix.as_bytes())).collect();
-    let mut bytes:usize=entries.iter().map(|(_,v)|v.len()).sum();let mut count=entries.len();
-    for(key,value)in entries{if count<=16&&bytes<=8*1024*1024{break;}store::delete(tx,HISTORY,&key)?;bytes-=value.len();count-=1;}Ok(())
-}
-fn revision_page<'a>(revision:&'a serde_json::Value,id:&str)->Option<(&'a str,&'a str)>{
-    let p=if id.is_empty(){revision}else{revision["pages"].as_array()?.iter().find(|p|p["id"]==id)?};
-    Some((p["title"].as_str()?,p["html"].as_str()?))
 }
 
 /// Owner routes; the caller already checked the bearer token.
@@ -234,7 +211,6 @@ pub async fn serve_owner<B: ReqBody>(r: &Relay, q: Request<B>, path: &str) -> Re
     match (path, q.method().clone()) {
         ("/v1/publications", Method::GET) => list(r).await,
         ("/v1/publications", Method::POST) => create(r, q).await,
-        (p, Method::GET) if p.starts_with("/v1/publications/") => owner_snapshot(r, p["/v1/publications/".len()..].to_owned()).await,
         (p, Method::DELETE) if p.starts_with("/v1/publications/") => {
             revoke(r, p["/v1/publications/".len()..].to_owned()).await
         }
@@ -395,8 +371,9 @@ async fn create_share<B: ReqBody>(r: &Relay, q: Request<B>) -> Response<Body> {
     let Some(publication_id) = v["publication_id"].as_str().filter(|s| capability(s)) else {
         return respond(StatusCode::BAD_REQUEST, &error("invalid publication"));
     };
+    // Invitations are read-only; editing by other people is not offered.
     let role = v["role"].as_str().unwrap_or("viewer");
-    if !matches!(role, "viewer" | "editor") {
+    if role != "viewer" {
         return respond(StatusCode::BAD_REQUEST, &error("invalid role"));
     }
     let password = v["password"].as_str().unwrap_or("");
@@ -467,7 +444,7 @@ async fn create_share<B: ReqBody>(r: &Relay, q: Request<B>) -> Response<Body> {
     }
 }
 fn json_share(s: &Share) -> serde_json::Value {
-    serde_json::json!({"id":s.id,"publication_id":s.publication_id,"role":s.role,"created":s.created,"expires":s.expires})
+    serde_json::json!({"id":s.id,"publication_id":s.publication_id,"role":"viewer","created":s.created,"expires":s.expires})
 }
 async fn list_shares(r: &Relay) -> Response<Body> {
     match r
@@ -497,7 +474,6 @@ async fn revoke_share(r: &Relay, id: String) -> Response<Body> {
     if !valid_token(&id) {
         return not_found();
     }
-    let revoked_id=id.clone();
     match r
         .db(move |s| {
             s.update(|tx| {
@@ -511,7 +487,7 @@ async fn revoke_share(r: &Relay, id: String) -> Response<Body> {
         })
         .await
     {
-        Ok(()) => {r.presence.lock().unwrap_or_else(|e|e.into_inner()).retain(|p|p.share!=revoked_id);crate::build(StatusCode::NO_CONTENT, None, Body::none())},
+        Ok(()) => crate::build(StatusCode::NO_CONTENT, None, Body::none()),
         Err(_) => respond(
             StatusCode::INTERNAL_SERVER_ERROR,
             &error("share revoke failed"),
@@ -523,9 +499,7 @@ pub async fn serve_share<B: ReqBody>(r: &Relay, q: Request<B>) -> Response<Body>
     if !host_allowed(r, &q).await {
         return respond(StatusCode::FORBIDDEN, &error("host is not allowed"));
     }
-    let share_path=q.uri().path().strip_prefix("/s/").unwrap_or("");
-    let session=share_path.ends_with("/session");
-    let id=share_path.strip_suffix("/session").unwrap_or(share_path).to_owned();
+    let id = q.uri().path().strip_prefix("/s/").unwrap_or("").to_owned();
     if !valid_token(&id) || q.uri().query().is_some() {
         return not_found();
     }
@@ -548,23 +522,6 @@ pub async fn serve_share<B: ReqBody>(r: &Relay, q: Request<B>) -> Response<Body>
     if !password_ok(&share.password_hash, &password) {
         return public_app(StatusCode::UNAUTHORIZED);
     }
-    if session {
-        if q.method()!=Method::POST {return not_found();}
-        if q.headers().get("sec-fetch-site").is_some_and(|v|v=="cross-site") {return respond(StatusCode::FORBIDDEN,&error("cross-site session rejected"));}
-        return session_status(r,q,id,password).await;
-    }
-    if q.method() == Method::PUT {
-        if share.role != "editor" {
-            return respond(StatusCode::FORBIDDEN, &error("viewer cannot edit"));
-        }
-        if q.headers()
-            .get("sec-fetch-site")
-            .is_some_and(|v| v == "cross-site")
-        {
-            return respond(StatusCode::FORBIDDEN, &error("cross-site edit rejected"));
-        }
-        return update_shared(r, q, id, password).await;
-    }
     if q.method() != Method::GET {
         return not_found();
     }
@@ -583,146 +540,10 @@ pub async fn serve_share<B: ReqBody>(r: &Relay, q: Request<B>) -> Response<Body>
         return not_found();
     }
     if wants_json(&q) {
-        public_data(&p, &share.role)
+        // Invitations stored as "editor" by older versions read as viewers.
+        public_data(&p, "viewer")
     } else {
         public_app(StatusCode::OK)
-    }
-}
-
-/// Small metadata heartbeat, never a full-body poll. Every heartbeat rechecks
-/// invitation/password/publication expiry after reading the bounded input body.
-async fn session_status<B: ReqBody>(r:&Relay,q:Request<B>,share_id:String,password:String)->Response<Body>{
-    let(buf,broken,over)=read_limited(q.into_body(),1024).await;
-    let v=serde_json::from_slice::<serde_json::Value>(&buf).ok();
-    let client=v.as_ref().and_then(|v|v["client_id"].as_str()).filter(|s|(16..=64).contains(&s.len())&&s.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-')).map(str::to_owned);
-    let page=v.as_ref().and_then(|v|v["page_id"].as_str()).filter(|s|s.len()<=100).map(str::to_owned);
-    let(Some(client),Some(page))=(client,page) else{return respond(StatusCode::BAD_REQUEST,&error("invalid session"));};
-    if broken||over{return respond(StatusCode::BAD_REQUEST,&error("invalid session"));}
-    let checked=r.db({let id=share_id.clone();let page=page.clone();move |s|s.view(|tx|{
-        let raw=store::get(tx,store::SHARES,id.as_bytes())?.ok_or("invitation unavailable")?;
-        let share:Share=serde_json::from_slice(&raw)?;
-        if share.revoked||share.expires<=now()||!password_ok(&share.password_hash,&password){return Err("invitation unavailable".into());}
-        let raw=store::get(tx,store::PUBLICATIONS,share.publication_id.as_bytes())?.ok_or("publication unavailable")?;
-        let p:Publication=serde_json::from_slice(&raw)?;
-        if p.expires<=now(){return Err("publication unavailable".into());}
-        // Deleted page cursors are reported as the root, never as arbitrary names.
-        let page=if page.is_empty()||p.pages.iter().any(|p|p.id==page){page}else{String::new()};
-        Ok((p.id,p.version,share.role,p.expires.min(share.expires),page))
-    })}).await;
-    let Ok((publication,version,role,expires,page))=checked else{return not_found();};
-    let mut peers=r.presence.lock().unwrap_or_else(|e|e.into_inner());
-    peers.retain(|p|p.expires>now());
-    if let Some(p)=peers.iter_mut().find(|p|p.share==share_id&&p.client==client){p.page=page;p.expires=expires.min(now()+40);p.role=role.clone();}
-    else {
-        if peers.len()>=6400||peers.iter().filter(|p|p.publication==publication).count()>=64{return respond(StatusCode::TOO_MANY_REQUESTS,&error("session limit reached"));}
-        peers.push(Presence{publication:publication.clone(),share:share_id,client:client.clone(),page,role:role.clone(),expires:expires.min(now()+40)});
-    }
-    let sessions:Vec<_>=peers.iter().filter(|p|p.publication==publication).map(|p|serde_json::json!({"client_id":p.client,"page_id":p.page,"role":p.role})).collect();
-    respond(StatusCode::OK,&serde_json::json!({"version":version,"role":role,"sessions":sessions,"ttl_seconds":40}))
-}
-
-async fn update_shared<B: ReqBody>(
-    r: &Relay,
-    q: Request<B>,
-    share_id: String,
-    password: String,
-) -> Response<Body> {
-    let (buf, broken, over) = read_limited(q.into_body(), sanitize::MAX_BYTES + 8192).await;
-    if broken || over {
-        return respond(StatusCode::BAD_REQUEST, &error("invalid shared edit"));
-    }
-    let Ok(v) = serde_json::from_slice::<serde_json::Value>(&buf) else {
-        return respond(StatusCode::BAD_REQUEST, &error("invalid shared edit"));
-    };
-    // Accept only a version reference, never client-supplied base content.
-    if v.get("base").is_some()||v.get("base_html").is_some()||v.get("base_title").is_some(){return respond(StatusCode::BAD_REQUEST,&error("client base content is not accepted"));}
-    let merge=v["merge"].as_str()==Some("blocks-v1");
-    let Some(version) = v["version"].as_u64() else {
-        return respond(StatusCode::BAD_REQUEST, &error("version required"));
-    };
-    let Some(title) = v["title"]
-        .as_str()
-        .filter(|v| v.len() <= 1024)
-        .map(str::to_owned)
-    else {
-        return respond(StatusCode::BAD_REQUEST, &error("invalid title"));
-    };
-    let Some(html) = v["html"].as_str().and_then(|v| sanitize::clean(v).ok()) else {
-        return respond(StatusCode::BAD_REQUEST, &error("invalid html"));
-    };
-    let page_id = v["page_id"].as_str().unwrap_or("").to_owned();
-    let result = r
-        .db(move |s| {
-            s.update(|tx| {
-                let raw = store::get(tx, store::SHARES, share_id.as_bytes())?
-                    .ok_or("revoked invitation")?;
-                let share: Share = serde_json::from_slice(&raw)?;
-                if share.revoked
-                    || share.expires <= now()
-                    || share.role != "editor"
-                    || !password_ok(&share.password_hash, &password)
-                {
-                    return Err("invitation unavailable".into());
-                }
-                let raw = store::get(tx, store::PUBLICATIONS, share.publication_id.as_bytes())?
-                    .ok_or("publication unavailable")?;
-                let mut p: Publication = serde_json::from_slice(&raw)?;
-                if p.expires <= now() {
-                    return Err("publication expired".into());
-                }
-                let rebased=p.version!=version;
-                let (title,html)=if rebased {
-                    if !merge||version>=p.version{return Err("version conflict".into());}
-                    let raw=store::get(tx,HISTORY,&history_key(&p.id,version))?.ok_or("base revision unavailable")?;
-                    let base:serde_json::Value=serde_json::from_slice(&raw)?;
-                    let (base_title,base_html)=revision_page(&base,&page_id).ok_or("base page unavailable")?;
-                    let (current_title,current_html)=if page_id.is_empty(){(p.title.as_str(),p.html.as_str())}else{let page=p.pages.iter().find(|page|page.id==page_id).ok_or("page unavailable")?;(page.title.as_str(),page.html.as_str())};
-                    (crate::publication_merge::scalar(base_title,current_title,&title)?,crate::publication_merge::html(base_html,current_html,&html)?)
-                }else{(title,html)};
-                remember_revision(tx,&p)?;
-                if page_id.is_empty() {
-                    p.title = title;
-                    p.html = html;
-                } else {
-                    let page = p
-                        .pages
-                        .iter_mut()
-                        .find(|p| p.id == page_id)
-                        .ok_or("page unavailable")?;
-                    page.title = title;
-                    page.html = html;
-                }
-                p.version += 1;
-                store::put(
-                    tx,
-                    store::PUBLICATIONS,
-                    p.id.as_bytes(),
-                    &serde_json::to_vec(&p)?,
-                )?;
-                let page=if page_id.is_empty(){serde_json::json!({"title":p.title,"html":p.html})}else{let page=p.pages.iter().find(|p|p.id==page_id).ok_or("page unavailable")?;serde_json::json!({"title":page.title,"html":page.html})};
-                Ok((p.version,rebased,if rebased{Some(page)}else{None}))
-            })
-        })
-        .await;
-    match result {
-        Ok((version,merged,page)) => respond(StatusCode::OK, &serde_json::json!({"version":version,"merged":merged,"merged_page":page})),
-        Err(_) => respond(
-            StatusCode::CONFLICT,
-            &error("invitation expired, revoked, or content changed; reload before saving"),
-        ),
-    }
-}
-
-// Owner-authenticated content fetch. Expired or revoked publications never reconcile.
-async fn owner_snapshot(r: &Relay, id: String) -> Response<Body> {
-    if !capability(&id) { return not_found(); }
-    let found = r.db(move |s| s.view(|tx| store::get(tx, store::PUBLICATIONS, id.as_bytes()))).await;
-    match found {
-        Ok(Some(raw)) => match serde_json::from_slice::<Publication>(&raw) {
-            Ok(p) if p.expires > now() => public_data(&p, "owner"),
-            _ => not_found(),
-        },
-        _ => not_found(),
     }
 }
 
@@ -852,12 +673,11 @@ async fn revoke(r: &Relay, id: String) -> Response<Body> {
     if !capability(&id) {
         return not_found();
     }
-    let revoked_id=id.clone();
     match r
         .db(move |s| s.update(|tx| {clear_history(tx,&id)?;store::delete(tx, store::PUBLICATIONS, id.as_bytes())}))
         .await
     {
-        Ok(()) => {r.presence.lock().unwrap_or_else(|e|e.into_inner()).retain(|p|p.publication!=revoked_id);crate::build(StatusCode::NO_CONTENT, None, Body::none())},
+        Ok(()) => crate::build(StatusCode::NO_CONTENT, None, Body::none()),
         Err(_) => respond(StatusCode::INTERNAL_SERVER_ERROR, &error("revoke failed")),
     }
 }
@@ -918,7 +738,6 @@ async fn update<B: ReqBody>(r: &Relay, q: Request<B>, id: String) -> Response<Bo
                     if p.expires <= now() {
                         return Err("publication expired".into());
                     };
-                    remember_revision(tx,&p)?;
                     p.title = title;
                     p.html = clean;
                     p.version += 1;

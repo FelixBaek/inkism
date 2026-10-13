@@ -1,0 +1,47 @@
+/* 36 받은 알림: 열린 노트의 알림이 울렸을 때 편집 영역 위 한 줄. */
+.reminder-banner {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+  padding: 8px 12px 8px 16px;
+  background: var(--hover);
+  color: var(--text);
+  font-size: var(--fs-caption);
+}
+.reminder-banner-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reminder-banner button {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.reminder-banner .reminder-control > .btn {
+  min-height: 28px;
+  border-color: var(--border);
+  background: var(--hover);
+}
+.reminder-banner .reminder-banner-primary {
+  background: var(--green);
+  color: var(--on-accent);
+}
+.reminder-banner button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.reminder-banner button:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}

@@ -1,6 +1,7 @@
 import SpliceWorker from "../workers/splice.worker?worker";
 import type { BodySplice } from "./body-splice";
 import { t } from "../i18n";
+import { workerErrorMessage, type WorkerFailure } from "./error-messages";
 export interface BodyChanges {
   content: BodySplice;
   text: BodySplice;
@@ -28,12 +29,12 @@ export function deriveSplices(
     worker = new SpliceWorker();
     worker.onerror = fail;
     worker.onmessageerror = fail;
-    worker.onmessage = (event: MessageEvent<BodyChanges & { id: number; error?: string }>) => {
+    worker.onmessage = (event: MessageEvent<BodyChanges & { id: number } & WorkerFailure>) => {
       const item = pending.get(event.data.id);
       if (!item) return;
       clearTimeout(item.timer);
       pending.delete(event.data.id);
-      if (event.data.error) item.reject(new Error(event.data.error));
+      if (event.data.error || event.data.error_code) item.reject(new Error(workerErrorMessage(event.data)));
       else item.resolve({ content: event.data.content, text: event.data.text });
     };
   }

@@ -1,8 +1,9 @@
 // Real React menu -> local API -> Rust engine -> portable ZIP, in a synthetic library.
+import {noteMenu} from './library-tools.ts';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {readZipEntries} from './read-zip.ts';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48131';
 const rpc=async(op:string,args={})=>{
  const res=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});
@@ -18,9 +19,12 @@ const open=async(note:any)=>{
  await page.goto(base);await page.getByLabel('노트 제목',{exact:true}).waitFor();
 };
 const command=async()=>{
- await page.getByRole('button',{name:'명령창 열기',exact:true}).click();
+ await noteMenu(page,'명령창 열기');
  await page.getByRole('option',{name:'Export as',exact:true}).click();
- await page.getByRole('option',{name:'Markdown + 첨부파일 (ZIP)',exact:true}).click();
+ // 열린 노트의 내보내기는 형식을 고르는 내보내기 창으로 열린다.
+ const dialog=page.getByRole('dialog',{name:'내보내기',exact:true});
+ await dialog.getByRole('radio',{name:'Markdown + 첨부 ZIP',exact:true}).check();
+ await dialog.getByRole('button',{name:'Markdown + 첨부 ZIP 내보내기',exact:true}).click();
 };
 const readZip=async(download:any)=>{
  const zipPath=await download.path();

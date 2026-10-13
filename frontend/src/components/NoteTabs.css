@@ -1,84 +1,90 @@
+/* 열린 노트 탭 줄 (Figma 01 74:7306): rail 바탕, 탭 180×30, 사이 8.
+ * 선택 탭은 secondary 버튼 모양(hover 면 + 테두리). shell.css 뒤에도 이기도록 .note-tabs 아래로 묶는다. */
 .note-tabs {
   display: flex;
   flex: 0 1 auto;
+  gap: 8px;
   min-width: 0;
   align-self: stretch;
+  align-items: center;
+  padding: 0 4px;
   overflow-x: auto;
   background: var(--surface);
   scrollbar-width: thin;
 }
-.note-tab {
+.note-tabs .note-tab {
   display: flex;
   flex: 0 0 auto;
-  max-width: 176px;
+  width: 180px;
+  max-width: 180px;
+  height: 30px;
   align-items: center;
-  border-right: 1px solid var(--border);
-  color: var(--muted);
-}
-.note-tab.is-selected {
-  background: var(--canvas);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text);
 }
-.note-tab > [role="tab"] {
+.note-tabs .note-tab.is-selected {
+  background: var(--hover);
+  border-color: var(--border);
+  color: var(--text);
+}
+.note-tabs .note-tab > [role="tab"] {
   display: flex;
+  flex: 1;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
+  gap: 6px;
   min-width: 0;
-  min-height: 35px;
-  padding: 7px 5px 7px 12px;
+  height: 28px;
+  min-height: 0;
+  padding: 0 4px 0 12px;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-caption);
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
-.note-tab > [role="tab"] svg {
-  flex-shrink: 0;
+/* Figma 탭에는 문서 아이콘이 없다: 제목과 닫기만 */
+.note-tabs .note-tab > [role="tab"] svg {
+  display: none;
 }
-.note-tab.is-selected > [role="tab"] svg {
-  color: var(--green);
-}
-.note-tab > [role="tab"] span {
+.note-tabs .note-tab > [role="tab"] span {
   display: block;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.note-tab > [role="tab"]:hover {
-  color: var(--text);
+.note-tabs .note-tab:not(.is-selected):hover {
+  background: var(--hover);
 }
-.note-tab-close {
+.note-tabs .note-tab-close {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   width: 22px;
-  height: 24px;
-  margin-right: 5px;
+  height: 22px;
+  margin-right: 4px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
   background: transparent;
   color: inherit;
   cursor: pointer;
-  opacity: 0;
 }
-.note-tab:is(.is-selected, :hover, :focus-within) .note-tab-close {
-  opacity: 1;
-}
-.note-tab-close:hover:not(:disabled) {
-  background: var(--border);
+.note-tabs .note-tab-close:hover:not(:disabled) {
+  background: var(--active);
   color: var(--text);
 }
-.note-tab-close:disabled {
+.note-tabs .note-tab-close:disabled {
   opacity: 0.45;
   cursor: wait;
 }
-.note-tab > button:focus-visible {
+.note-tabs .note-tab > button:focus-visible {
   outline-offset: -3px;
 }
-.note-tab.is-preview > [role="tab"] span {
+.note-tabs .note-tab.is-preview > [role="tab"] span {
   font-style: italic;
 }

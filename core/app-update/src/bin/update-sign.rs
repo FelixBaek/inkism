@@ -1,5 +1,5 @@
 //! inkism-update-sign manages the Inkism update-feed ed25519 key.
-//! Same files and output as the Go `update-sign`:
+//! Same files and output as the former Go `update-sign`:
 //!
 //!   inkism-update-sign keygen <private-key> <public-key>   new keypair (private file 0600, never printed)
 //!   inkism-update-sign sign   <private-key> <file>          writes <file>.sig (base64 signature)

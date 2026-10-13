@@ -1,4 +1,5 @@
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
+import {waitSaved} from './save-state.ts';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47966';
@@ -15,6 +16,8 @@ try {
   const note=await rpc('save',{note:{title,content,text:'기준'}});
   await rpc('wait_index');
   const page=await browser.newPage();
+  // Same isolated profile as the other UI tests: Korean UI and the note inspector closed (at 1280px it opens as a modal overlay over the editor).
+  await page.addInitScript(()=>{if(window.top!==window||!/^https?:$/.test(location.protocol))return;localStorage.setItem('inkism.lang','ko');if(localStorage.getItem('inkism.inspector')===null)localStorage.setItem('inkism.inspector','false');});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base+'/?virtual=1&lazy=1');
   await page.getByRole('button',{name:'노트 열기: '+title,exact:true}).click();
@@ -50,7 +53,8 @@ try {
   if(missing){
    await page.getByText('편집 기준 버전이 이력에 없습니다.',{exact:false}).waitFor();
    let requests=0;
-   const count=()=>requests++;
+   // Background panels (backlinks, journal, inspector) may poll; only note reads/writes count.
+   const count=(r)=>{let op;try{op=r.postDataJSON()?.op;}catch{}if(r.url().includes('/api/export/')||['get','save','patch','revision_body'].includes(op)||String(op).startsWith('document_'))requests++;};
    page.on('request',count);
    const downloaded=page.waitForEvent('download');
    await page.getByRole('button',{name:'미저장 편집 파일로 보관',exact:true}).click();
@@ -74,7 +78,7 @@ try {
    assert.equal((await rpc('get',{id:note.id})).content,remote.content);
    assert.ok((await page.locator('.tiptap-prose').textContent()).includes('내편집'));
   }else{
-   await page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+   await waitSaved(page);
    const stored=await rpc('get',{id:note.id});
    assert.ok(stored.content.includes('내편집 기준😀 0'));
    if(scenario==='typing')assert.ok(stored.content.includes('후속입력'));

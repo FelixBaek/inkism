@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 const base=process.env.INKISM_URL!;
 const rpc=async(op:string,args:any={})=>{const r=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(r.ok,true,JSON.stringify(r));return r.data;};
 const mesh=Buffer.alloc(42);[0,0,0,1,0,0,0,1,0].forEach((n,i)=>mesh.writeFloatLE(n,i*4));[0,1,2].forEach((n,i)=>mesh.writeUInt16LE(n,36+i*2));

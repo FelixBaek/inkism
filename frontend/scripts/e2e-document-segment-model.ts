@@ -8,7 +8,7 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import type {AddressInfo} from 'node:net';
 import {createServer} from 'vite';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 
 assert.ok(process.env.INKISM_SEGMENT_ENGINE,'current Rust executable required');
 const dir=await mkdtemp(join(tmpdir(),'inkism-selection-segments-'));
@@ -71,7 +71,7 @@ try{
    all.state.doc.check();
    const changed=m.changeSelection(all,{kind:'mark',mark:'highlight'});
    ok(changed.replacement.includes('<mark'),'all mark '+index);
-   const removed=m.changeSelection(all,{kind:'delete'});eq(removed.replacement,'<p></p>','whole delete '+index);
+   const removed=m.changeSelection(all,{kind:'delete'});ok(/^<p id="ink-block-[0-9a-f-]{36}"><\/p>$/.test(removed.replacement),'whole delete retains exactly one new block identity '+index);
    maxPreview=Math.max(maxPreview,enc.encode(changed.previewWindow.raw).length);
    ok(enc.encode(changed.previewWindow.raw).length<=512*1024,'bounded preview '+index);
    const parts=all.fragments.filter(f=>f.segment.start_context.length||f.segment.end_context.length);
@@ -106,7 +106,7 @@ try{
    const baseline=await m.prepareSelection({kind:'range',anchor:baselinePoint(range.anchor),head:baselinePoint(range.head)},{check:()=>{},read:async()=>({ready:true,total_blocks:3,next_offset:2,blocks:[{ordinal:1,html:body,byte_offset:enc.encode(before).length}]})});
    const baselineMark=m.changeSelection(baseline,{kind:'mark',mark:'bold'});
    eq(canonicalRichHTML(markedWhole),canonicalRichHTML(assemble(baselineMark)),'full baseline mark '+index);
-   if(index!==1){const baselineText=m.changeSelection(baseline,{kind:'text',text:'교체😀'});eq(canonicalRichHTML(assemble(m.changeSelection(prepared,{kind:'text',text:'교체😀'}))),canonicalRichHTML(assemble(baselineText)),'full baseline replacement '+index);}
+   if(index!==1){const baselineText=m.changeSelection(baseline,{kind:'text',text:'교체😀'});const normalize=html=>{let count=0;return canonicalRichHTML(html).replace(/ id="ink-block-[0-9a-f-]{36}"/g,()=>` id="generated-${count++}"`);};eq(normalize(assemble(m.changeSelection(prepared,{kind:'text',text:'교체😀'}))),normalize(assemble(baselineText)),'full baseline replacement '+index);}
    const bad={...source,segments:async(...args)=>{const value=await source.segments(...args);return {...value,segments:value.segments.map((v,i)=>i===0?{...v,byte_offset:v.byte_offset+1}:v)};}};
    await reject(()=>m.prepareSelection({kind:'all'},bad),'discontinuous spans '+index);
    const incomplete={...source,segments:async(...args)=>{const value=await source.segments(...args);return {...value,segments:value.segments.map((v,i)=>i===0?{...v,start_context:[{tag:'p',open:'<p>'}]}:v)};}};

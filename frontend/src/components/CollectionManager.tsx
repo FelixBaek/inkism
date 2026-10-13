@@ -19,7 +19,7 @@ export function CollectionManager({settings,items,selected,onSaved,flush}:{setti
    await onSaved(updated);setStatus(t('저장됨'));if(operation==='remove')setDefinition(empty());
   }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
  };
- return <details className="collection-manager"><summary>{t('공통 속성과 일괄 편집')}</summary>
+ return <section className="collection-manager" aria-label={t('공통 속성')}>
   <p>{t('공통 속성 변경은 연결된 모든 노트에 적용됩니다. 기존 값이 새 종류나 선택 항목에 맞지 않으면 전체 변경을 취소합니다.')}</p>
   {error&&<p role="alert">{error}</p>}{status&&<output>{status}</output>}
   <fieldset className="plain-fieldset" disabled={busy}><div className="knowledge-row">
@@ -34,5 +34,5 @@ export function CollectionManager({settings,items,selected,onSaved,flush}:{setti
    {definition.type==='attachment'?<AttachmentPropertyEditor key={definition.id} value={String(value)} onChange={setValue}/>:['select','multiselect','relation'].includes(definition.type)?<PropertyValueEditor property={{...definition,definition_id:definition.id,value}} items={items} onChange={patch=>{if(patch.value!==undefined)setValue(patch.value);}}/>:definition.type==='checkbox'?<input aria-label={t('일괄 적용 값')} type="checkbox" checked={value===true} onChange={e=>setValue(e.target.checked)}/>:<input aria-label={t('일괄 적용 값')} type={definition.type==='number'?'number':definition.type==='date'?'date':'text'} value={Array.isArray(value)?value.join(', '):String(value)} onChange={e=>setValue(definition.type==='number'?Number(e.target.value):['list','person'].includes(definition.type)?e.target.value.split(',').map(x=>x.trim()).filter(Boolean):e.target.value)}/>}
    <button className="btn" disabled={!saved||!selected.size||saved.name!==definition.name||saved.type!==definition.type||JSON.stringify(saved.options??[])!==JSON.stringify(definition.options??[])} onClick={()=>void run('apply')}>{t('선택한 노트의 값 덮어쓰기')}</button>
   </div></fieldset>
- </details>;
+ </section>;
 }

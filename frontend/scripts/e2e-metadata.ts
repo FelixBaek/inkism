@@ -1,11 +1,11 @@
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47924';
 const rpc=async(op,args={})=>{const r=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const v=await r.json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
 const title='메타만 수정 '+Date.now();
 const content='<p><strong>본문 보존</strong> 한글😀 긴 문서의 메타데이터 검사</p>'.repeat(10000);
 const note=await rpc('save',{note:{title,content,text:'본문 보존\n'.repeat(10000)}});await rpc('wait_index');
-const notebook=await rpc('save_notebook',{name:'메타 저장 노트북 '+Date.now()});
+const notebook=await rpc('save_notebook',{name:'메타 저장 폴더 '+Date.now()});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 const page=await browser.newPage({viewport:{width:1440,height:960}});const errors=[];page.on('pageerror',e=>errors.push(e.message));const workers=[];page.on('worker',w=>workers.push(w.url()));
 const menu=async name=>{await page.locator('.note-row.is-selected .note-row-main').click({button:'right'});await page.getByRole('menuitemcheckbox',{name,exact:true}).click();};
@@ -37,7 +37,7 @@ try {
  await page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
  for(const notebookId of [notebook.id,'']){
   const notebookPatch=page.waitForResponse(r=>r.url().endsWith('/api/rpc')&&r.request().postDataJSON().op==='patch');
-  await page.getByLabel('이 노트가 속한 노트북').selectOption(notebookId);await page.keyboard.press('Control+s');
+  await page.getByLabel('이 노트가 속한 폴더').selectOption(notebookId);await page.keyboard.press('Control+s');
   const notebookResponse=await notebookPatch;assert.equal((await notebookResponse.json()).ok,true);
   assert.deepEqual(notebookResponse.request().postDataJSON().changes,{notebook_id:notebookId||null});
   await page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));

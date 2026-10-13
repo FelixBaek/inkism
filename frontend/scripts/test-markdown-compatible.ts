@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {fileURLToPath} from 'node:url';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 const src=fileURLToPath(new URL('../src/',import.meta.url));
 const bundle=await build({stdin:{contents:`export * from './lib/markdown-compatible';
  export {generateJSON} from '@tiptap/core';`,resolveDir:src,loader:'ts'},bundle:true,write:false,format:'iife',globalName:'compat',

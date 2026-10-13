@@ -111,7 +111,7 @@ export {
   ChatTextIcon as MessageSquare,
   MoonIcon as Moon,
   DotsThreeVerticalIcon as MoreVertical,
-  NotebookIcon as Notebook,
+  FolderIcon as Folder,
   PaletteIcon as Palette,
   PaperclipIcon as Paperclip,
   PencilSimpleIcon as Pencil,

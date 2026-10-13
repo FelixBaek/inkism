@@ -1,22 +1,38 @@
-.document-tools {padding:0 16px;flex-shrink:0;font-size:12px;max-height:35dvh;overflow:auto}
-.document-tools summary {padding:8px 0;cursor:pointer;color:var(--muted)}
+/* 문서 구성 (Figma 30 62:5901): 펼치면 편집기 오른쪽 판(300px). 요약 줄이 판 머리가 되고 다시 누르면 닫힌다. */
+.document-tools {padding:0 32px;flex-shrink:0;font-size:var(--fs-caption);max-height:35dvh;overflow:auto}
+.document-tools summary {display:none;cursor:pointer;list-style:none}
+.document-tools summary::-webkit-details-marker {display:none}
+.document-tools details[open] {position:absolute;top:41px;right:0;bottom:0;z-index:15;width:min(300px,100%);overflow:auto;padding:0 16px 16px;background:var(--raised);border-left:1px solid var(--border)}
+.document-tools details[open] > summary {display:flex;justify-content:space-between;align-items:center;margin:0 -16px 0;padding:12px 16px;border-bottom:1px solid var(--border);color:var(--text);font-size:var(--fs-caption);font-weight:500}
+.document-tools details[open] > summary::after {content:"\2715";font-size:12px;color:var(--muted)}
+.document-tools h3 {margin:0;font-size:var(--fs-caption);font-weight:500;color:var(--text)}
+.document-control-buttons {display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.document-control-buttons .btn {width:100%}
+.document-tools .document-danger {color:var(--danger)}
+.document-tools .document-save .btn-primary {width:100%}
+.document-tools details[open] > p {color:var(--muted);font-size:var(--fs-small);line-height:1.5}
 .document-controls {display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:8px 0}
+.document-tools details[open] .document-controls {flex-direction:column;align-items:stretch;gap:8px;padding:12px 0;border-bottom:1px solid var(--border)}
 .document-controls label {display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.document-controls input:not([type=checkbox]),.document-controls select {max-width:240px;min-width:0;min-height:32px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;color:var(--text);background:var(--surface)}
-.document-breadcrumbs {display:flex;gap:6px;flex-wrap:wrap}
+.document-tools details[open] .document-controls label {flex-direction:column;align-items:stretch;gap:6px;color:var(--muted);font-size:var(--fs-small)}
+.document-tools details[open] .document-controls label:has(input[type=checkbox]) {flex-direction:row;align-items:center;color:var(--text)}
+.document-controls input:not([type=checkbox]),.document-controls select {max-width:240px;min-width:0;min-height:32px;padding:5px 10px;border:1px solid var(--border);border-radius:0;color:var(--text);background:var(--canvas);font-size:var(--fs-caption)}
+.document-tools details[open] .document-controls :is(input:not([type=checkbox]),select) {max-width:none;width:100%}
+.document-tools details[open] .document-controls > span {color:var(--muted);font-size:var(--fs-small)}
+.document-breadcrumbs {display:flex;gap:6px;flex-wrap:wrap;padding-top:8px}
 .document-breadcrumbs button {color:var(--muted);background:none;border:0;padding:4px;cursor:pointer}
 .document-children {display:flex;gap:8px;overflow:auto;padding:8px 0}
-.document-children button {flex:0 0 180px;min-height:64px;padding:12px;text-align:left;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow-wrap:anywhere}
+.document-children button {flex:0 0 180px;min-height:64px;padding:12px;text-align:left;color:var(--text);background:var(--raised);border:1px solid var(--border);overflow-wrap:anywhere}
 .document-children [data-size=small] {flex-basis:140px;min-height:44px}.document-children [data-size=large] {flex-basis:240px;min-height:96px}
 .document-children [data-shadow],.knowledge-card[data-shadow] {box-shadow:0 4px 12px #0002}
 .document-children [data-tone=paper],.knowledge-card[data-tone=paper],.editor-pane[data-document-tone=paper] .editor-scroll {background:var(--canvas)}
 .document-children [data-tone=soft],.knowledge-card[data-tone=soft],.editor-pane[data-document-tone=soft] .editor-scroll {background:var(--raised)}
-.editor-pane[data-document-width=wide] .rich-editor {max-width:1100px!important}
+.editor-pane[data-document-width=wide] .rich-editor {max-width:1240px!important}
 .editor-pane[data-document-width=full] .rich-editor {max-width:none!important}
 .editor-pane[data-document-spacing=compact] .tiptap-prose p {margin-block:.25em}
 .editor-pane[data-document-spacing=relaxed] .tiptap-prose p {margin-block:1.25em}
 .knowledge-board {display:flex;gap:16px;overflow:auto;padding:8px 0}.knowledge-body .knowledge-board>.knowledge-group {flex:0 0 260px;margin:0;border:0;padding:0}
-.knowledge-card {border:1px solid var(--border);border-radius:8px;background:var(--raised);padding:12px;min-width:0}
+.knowledge-card {border:1px solid var(--border);background:var(--raised);padding:12px;min-width:0}
 .knowledge-card-open {display:flex;flex-direction:column;gap:8px;border:0;background:none;color:var(--text);text-align:left;width:100%;overflow-wrap:anywhere;cursor:pointer}
 .knowledge-card[data-size=small] {padding:8px}.knowledge-card[data-size=large] {padding:24px}
 .knowledge-card label {margin-top:12px}.knowledge-card select {width:100%}
