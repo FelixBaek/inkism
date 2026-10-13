@@ -1,10 +1,7 @@
 name: Coverage
 on:
+  # Required for merging, so it runs on every pull request.
   pull_request:
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/coverage.yml'
-      - 'codecov.yml'
   push:
     branches: [main]
     paths:
