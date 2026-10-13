@@ -2,6 +2,7 @@
 /core/*/target/
 /frontend/node_modules/
 /frontend/dist/
+/frontend/lcov.info
 /dist/
 /.test-data/
 /.impeccable/review/
