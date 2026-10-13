@@ -1,5 +1,4 @@
-//! Ports of Go `backup_bundle_test.go` and `backup_restore_test.go`, plus a
-//! Go <-> Rust bundle exchange (`cross_compat_with_go`, needs `go`).
+//! Ports of the former Go implementation's backup bundle and restore tests.
 
 use super::*;
 use std::sync::{Arc, Mutex};
@@ -670,105 +669,6 @@ fn manifest_lines_match_go_encoding() {
             r#"{{"id":"{PHOTO_ID}","name":"a\u0026b\u003cc\u003e.png","media_type":"image/png","size":3,"sha256":"{}"}}"#,
             "ab".repeat(32)
         )
-    );
-}
-
-// ---------------------------------------------------------------- Go exchange
-
-fn unhex(text: &str) -> Vec<u8> {
-    (0..text.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap())
-        .collect()
-}
-
-/// Runs the Go helper (`tests/testdata/xcompat_test.go`) inside the Go bridge
-/// package through `go test -overlay`, so nothing is written under `desktop/`.
-fn run_go(work: &Path, env: &[(&str, &Path)]) {
-    let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let repo = crate_dir.join("../..").canonicalize().unwrap();
-    let overlay = work.join("overlay.json");
-    let replace = json!({"Replace": {
-        repo.join("desktop/internal/bridge/zz_xcompat_test.go").to_string_lossy(): crate_dir.join("tests/testdata/xcompat_test.go").to_string_lossy(),
-    }});
-    std::fs::write(&overlay, replace.to_string()).unwrap();
-    let mut command = std::process::Command::new("go");
-    command
-        .current_dir(&repo)
-        .args(["test", "-count=1", "-run", "^TestXCompat$", "-overlay"])
-        .arg(&overlay)
-        .arg("./desktop/internal/bridge");
-    for (k, v) in env {
-        command.env(k, v);
-    }
-    let out = command.output().expect("go toolchain");
-    assert!(
-        out.status.success(),
-        "go test failed:\n{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
-
-#[test]
-#[ignore = "needs the Go toolchain; run with --ignored"]
-fn cross_compat_with_go() {
-    let work = tempfile::tempdir().unwrap();
-    let (notes, attachments) = rich_fixture();
-    let fixture = json!({
-        "notes": notes,
-        "attachments": attachments.iter().map(|(m, d)| json!({"meta": m, "data": hex(d)})).collect::<Vec<_>>(),
-    });
-    let fixture_path = work.path().join("fixture.json");
-    std::fs::write(&fixture_path, fixture.to_string()).unwrap();
-
-    // Go writes a bundle; Rust restores it.
-    let go_bundle = work.path().join("go.zip");
-    run_go(
-        work.path(),
-        &[
-            ("XCOMPAT_FIXTURE", &fixture_path),
-            ("XCOMPAT_GO_BUNDLE", &go_bundle),
-        ],
-    );
-    let fake = rust_restore(&std::fs::read(&go_bundle).unwrap());
-    assert_rich_restore(
-        &fake.calls.lock().unwrap(),
-        &fake.notes.lock().unwrap(),
-        &fake.imported.lock().unwrap(),
-    );
-
-    // Rust writes a bundle; Go restores it and reports what reached its engine.
-    let (reply, _) = run_bundle(rich_bundle_fake());
-    assert_eq!(reply.status, 200, "{}", body(&reply));
-    let rust_bundle = work.path().join("rust.zip");
-    std::fs::write(&rust_bundle, &reply.body).unwrap();
-    let report_path = work.path().join("report.json");
-    run_go(
-        work.path(),
-        &[
-            ("XCOMPAT_RUST_BUNDLE", &rust_bundle),
-            ("XCOMPAT_REPORT", &report_path),
-        ],
-    );
-    let report: Value = serde_json::from_slice(&std::fs::read(&report_path).unwrap()).unwrap();
-    assert_eq!(report["status"], 200, "{report}");
-    let calls: Vec<String> = serde_json::from_value(report["calls"].clone()).unwrap();
-    let imported: Vec<(AttachmentMetadata, Vec<u8>)> = report["imports"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|i| {
-            (
-                serde_json::from_value(i["meta"].clone()).unwrap(),
-                unhex(i["data"].as_str().unwrap()),
-            )
-        })
-        .collect();
-    assert_rich_restore(
-        &calls,
-        report["notes"].as_str().unwrap().as_bytes(),
-        &imported,
     );
 }
 

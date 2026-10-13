@@ -29,7 +29,7 @@ fn attachment_db(path: &Path) -> std::path::PathBuf {
 
 #[test]
 fn automatic_worker_transfers_files_before_notes_and_preserves_links_after_restart() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let ap = dir.path().join("a.db");
     let bp = dir.path().join("b.db");
@@ -89,7 +89,7 @@ fn automatic_worker_transfers_files_before_notes_and_preserves_links_after_resta
 
 #[test]
 fn missing_local_attachment_does_not_publish_broken_remote_note() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let a = AppCore::open(dir.path().join("a.db").to_str().unwrap()).unwrap();
     let b = AppCore::open(dir.path().join("b.db").to_str().unwrap()).unwrap();
@@ -127,7 +127,7 @@ fn incomplete_incoming_file_waits_across_restart_then_applies_after_last_chunk_a
         AttachmentTransport, ChunkContext, SealedChunk, ATTACHMENT_CHUNK_BYTES,
     };
     use sync_core::{Entity, EntityKind, SyncConfig, SyncEngine};
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate();
     let ap = dir.path().join("a.db");
@@ -263,7 +263,7 @@ fn incomplete_incoming_file_waits_across_restart_then_applies_after_last_chunk_a
 
 #[test]
 fn concurrent_notes_keep_both_attachments_in_conflict_copies() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let ap = dir.path().join("a.db");
     let bp = dir.path().join("b.db");

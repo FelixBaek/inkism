@@ -7,7 +7,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createServer} from 'vite';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 
 const root=fileURLToPath(new URL('..',import.meta.url));
 const cacheDir=await mkdtemp(join(tmpdir(),'inkism-rich-flush-'));

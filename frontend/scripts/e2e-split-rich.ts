@@ -1,5 +1,5 @@
 // 분할 오른쪽 창의 서식 편집기(Figma 05): 다른 노트·같은 노트 저장과 충돌, 원문 전환, 제목·태그, 창별 찾기.
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48139';
 const rpc=async(op:string,args={})=>{const v=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};

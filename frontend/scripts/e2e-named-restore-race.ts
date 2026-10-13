@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';import {chromium} from 'playwright-core';
+import assert from 'node:assert/strict';import {chromium} from './browser-env.ts';
 const base=process.env.INKISM_URL!;const rpc=async(op,args={})=>{const v=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
 let note=await rpc('save',{note:{title:'Restore race',content:'<p>saved checkpoint</p>'}});await rpc('history_name_current',{id:note.id,revision:note.revision,label:'Checkpoint'});note=await rpc('save',{note:{...note,content:'<p>latest before restore</p>'}});await rpc('workspace_set',{ids:[note.id],active:note.id,locations:{}});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1440,height:1000}});

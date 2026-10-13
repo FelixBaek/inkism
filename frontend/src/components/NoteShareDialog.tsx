@@ -188,7 +188,7 @@ export function NoteShareDialog({ noteID, onClose }: Readonly<{ noteID: string; 
           >
             {t("공개 중인 사본 확인")}
           </button>
-          <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setManageShares(v => !v)}>{manageShares ? t("공개 링크") : t("초대와 권한 관리")}</button>
+          <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setManageShares(v => !v)}>{manageShares ? t("공개 링크") : t("초대 링크 관리")}</button>
           <span className="dialog-actions-gap" />
           <button
             className="btn btn-primary"

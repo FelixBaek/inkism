@@ -1,4 +1,4 @@
-//! Local API for the renderer. Ported from the Go `desktop/internal/bridge`.
+//! Local API for the renderer. Ported from the former Go implementation's bridge.
 //!
 //! `Handler::handle` takes one complete request and returns one complete
 //! response. The Tauri shell calls it from its custom protocol, and the

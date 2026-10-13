@@ -1,4 +1,5 @@
-import {chromium} from 'playwright-core';import {libraryTool} from './library-tools.ts';import assert from 'node:assert/strict';
+import {chromium} from './browser-env.ts';import {libraryTool} from './library-tools.ts';import assert from 'node:assert/strict';
+
 const base=process.env.INKISM_URL!;const rpc=async(op:string,args={})=>{const e=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(e.ok,true,JSON.stringify(e));return e.data;};
 const targets=[];for(let i=0;i<105;i++)targets.push(await rpc('save',{note:{title:'Destination '+String(i).padStart(3,'0'),content:'<h2>Details</h2><p id="block">Target details</p>',content_format:'html'}}));
 const mentions=[];for(let i=0;i<45;i++)mentions.push(await rpc('save',{note:{title:'Unlinked '+String(i).padStart(3,'0'),content:'<p>mention</p>',content_format:'html'}}));

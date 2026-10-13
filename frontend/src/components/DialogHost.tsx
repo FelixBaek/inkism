@@ -1,6 +1,6 @@
 import { t } from "../i18n";
 import React, { useEffect, useRef, useState } from "react";
-import { AlertTriangle, History, X } from "../icons";
+import { AlertTriangle, History, LockKeyhole, X } from "../icons";
 import { useStore } from "../store";
 import { api } from "../api";
 import type { HistoryEntry, NotebookCover } from "../types";
@@ -263,6 +263,8 @@ function HistoryPanel({ noteId, initialId }: Readonly<{ noteId: string; initialI
   const [copying, setCopying] = useState(false);
   const [versionName,setVersionName]=useState("");
   const [naming,setNaming]=useState(false);
+  const [sealed,setSealed]=useState<{id:string;label:string;created_at:number}[]>([]);
+  useEffect(()=>{let alive=true;api.sealedHistory(noteId).then(v=>alive&&setSealed(v),()=>alive&&setSealed([]));return()=>{alive=false;};},[noteId]);
   const changeNamed=async(kind:"create"|"rename"|"delete")=>{
     if(naming)return;setNaming(true);setError(null);
     try{
@@ -358,6 +360,15 @@ function HistoryPanel({ noteId, initialId }: Readonly<{ noteId: string; initialI
         <button className="btn" disabled={naming||!versionName.trim()} onClick={()=>void changeNamed("create")}>{t("현재 버전 보관")}</button>
         {entry?.label&&<><button className="btn" disabled={naming||!versionName.trim()} onClick={()=>void changeNamed("rename")}>{t("버전 이름 변경")}</button><button className="btn" disabled={naming} onClick={()=>void changeNamed("delete")}>{t("선택한 보관 버전 삭제")}</button></>}
       </section>
+      {sealed.length>0&&(
+        <section className="history-sealed" role="note" aria-label={t("암호화된 채로 보관된 버전")}>
+          <strong><LockKeyhole size={14} aria-hidden /> {t("암호화된 채로 보관된 버전 {n}개",{n:sealed.length})}</strong>
+          <p>{t("금고에 보관됐을 때 만든 버전입니다. 지워지지 않았고 암호화된 상태 그대로 보관되어 있지만, 이 노트가 지금 금고 밖에 있어 이 목록에서는 열 수 없습니다.")}</p>
+          <p>{t("보려면 금고를 연 뒤 이 노트를 다시 금고에 보관하고 ‘현재 금고 노트 열기’에서 확인하세요. 금고에서 노트를 해제하면 이 버전들도 일반 버전으로 돌아옵니다.")}</p>
+          <ul>{sealed.map(v=><li key={v.id}>{t("보관: {name}",{name:v.label})} · {formatDateTime(v.created_at)}</li>)}</ul>
+          <button type="button" className="btn btn-secondary" onClick={()=>{store.closeDialog();window.dispatchEvent(new CustomEvent("inkism-open-settings",{detail:"lock"}));}}>{t("금고 설정 열기")}</button>
+        </section>
+      )}
       {error && <p className="dialog-message danger-text">{error}</p>}
       {!error && entries === null && <p className="dialog-message">{t("기록을 불러오는 중…")}</p>}
       {entries !== null && entries.length === 0 && (

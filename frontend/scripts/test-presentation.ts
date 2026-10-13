@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));const bundle=await build({absWorkingDir:root,stdin:{contents:`export * from './src/lib/presentation';`,resolveDir:root,loader:'ts'},bundle:true,write:false,format:'iife',globalName:'slides',loader:{'.css':'empty'},logLevel:'error'});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});

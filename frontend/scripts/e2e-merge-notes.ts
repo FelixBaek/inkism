@@ -1,6 +1,6 @@
-import assert from "node:assert/strict";
-import { chromium } from "playwright-core";
 import { libraryTool } from "./library-tools.ts";
+import assert from "node:assert/strict";
+import { chromium } from './browser-env.ts';
 
 const base = process.env.INKISM_URL || "http://127.0.0.1:49323";
 const rpc = async (op: string, args: Record<string, unknown> = {}) => {

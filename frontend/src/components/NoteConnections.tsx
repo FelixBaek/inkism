@@ -2,7 +2,7 @@ import { referencePreview } from "../lib/reference-preview";
 import { referenceRead } from "../lib/reference-read";
 import { prepareHTMLBlockIdentity } from "../lib/block-identity";
 import React, { useEffect, useRef, useState } from "react";
-import { api, rpc } from "../api";
+import { api, rpc, hasRpcDiagnostic } from "../api";
 import { useStore } from "../store";
 import { t } from "../i18n";
 import { knowledge, parseReference, wikiReferences, type NoteReference } from "../lib/knowledge";
@@ -20,7 +20,7 @@ const escape = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 function exceedsReadBudget(error: unknown) {
-  return error instanceof Error && error.message.includes("note body exceeds read budget");
+  return hasRpcDiagnostic(error, "body_read_budget");
 }
 
 function connectionText(note: Note) {

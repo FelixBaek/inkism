@@ -96,4 +96,4 @@ try {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
-console.log('PASS: packaged Go encrypted copy, original preservation, keyed note/search/attachment reopen, busy and failed-copy isolation');
+console.log('PASS: packaged encrypted copy, original preservation, keyed note/search/attachment reopen, busy and failed-copy isolation');

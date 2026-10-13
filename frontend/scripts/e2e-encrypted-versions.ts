@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';import {chromium} from 'playwright-core';
+import assert from 'node:assert/strict';import {chromium} from './browser-env.ts';
 const base=process.env.INKISM_URL!;const rpc=async(op,args={})=>{const v=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
 let n=await rpc('save',{note:{title:'Encrypted versions UI',content:'<p>original secret</p>',text:'original secret'}});await rpc('history_name_current',{id:n.id,revision:n.revision,label:'Release'});n=await rpc('save',{note:{...n,content:'<p>current secret</p>',text:'current secret'}});await rpc('vault_create',{password:'password123'});await rpc('vault_lock_note',{id:n.id,revision:n.revision});await rpc('workspace_set',{ids:[n.id],active:n.id,locations:{}});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));

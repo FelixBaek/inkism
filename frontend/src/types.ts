@@ -47,6 +47,8 @@ export interface SegmentAncestor {
   tag: string;
   open: string;
   prelude?: string;
+  /** UTF-8 byte offset of `open` in the note, when the source scanner knows it. */
+  at?: number;
 }
 export interface DocumentSegment {
   ordinal: number;

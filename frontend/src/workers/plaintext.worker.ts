@@ -49,8 +49,8 @@ self.onmessage = (ev: MessageEvent<{ id: number; html: string }>) => {
   let text = "";
   try {
     text = stripHtml(html);
-  } catch {
-    self.postMessage({ id, error: "검색용 텍스트를 추출하지 못했습니다." });
+  } catch (error) {
+    self.postMessage({ id, error_code: "plaintext_extract_failed", error: error instanceof Error ? error.message : String(error) });
     return;
   }
   (self as unknown as Worker).postMessage({ id, text });

@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import { backendErrorCode, backendErrorDetail, localizeBackendError } from "./lib/error-messages";
 /** 데스크톱 브리지: POST /api/rpc ({op,...args}) → {ok:true,data}|{ok:false,error} */
 import type {
   AppInfo,
@@ -20,17 +21,31 @@ import type {
 } from "./types";
 
 export class RpcError extends Error {
+  public readonly code: string | undefined;
+  public readonly rawMessage: string;
   constructor(
     public op: string,
     message: string,
+    public readonly status?: number,
   ) {
-    super(message);
+    super(localizeBackendError(message));
+    this.rawMessage = message;
+    this.code = backendErrorCode(message);
     this.name = "RpcError";
   }
-  /** 낙관적 revision 충돌 여부 (오류 문자열로 판별) */
+  /** Keep conflict handling independent of the selected display language. */
   get isConflict(): boolean {
-    return /revision|conflict/i.test(this.message);
+    return this.code === "conflict" || /revision|conflict/i.test(this.rawMessage);
   }
+}
+
+export type RpcDiagnostic = "body_read_budget" | "duplicate_block_id";
+/** Decisions use the raw protocol diagnostic, never translated display text. */
+export function hasRpcDiagnostic(error: unknown, diagnostic: RpcDiagnostic): error is RpcError {
+  if (!(error instanceof RpcError) || error.code !== "invalid" || (error.status !== undefined && error.status !== 400)) return false;
+  const detail = backendErrorDetail(error.rawMessage);
+  return diagnostic === "body_read_budget" ? detail === "note body exceeds read budget" :
+    /^duplicate block ID .+: rename the duplicate block ID before merging$/.test(detail);
 }
 
 interface RpcEnvelope<T> {
@@ -60,10 +75,10 @@ export async function rpc<T>(
   try {
     body = (await res.json()) as RpcEnvelope<T>;
   } catch {
-    throw new RpcError(op, t("응답을 해석할 수 없습니다 (HTTP {status})", { status: res.status }));
+    throw new RpcError(op, t("응답을 해석할 수 없습니다 (HTTP {status})", { status: res.status }), res.status);
   }
   if (!res.ok || body?.ok !== true) {
-    throw new RpcError(op, body?.error || t("RPC 실패 (HTTP {status})", { status: res.status }));
+    throw new RpcError(op, body?.error || t("RPC 실패 (HTTP {status})", { status: res.status }), res.status);
   }
   return body.data as T;
 }
@@ -82,7 +97,7 @@ async function shellJSON<T>(path: string, body?: unknown): Promise<T> {
   } catch {
     /* 셸 없음 */
   }
-  if (!res.ok || !env?.ok) throw new Error(env?.error || `HTTP ${res.status}`);
+  if (!res.ok || !env?.ok) throw new Error(localizeBackendError(env?.error || `HTTP ${res.status}`));
   return env.data as T;
 }
 
@@ -310,6 +325,9 @@ export const api = {
   renameVersion: (id:string,revision:number,history_id:string,expected_label:string,label:string)=>rpc<{id:string}>("history_rename",{id,revision,history_id,expected_label,label}),
   deleteNamedVersion: (id:string,revision:number,history_id:string,expected_label:string)=>rpc<{id:string}>("history_delete_named",{id,revision,history_id,expected_label}),
   history: (id: string) => rpc<HistoryEntry[]>("history", { id }),
+  /** 일반 노트 아래 암호화된 채로 남은 금고형 버전의 이름·시각. 본문·암호문은 오지 않는다. */
+  sealedHistory: (id: string) =>
+    rpc<{ id: string; label: string; title: string; created_at: number }[]>("history_sealed", { id }),
 
   restore: (id: string, historyId: string, revision?:number) => rpc<Note>("restore", { id, history_id: historyId, revision }),
 
@@ -323,7 +341,7 @@ export const api = {
     form.append("size", String(file.size));
     const response = await postFile("/api/attachments", form, signal);
     const result = await response.json();
-    if (!response.ok || !result.ok || !result.data) throw new Error(result.error || t("파일 업로드에 실패했습니다."));
+    if (!response.ok || !result.ok || !result.data) throw new Error(localizeBackendError(result.error || t("파일 업로드에 실패했습니다.")));
     const asset = result.data;
     if (
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(asset.id) ||
@@ -361,7 +379,7 @@ export const api = {
       /* 빈 응답 허용 */
     }
     if (!res.ok || !body || body.ok === false) {
-      throw new Error(body?.error || t("가져오기 실패 (HTTP {status})", { status: res.status }));
+      throw new Error(localizeBackendError(body?.error || t("가져오기 실패 (HTTP {status})", { status: res.status })));
     }
     return body.data?.imported ?? body.imported ?? 0;
   },

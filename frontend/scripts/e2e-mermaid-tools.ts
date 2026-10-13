@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {chromium} from 'playwright-core';
+import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {chromium} from './browser-env.ts';
 const base=process.env.INKISM_URL!;const rpc=async(op:string,args:any={})=>{const reply=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(reply.ok,true,JSON.stringify(reply));return reply.data;};
 const code='flowchart LR\n A[Alpha] --> B[Beta]';const source='<p>Preserve &amp; exact</p><div data-type="inkism-diagram" data-mode="preview"><pre><code class="language-mermaid">'+code+'</code></pre></div>';
 const note=await rpc('save',{note:{title:'Mermaid tool fixture',content:source,content_format:'html'}});await rpc('workspace_set',{ids:[note.id],active:note.id,locations:{}});

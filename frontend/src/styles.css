@@ -2337,7 +2337,8 @@ kbd {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.sync-held {
+.sync-held,
+.history-sealed {
   display: grid;
   gap: 6px;
   margin-top: 10px;
@@ -2345,18 +2346,21 @@ kbd {
   border: 1px solid var(--border);
   border-radius: 6px;
 }
-.sync-held strong {
+.sync-held strong,
+.history-sealed strong {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
-.sync-held-list {
+.sync-held-list,
+.history-sealed ul {
   margin: 0;
   padding-left: 18px;
   font-size: 13px;
   overflow-wrap: anywhere;
 }
-.sync-held .btn {
+.sync-held .btn,
+.history-sealed .btn {
   justify-self: start;
 }
 

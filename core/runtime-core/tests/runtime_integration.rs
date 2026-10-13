@@ -1,9 +1,8 @@
-//! End-to-end runtime tests: real Go relay process, real encryption, real
+//! End-to-end runtime tests: real Rust relay process, real encryption, real
 //! SQLite note + sync state databases, real background worker.
 //!
-//! Each test starts its own relay (see `common`). If the Go toolchain/relay is
-//! unavailable the test prints SKIP and returns; `main` runs the full
-//! end-to-end flow.
+//! Each test starts its own relay (see `common`); a relay that cannot be built
+//! or started fails the test. `main` runs the full end-to-end flow.
 
 mod common;
 
@@ -112,7 +111,7 @@ fn local_engine_apis_round_trip() {
 #[test]
 fn create_on_a_syncs_to_b_with_exact_id() {
     let relay =
-        Relay::start().expect("actual Go relay must start; install Go or set INKISM_RELAY_BIN");
+        Relay::start().expect("actual Rust relay must build and start (or set INKISM_RELAY_BIN)");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate().to_base64();
 
@@ -139,7 +138,7 @@ fn create_on_a_syncs_to_b_with_exact_id() {
 #[test]
 fn offline_concurrent_edits_preserve_both_sides() {
     let relay =
-        Relay::start().expect("actual Go relay must start; install Go or set INKISM_RELAY_BIN");
+        Relay::start().expect("actual Rust relay must build and start (or set INKISM_RELAY_BIN)");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate().to_base64();
 
@@ -199,7 +198,7 @@ fn offline_concurrent_edits_preserve_both_sides() {
 #[test]
 fn delete_then_restart_converges() {
     let relay =
-        Relay::start().expect("actual Go relay must start; install Go or set INKISM_RELAY_BIN");
+        Relay::start().expect("actual Rust relay must build and start (or set INKISM_RELAY_BIN)");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate().to_base64();
 
@@ -246,7 +245,7 @@ fn delete_then_restart_converges() {
 #[test]
 fn notebook_and_tag_metadata_replicate() {
     let relay =
-        Relay::start().expect("actual Go relay must start; install Go or set INKISM_RELAY_BIN");
+        Relay::start().expect("actual Rust relay must build and start (or set INKISM_RELAY_BIN)");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate().to_base64();
 
@@ -302,7 +301,7 @@ fn notebook_and_tag_metadata_replicate() {
 #[test]
 fn remote_change_bumps_revision_and_rejects_stale_editor() {
     let relay =
-        Relay::start().expect("actual Go relay must start; install Go or set INKISM_RELAY_BIN");
+        Relay::start().expect("actual Rust relay must build and start (or set INKISM_RELAY_BIN)");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate().to_base64();
 
@@ -354,8 +353,8 @@ fn remote_change_bumps_revision_and_rejects_stale_editor() {
 
 #[test]
 fn changing_relays_keeps_old_state_and_syncs_latest_source_after_restart() {
-    let old_relay = Relay::start().expect("real old Go relay");
-    let new_relay = Relay::start().expect("real new Go relay");
+    let old_relay = Relay::start().expect("real old relay");
+    let new_relay = Relay::start().expect("real new relay");
     let dir = tempfile::tempdir().unwrap();
     let old_key = Key::generate().to_base64();
     let new_key = Key::generate().to_base64();
@@ -436,7 +435,7 @@ fn changing_relays_keeps_old_state_and_syncs_latest_source_after_restart() {
 #[test]
 fn config_generates_key_hides_secrets_and_requires_migration() {
     let relay =
-        Relay::start().expect("actual Go relay must start; install Go or set INKISM_RELAY_BIN");
+        Relay::start().expect("actual Rust relay must build and start (or set INKISM_RELAY_BIN)");
     let dir = tempfile::tempdir().unwrap();
     let app = open_at(dir.path(), "cfg.db");
 
@@ -528,7 +527,7 @@ fn invalid_configured_key_is_rejected_at_open() {
 #[test]
 fn reminder_metadata_syncs_between_devices_and_clears_both_ways() {
     let relay =
-        Relay::start().expect("actual Go relay must start; install Go or set INKISM_RELAY_BIN");
+        Relay::start().expect("actual Rust relay must build and start (or set INKISM_RELAY_BIN)");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate().to_base64();
 
@@ -591,7 +590,7 @@ fn reminder_metadata_syncs_between_devices_and_clears_both_ways() {
 
 #[test]
 fn bulk_tag_rename_and_removal_sync_without_body_changes() {
-    let relay = Relay::start().expect("actual Go relay required");
+    let relay = Relay::start().expect("actual Rust relay required");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate().to_base64();
     let a = open_at(dir.path(), "tags-a.db");
@@ -635,7 +634,7 @@ fn encrypted_paused_sync_survives_restart_and_preserves_both_directions() {
     pause_scenario(true);
 }
 fn pause_scenario(encrypted: bool) {
-    let relay = Relay::start().expect("actual Go relay must start");
+    let relay = Relay::start().expect("actual Rust relay must start");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate().to_base64();
     let open = |name: &str| {

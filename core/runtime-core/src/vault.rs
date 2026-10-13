@@ -268,17 +268,33 @@ impl Svc {
                 attachments: attachment_refs(id, &plain)?,
                 key_id,
             };
-            let original=inkism_engine::named_versions::backup(c,id)?;
-            let digest=inkism_engine::encrypted_versions::digest(&original)?;
-            let mut versions=original.as_array().cloned().unwrap_or_default();
-            for version in &mut versions {
-                let plain=Plain{content:text(version,"content")?.to_string(),text:text(version,"text")?.to_string(),content_format:text(version,"content_format")?.to_string()};
-                let sealed=store::LockedBody{ciphertext:encrypt(&key,&body.key_id,&plain)?,key_id:body.key_id.clone(),attachments:attachment_refs(id,&plain)?};
-                version["plain_bytes"]=json!(plain.content.len()+plain.text.len());
-                version.as_object_mut().unwrap().remove("content");version.as_object_mut().unwrap().remove("text");version["locked_body"]=serde_json::to_value(sealed).map_err(|e|RuntimeError::internal(e.to_string()))?;
+            // Seal and store one snapshot at a time inside the engine's
+            // revision transaction: memory stays at one plaintext snapshot
+            // and its ciphertext instead of every snapshot several times over.
+            let mut failure = None;
+            let mut seal = |mut version: Value| -> std::result::Result<Value, inkism_engine::EngineError> {
+                let sealed = (|| -> Result<store::LockedBody> {
+                    let plain = Plain { content: text(&version, "content")?.to_string(), text: text(&version, "text")?.to_string(), content_format: text(&version, "content_format")?.to_string() };
+                    version["plain_bytes"] = json!(plain.content.len() + plain.text.len());
+                    Ok(store::LockedBody { ciphertext: encrypt(&key, &body.key_id, &plain)?, key_id: body.key_id.clone(), attachments: attachment_refs(id, &plain)? })
+                })();
+                let sealed = sealed.map_err(|e| {
+                    let message = e.to_string();
+                    failure = Some(e);
+                    inkism_engine::EngineError::internal(message)
+                })?;
+                let map = version.as_object_mut().expect("backup row is an object");
+                map.remove("content");
+                map.remove("text");
+                map.insert("locked_body".into(), serde_json::to_value(sealed)?);
+                Ok(version)
+            };
+            let result = store::lock_with_sealed_versions(c, id, revision, &body, &mut seal);
+            match (result, failure) {
+                (Ok(note), _) => Ok(note),
+                (Err(_), Some(e)) => Err(e),
+                (Err(e), None) => Err(e.into()),
             }
-            let existing=inkism_engine::encrypted_versions::rows(c,id)?;versions.extend(existing.as_array().cloned().unwrap_or_default());
-            Ok(store::lock_with_versions(c,id,revision,&body,&json!(versions),&digest)?)
         })
     }
 
@@ -288,39 +304,46 @@ impl Svc {
             let current=inkism_engine::ops_notes::load_summary(c,id)?;
             let current_body=store::locked_body(c,id)?.ok_or_else(||RuntimeError::config("note is not locked"))?;
             let _key=self.vault_key(&current_body.key_id)?;
-            let original=inkism_engine::encrypted_versions::rows(c,id)?;let expected=inkism_engine::encrypted_versions::digest(&original)?;
-            let mut versions=original.as_array().cloned().unwrap_or_default();
-            if action=="list"{for row in &mut versions{row.as_object_mut().unwrap().remove("locked_body");}return Ok(json!({"items":versions}));}
+            // Listing and reading one body never load the other ciphertexts.
+            if action=="list"{return Ok(json!({"items":inkism_engine::encrypted_versions::listing(c,id)?}));}
             if action=="body" {
-                let hid=text(req,"history_id")?;let row=versions.iter().find(|r|r["id"].as_str()==Some(hid)).ok_or_else(||RuntimeError::config("version not found"))?;
-                let body:store::LockedBody=serde_json::from_value(row["locked_body"].clone()).map_err(|e|RuntimeError::internal(e.to_string()))?;
+                let hid=text(req,"history_id")?;let row=inkism_engine::encrypted_versions::row(c,id,hid)?.ok_or_else(||RuntimeError::config("version not found"))?;
+                let body=store::LockedBody::deserialize(&row["locked_body"]).map_err(|e|RuntimeError::internal(e.to_string()))?;
                 let mut plain=decrypt(&*self.vault_key(&body.key_id)?,&body.key_id,&body.ciphertext)?;apply_aliases(&mut plain,&body.attachments);
                 return Ok(json!({"title":row["title"],"content":plain.content,"text":plain.text,"content_format":plain.content_format}));
             }
+            // Each action touches at most one stored snapshot (plus a new
+            // one); the engine checks that row is unchanged and the per-note
+            // limits in its transaction, without loading every ciphertext.
             let revision=revision(req)?;
             let current_plain=decrypt(&_key,&current_body.key_id,&current_body.ciphertext)?;
             let current_bytes=current_plain.content.len()+current_plain.text.len();
+            drop(current_plain);
             let name=||->Result<String>{let name=text(req,"label")?.trim();if name.is_empty()||name.chars().count()>120{return Err(RuntimeError::config("version name requires 1–120 characters"));}Ok(name.to_string())};
+            let mut change=store::EncryptedVersionChange::default();
             let mut restore=None;
-            if action=="create"{versions.push(json!({"id":inkism_engine::ids::new_id(),"label":name()?,"title":current.title,"content_format":current.content_format,"created_at":inkism_engine::ids::now_ms(),"plain_bytes":current_bytes,"locked_body":current_body}));}
+            let target;
+            if action=="create"{change.put.push(json!({"id":inkism_engine::ids::new_id(),"label":name()?,"title":current.title,"content_format":current.content_format,"created_at":inkism_engine::ids::now_ms(),"plain_bytes":current_bytes,"locked_body":current_body}));}
             else {
-                let hid=text(req,"history_id")?;let pos=versions.iter().position(|r|r["id"].as_str()==Some(hid)).ok_or_else(||RuntimeError::config("version not found"))?;
-                if req.get("expected_label").and_then(Value::as_str)!=versions[pos]["label"].as_str(){return Err(RuntimeError::config("version name changed"));}
+                let hid=text(req,"history_id")?;let row=inkism_engine::encrypted_versions::row(c,id,hid)?.ok_or_else(||RuntimeError::config("version not found"))?;
+                if req.get("expected_label").and_then(Value::as_str)!=row["label"].as_str(){return Err(RuntimeError::config("version name changed"));}
                 match action{
-                    "rename"=>versions[pos]["label"]=json!(name()?),
-                    "delete"=>{versions.remove(pos);},
+                    "rename"=>{let mut renamed=row.clone();renamed["label"]=json!(name()?);change.put.push(renamed);},
+                    "delete"=>{change.remove=Some(hid.to_string());},
                     "restore"=>{
-                        let row=versions[pos].clone();let body:store::LockedBody=serde_json::from_value(row["locked_body"].clone()).map_err(|e|RuntimeError::internal(e.to_string()))?;
+                        let body=store::LockedBody::deserialize(&row["locked_body"]).map_err(|e|RuntimeError::internal(e.to_string()))?;
                         // Authenticate before replacing the live ciphertext.
                         let _=decrypt(&*self.vault_key(&body.key_id)?,&body.key_id,&body.ciphertext)?;
-                        versions.push(json!({"id":inkism_engine::ids::new_id(),"label":format!("Before restore {}",inkism_engine::ids::now_ms()),"title":current.title,"content_format":current.content_format,"created_at":inkism_engine::ids::now_ms(),"plain_bytes":current_bytes,"locked_body":current_body}));
+                        change.put.push(json!({"id":inkism_engine::ids::new_id(),"label":format!("Before restore {}",inkism_engine::ids::now_ms()),"title":current.title,"content_format":current.content_format,"created_at":inkism_engine::ids::now_ms(),"plain_bytes":current_bytes,"locked_body":current_body}));
                         restore=Some((text(&row,"title")?.to_string(),text(&row,"content_format")?.to_string(),body));
                     },
                     _=>return Err(RuntimeError::config("unknown vault version action")),
                 }
+                target=row;
+                change.expected=Some((hid.to_string(),&target));
             }
             let restore_ref=restore.as_ref().map(|(title,format,body)|(title.as_str(),format.as_str(),body));
-            Ok(store::change_encrypted_versions(c,id,revision,&json!(versions),&expected,restore_ref)?)
+            Ok(store::change_encrypted_version(c,id,revision,&change,restore_ref)?)
         })
     }
 
@@ -379,11 +402,33 @@ impl Svc {
             let body = store::locked_body(c, id)?.ok_or_else(|| RuntimeError::config("note is not locked"))?;
             let mut plain = decrypt(&*self.vault_key(&body.key_id)?, &body.key_id, &body.ciphertext)?;
             apply_aliases(&mut plain, &body.attachments);
-            let encrypted=inkism_engine::encrypted_versions::rows(c,id)?;
-            let expected=inkism_engine::encrypted_versions::digest(&encrypted)?;
-            let mut versions=encrypted.as_array().cloned().unwrap_or_default();
-            for version in &mut versions {let body:store::LockedBody=serde_json::from_value(version["locked_body"].clone()).map_err(|e|RuntimeError::internal(e.to_string()))?;let mut old=decrypt(&*self.vault_key(&body.key_id)?,&body.key_id,&body.ciphertext)?;apply_aliases(&mut old,&body.attachments);version["content"]=json!(old.content);version["text"]=json!(old.text);version["content_format"]=json!(old.content_format);version.as_object_mut().unwrap().remove("locked_body");}
-            Ok(store::unlock_with_versions(c,id,revision,&plain.content,&plain.text,&plain.content_format,&json!(versions),&expected)?)
+            // Decrypt and restore one snapshot at a time inside the engine's
+            // revision transaction (see `vault_lock_note`).
+            let mut failure = None;
+            let mut open = |mut version: Value| -> std::result::Result<Value, inkism_engine::EngineError> {
+                let opened = (|| -> Result<Plain> {
+                    let body: store::LockedBody = store::LockedBody::deserialize(&version["locked_body"]).map_err(|e| RuntimeError::internal(e.to_string()))?;
+                    let mut old = decrypt(&*self.vault_key(&body.key_id)?, &body.key_id, &body.ciphertext)?;
+                    apply_aliases(&mut old, &body.attachments);
+                    Ok(old)
+                })();
+                let old = opened.map_err(|e| {
+                    let message = e.to_string();
+                    failure = Some(e);
+                    inkism_engine::EngineError::internal(message)
+                })?;
+                version["content"] = json!(old.content);
+                version["text"] = json!(old.text);
+                version["content_format"] = json!(old.content_format);
+                version.as_object_mut().expect("encrypted row is an object").remove("locked_body");
+                Ok(version)
+            };
+            let result = store::unlock_with_opened_versions(c, id, revision, &plain.content, &plain.text, &plain.content_format, &mut open);
+            match (result, failure) {
+                (Ok(note), _) => Ok(note),
+                (Err(_), Some(e)) => Err(e),
+                (Err(e), None) => Err(e.into()),
+            }
         })
     }
 

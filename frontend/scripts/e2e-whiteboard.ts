@@ -1,4 +1,5 @@
-import assert from 'node:assert/strict';import {chromium} from 'playwright-core';import {libraryTool} from './library-tools.ts';import {readFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';import {chromium} from './browser-env.ts';import {libraryTool} from './library-tools.ts';import {readFile} from 'node:fs/promises';
+
 const base=process.env.INKISM_URL!;const rpc=async(op:string,args:any={})=>{const result=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(result.ok,true,JSON.stringify(result));return result.data;};
 const note=await rpc('save',{note:{title:'Whiteboard source unchanged',content:'<p>Canonical source &amp; exact</p>',content_format:'html'}});await rpc('workspace_set',{ids:[note.id],active:note.id,locations:{}});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
