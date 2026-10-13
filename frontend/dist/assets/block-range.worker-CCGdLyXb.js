@@ -1,0 +1,1 @@
+function e(e){return e<=127?1:e<=2047?2:e<=65535?3:4}self.onmessage=t=>{let{source:n,start:r,expected:i}=t.data;try{let t=0,a=0;for(;t<r&&a<n.length;){let r=n.codePointAt(a);t+=e(r),a+=r>65535?2:1}if(t!==r||n.slice(a,a+i.length)!==i)throw Error(`document range changed`);self.postMessage({from:a,to:a+i.length})}catch{self.postMessage({error:`문서 구간이 변경되었습니다. 다시 불러와 주세요.`})}};

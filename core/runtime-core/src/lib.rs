@@ -708,7 +708,8 @@ impl AppCore {
             | "sync_scope"
             | "sync_pause"
             | "sync_recovery_export"
-            | "sync_recovery_import" => self.handle_sync(op, &req),
+            | "sync_recovery_import"
+            | "sync_relay_token" => self.handle_sync(op, &req),
             "vault_status" | "vault_create" | "vault_unlock" | "vault_lock"
             | "vault_change_password" | "vault_lock_note" | "vault_open" | "vault_save"
             | "vault_unlock_note" | "vault_clear" | "vault_delete" | "vault_versions" => match self.svc.handle_vault(op, &req) {
@@ -759,6 +760,11 @@ impl AppCore {
                     Err(e) => json!({"ok":false,"error":e.to_string()}),
                 }
             }
+            // Host-only (public-link publishing): never add to the renderer RPC whitelist.
+            "sync_relay_token" => match self.svc.config() {
+                Some(cfg) => json!({"ok":true,"data":{"token":cfg.token}}),
+                None => json!({"ok":false,"error":"연결된 동기화 서버가 없습니다"}),
+            },
             "sync_status" => json!({ "ok": true, "data": self.sync_status() }),
             "sync_now" => {
                 if self.svc.config().is_some_and(|cfg| cfg.paused) {
@@ -1161,6 +1167,19 @@ mod configuration_round_tests {
             assert!(host::journal_batch(c, 0, host::JOURNAL_BATCH)?.is_empty());
             Ok(())
         }).unwrap();
+    }
+
+    #[test]
+    fn relay_token_is_only_the_saved_sync_token() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = AppCore::open(tmp.path().join("relay-token.db").to_str().unwrap()).unwrap();
+        assert_eq!(app.execute(json!({"op":"sync_relay_token"}))["ok"], false);
+        let key = Key::generate().to_base64();
+        let req = json!({"op":"sync_recovery_import", "server_url":"http://127.0.0.1:9", "key":key, "token":"synthetic-token", "confirmed_server_recovery":true});
+        assert_eq!(app.execute(req)["ok"], true);
+        let out = app.execute(json!({"op":"sync_relay_token"}));
+        assert_eq!(out["data"]["token"], "synthetic-token");
+        assert!(out["data"].get("key").is_none());
     }
 
     #[test]

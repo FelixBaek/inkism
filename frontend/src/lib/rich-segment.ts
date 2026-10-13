@@ -1,3 +1,4 @@
+import { modelSourceSegments } from "./source-segments";
 import { canonicalRichHTML, inspectRichHTML } from "./rich-document";
 import type { DocumentSegment, SegmentAncestor } from "../types";
 import type { BodySplice } from "./body-splice";
@@ -163,11 +164,22 @@ export function contextIdentifiable(segment: Pick<DocumentSegment, "start_contex
     (a) => !identityTag.test(a.tag) || a.at !== undefined || ancestorElement(a).hasAttribute("id"),
   );
 }
+function identityEdge(edited: string, end: boolean): string {
+  let edge = edited;
+  if (edited.length > 32768) {
+    const parts = modelSourceSegments(edited, 0, []);
+    let segment = parts.next().value;
+    if (end) for (const next of parts) segment = next;
+    if (segment) edge = renderSegment(segment);
+  }
+  return edge;
+}
 /** Outside opening tags whose block `edited` gave a new identity, in context order. */
-function identityRewrites(context: SegmentAncestor[], edited: string): { at: number; open: string; next: string }[] {
+function identityRewrites(context: SegmentAncestor[], edited: string, end = false): { at: number; open: string; next: string }[] {
   const template = document.createElement("template");
-  template.innerHTML = edited;
-  let node: Node | null = template.content.firstChild;
+  const edge = identityEdge(edited, end);
+  template.innerHTML = edge;
+  let node: Node | null = end ? template.content.lastChild : template.content.firstChild;
   const rewrites: { at: number; open: string; next: string }[] = [];
   for (const ancestor of context) {
     if (!sameAncestor(node, ancestor)) break;
@@ -177,8 +189,8 @@ function identityRewrites(context: SegmentAncestor[], edited: string): { at: num
         throw new Error(t("블록 식별자를 붙일 위치를 찾지 못했습니다. 원문을 유지했습니다."));
       rewrites.push({ at: ancestor.at, open: ancestor.open, next: `${ancestor.open.slice(0, -1)} id="${id}">` });
     }
-    node = node.firstChild;
-    while (ancestor.prelude && node instanceof Element && node.localName === "colgroup") node = node.nextSibling;
+    node = end ? node.lastChild : node.firstChild;
+    while (!end && ancestor.prelude && node instanceof Element && node.localName === "colgroup") node = node.nextSibling;
   }
   return rewrites;
 }
@@ -191,9 +203,13 @@ export function contextIdentity(
   segment: DocumentSegment,
   edited: string,
 ): { segment: DocumentSegment; tags: BodySplice[] } {
-  if (!segment.start_context.length || !/\sid=/.test(edited)) return { segment, tags: [] };
+  if ((!segment.start_context.length && !segment.end_context.length) || !/\sid=/.test(edited)) return { segment, tags: [] };
   const rewrites = identityRewrites(segment.start_context, edited);
-  if (!rewrites.length) return { segment, tags: [] };
+  // A split may give the right-hand continuation a different ID, including
+  // when both edges originally shared one ancestor. Its opening tag is in the
+  // replacement, so update only the virtual end wrapper; do not splice it twice.
+  const endings = identityRewrites(segment.end_context, edited, true);
+  if (!rewrites.length && !endings.length) return { segment, tags: [] };
   rewrites.sort((a, b) => a.at - b.at);
   const tags: BodySplice[] = [];
   let shift = 0;
@@ -205,9 +221,9 @@ export function contextIdentity(
   }
   const moved = (at: number) =>
     at + rewrites.filter((r) => r.at < at).reduce((n, r) => n + utf8(r.next) - utf8(r.open), 0);
-  const context = (list: SegmentAncestor[]) =>
+  const context = (list: SegmentAncestor[], end = false) =>
     list.map((a) => {
-      const rewrite = rewrites.find((r) => r.at === a.at && r.open === a.open);
+      const rewrite = (end ? endings : rewrites).find((r) => r.at === a.at && r.open === a.open);
       return { ...a, ...(rewrite ? { open: rewrite.next } : {}), ...(a.at === undefined ? {} : { at: moved(a.at) }) };
     });
   return {
@@ -215,7 +231,7 @@ export function contextIdentity(
       ...segment,
       byte_offset: moved(segment.byte_offset),
       start_context: context(segment.start_context),
-      end_context: context(segment.end_context),
+      end_context: context(segment.end_context, true),
     },
     tags,
   };
@@ -228,7 +244,7 @@ export function rebaseSegmentIdentity(segment: DocumentSegment, tags: BodySplice
   let current = segment;
   for (const edit of tags) {
     const growth = utf8(edit.replacement) - utf8(edit.expected);
-    const context = (list: SegmentAncestor[]) => list.map((ancestor) => ({
+    const context = (list: SegmentAncestor[], end = false) => list.map((ancestor) => ({
       ...ancestor,
       ...(ancestor.at === edit.start && ancestor.open === edit.expected ? { open: edit.replacement } : {}),
       ...(ancestor.at !== undefined && ancestor.at > edit.start ? { at: ancestor.at + growth } : {}),

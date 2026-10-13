@@ -10,18 +10,21 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - name: Keep pull requests below 300 changed files
+      - name: Keep reviewed source below 300 changed files
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          count=$(gh api "repos/$GH_REPO/pulls/$PR_NUMBER" --jq '.changed_files')
+          set -euo pipefail
+          # dist is reproducible Vite output committed with its source. Count every
+          # other path, including tests, CI, lockfiles and public assets.
+          count=$(gh api --paginate "repos/$GH_REPO/pulls/$PR_NUMBER/files?per_page=100" --jq '.[] | select(.filename | startswith("frontend/dist/") | not) | .filename' | wc -l | tr -d ' ')
           case "$count" in
             ''|*[!0-9]*) echo "::error::Could not read the pull request file count"; exit 1 ;;
           esac
-          echo "Changed files: $count (maximum 299)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Reviewed source files: $count (maximum 299; generated frontend/dist excluded)" >> "$GITHUB_STEP_SUMMARY"
           if [ "$count" -ge 300 ]; then
-            echo "::error::This PR changes $count files. Split it into pull requests with at most 299 files so CodeRabbit can review them."
+            echo "::error::This PR changes $count source files. Split it into pull requests with at most 299 files so CodeRabbit can review them."
             exit 1
           fi

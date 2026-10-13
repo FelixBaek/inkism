@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Bell } from "../icons";
+import { Bell, X } from "../icons";
 import { api } from "../api";
 import type { Summary } from "../types";
 import { useStore } from "../store";
@@ -69,11 +69,13 @@ function SystemReminderSettings() {
   };
   if (!settings.available) return null;
   return (
-    <fieldset disabled={busy}>
-      <legend>{t("이 Windows 기기")}</legend>
-      <label>
+    <fieldset className="plain-fieldset reminder-system" disabled={busy}>
+      <legend className="field-label">{t("이 Windows 기기")}</legend>
+      <label className="reminder-switch">
         <input
           type="checkbox"
+          role="switch"
+          className="toggle"
           checked={!!settings.enabled}
           onChange={(e) => void change({ enabled: e.target.checked })}
         />
@@ -81,9 +83,11 @@ function SystemReminderSettings() {
       </label>
       <p>{t("알림에는 노트 내용을 표시하지 않습니다.")}</p>
       {settings.background_available && (
-        <label>
+        <label className="reminder-switch">
           <input
             type="checkbox"
+            role="switch"
+            className="toggle"
             checked={!!settings.background}
             disabled={!settings.enabled}
             onChange={(e) => void change({ background: e.target.checked })}
@@ -101,6 +105,28 @@ function SystemReminderSettings() {
       {settings.delivery_error && <p role="alert">{t("시스템 알림 전송 실패. 연결되면 다시 시도합니다.")}</p>}
       {error && <p role="alert">{error}</p>}
     </fieldset>
+  );
+}
+
+/** 알림 설정은 화면 가운데 모달로 연다. Esc·바깥 막은 닫기와 같다. */
+function ReminderDialog({ onClose, children }: Readonly<{ onClose: () => void; children: React.ReactNode }>) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (!ref.current?.open) ref.current?.showModal();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className="sharing-dialog dialog reminder-dialog"
+      aria-label={t("노트 알림 설정")}
+      onCancel={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }}
+    >
+      {children}
+    </dialog>
   );
 }
 
@@ -170,20 +196,21 @@ export function ReminderEditor({
         </button>
       )}
       {open && (
+        <ReminderDialog onClose={() => updateOpen(false)}>
         <form
           className="reminder-popover"
           aria-label={t("노트 알림")}
-          onKeyDown={(event) => {
-            if (controlled && event.key === "Escape") {
-              event.stopPropagation();
-              updateOpen(false);
-            }
-          }}
           onSubmit={(event) => {
             event.preventDefault();
             void change(new Date(value).getTime());
           }}
         >
+          <div className="dialog-title-row">
+            <h2 className="dialog-title">{t("노트 알림 설정")}</h2>
+            <button type="button" className="icon-btn" aria-label={t("대화상자 닫기")} onClick={() => updateOpen(false)}>
+              <X size={16} aria-hidden />
+            </button>
+          </div>
           <label>
             {t("알림 날짜와 시간")}
             <input
@@ -195,7 +222,7 @@ export function ReminderEditor({
               onChange={(event) => setValue(event.target.value)}
             />
           </label>
-          <p>{t("이 기기의 현지 시간입니다. 앱 실행 중 표시하며, 지난 알림은 다음 실행 때 보여줍니다.")}</p>
+          <p className="reminder-hint">{t("이 기기의 현지 시간입니다. 앱 실행 중 표시하며, 지난 알림은 다음 실행 때 보여줍니다.")}</p>
           <label>
             {t("반복")}
             <select
@@ -209,28 +236,35 @@ export function ReminderEditor({
               <option value={168}>{t("7일마다")}</option>
             </select>
           </label>
-          <p>
+          <p className="dialog-note">
             {t(
               "예약 시각부터 UTC 기준 일정한 간격입니다. 시간대나 서머타임이 바뀌면 현지 표시 시간이 달라질 수 있습니다. 절전 후에는 최신 알림 한 번만 표시합니다.",
             )}
           </p>
           <SystemReminderSettings />
-          {at !== null && <p>{t("예약: {time}", { time: new Date(at).toLocaleString() })}</p>}
+          {at != null && <p>{t("예약: {time}", { time: new Date(at).toLocaleString() })}</p>}
           {error && <p role="alert">{error}</p>}
-          <div className="reminder-actions">
-            <button className="btn btn-primary btn-small" disabled={busy} type="submit">
-              {t("알림 저장")}
+          <div className="dialog-actions">
+            <button
+              className="btn btn-ghost"
+              disabled={busy}
+              type="button"
+              onClick={() => void change(Date.now() + 10 * 60 * 1000)}
+            >
+              {t("10분 뒤 다시 알림")}
             </button>
-            {at !== null && (
-              <button className="btn btn-small" disabled={busy} type="button" onClick={() => void change(null)}>
+            <span className="dialog-actions-gap" />
+            {at != null && (
+              <button className="btn" disabled={busy} type="button" onClick={() => void change(null)}>
                 {t("알림 해제")}
               </button>
             )}
-            <button className="btn btn-small" disabled={busy} type="button" onClick={() => updateOpen(false)}>
-              {t("닫기")}
+            <button className="btn btn-primary" disabled={busy} type="submit">
+              {t("알림 저장")}
             </button>
           </div>
         </form>
+        </ReminderDialog>
       )}
     </div>
   );

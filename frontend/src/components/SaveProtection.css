@@ -1,0 +1,54 @@
+/* 저장 실패 띠: 편집 영역 맨 위, warning 면 + 12px warning 글자 */
+.save-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 10px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+}
+.save-band-action {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.save-protection-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.save-protection .draft-recovery {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+.save-band .draft-recovery {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.save-band .draft-recovery .btn {
+  min-height: 0;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  font-weight: 400;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.save-band .draft-recovery .btn:hover:not(:disabled) {
+  background: transparent;
+}

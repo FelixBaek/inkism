@@ -27,6 +27,15 @@ try{
   // @ts-expect-error -- served by Vite in the browser
   const {serializeModelMapped,modelSourceSegments}=await import('/src/lib/segment-model.ts');
   const enc=new TextEncoder(),dec=new TextDecoder();
+  const exactEdited=(actual,expected,label)=>{
+   const root=document.createElement('template');root.innerHTML=actual;
+   const edited=Array.from(root.content.children).slice(1,-1);
+   if(!edited.length)throw Error('missing edited block '+label);
+   const nodes=edited.flatMap(node=>[node,...node.querySelectorAll('[id]')]);const ids=[];
+   for(const node of nodes){const id=node.getAttribute('id');if(id&&/^ink-block-[0-9a-f-]{36}$/.test(id)){ids.push(id);node.removeAttribute('id');}}
+   if(!ids.length||new Set(ids).size!==ids.length)throw Error('missing or duplicate edited identities '+label);
+   if(canonicalRichHTML(root.innerHTML)!==expected)throw Error(label);
+  };
   const original=['<p>앞 &amp;😀</p>','<p><strong>abcdef</strong></p>','<p>뒤 raw&#128512;</p>'],whole=original.join('');
   const source={check:()=>{},read:async(offset,limit)=>({ready:true,total_blocks:3,next_offset:offset+limit<3?offset+limit:null,blocks:original.slice(offset,offset+limit).map((html,index)=>({ordinal:offset+index,html,byte_offset:enc.encode(original.slice(0,offset+index).join('')).length}))})};
   const inputs=[
@@ -71,7 +80,7 @@ try{
    try{result=m.changeSelection(prepared,op);}finally{Object.defineProperty(Element.prototype,'innerHTML',descriptor);window.DOMParser.prototype.parseFromString=nativeParse;}
    const assembled=dec.decode(enc.encode(whole).subarray(0,result.start))+result.replacement+dec.decode(enc.encode(whole).subarray(result.start+enc.encode(result.expected).length));
    const expected=getHTMLFromFragment(tr.doc.content,schema);
-   if(canonicalRichHTML(assembled)!==expected)throw Error('full baseline '+fixture.name+' reverse='+reverse);
+   exactEdited(assembled,expected,'full baseline '+fixture.name+' reverse='+reverse);
    if(!assembled.startsWith(original[0])||!assembled.endsWith(original[2]))throw Error('outside raw changed '+fixture.name);
    if(!fixture.fallback&&largest>65536)throw Error('whole product DOM '+fixture.name+' bytes='+largest);
    if(enc.encode(result.previewWindow.raw).length>32768)throw Error('large display '+fixture.name);
@@ -105,7 +114,7 @@ try{
    t.innerHTML=sanitizeRichHtml(operation.html);const tr=state.tr.replaceSelection(parser.parseSlice(t.content,{preserveWhitespace:'full'}));
    const changed=m.changeSelection(prepared,operation),assembled=before.slice(0,changed.start)+changed.replacement+before.slice(changed.start+changed.expected.length);
    if(!assembled.startsWith(before.slice(0,at))||!assembled.endsWith(before.slice(at+6)))throw Error('raw alias outside changed '+token);
-   if(canonicalRichHTML(assembled)!==getHTMLFromFragment(tr.doc.content,schema))throw Error('alias baseline '+token+' split='+split);
+   if(canonicalRichHTML(assembled.replace(/ id="ink-block-[0-9a-f-]{36}"/g,''))!==getHTMLFromFragment(tr.doc.content,schema))throw Error('alias baseline '+token+' split='+split);
    const pieces:any[]=Array.from(modelSourceSegments(assembled,0,[]));
    if(pieces.at(-1).end_context.length)throw Error('unbalanced alias source '+token);
    const shown={ordinal:0,byte_offset:changed.previewWindow.byteStart,source:changed.previewWindow.raw,start_context:changed.previewWindow.internal?.start_context??[],end_context:changed.previewWindow.internal?.end_context??[]};

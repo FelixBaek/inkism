@@ -10,6 +10,8 @@ import type { MenuItemSpec } from "./Menu";
 import { ReminderEditor } from "./Reminders";
 import { NoteShareDialog } from "./NoteShareDialog";
 import { PREVIEW_EVENT } from "./PreviewExport";
+import "./CommandPalette.css";
+import { Segmented } from "./Segmented";
 
 const LABELS: Record<string, string> = {
   "새 탭에서 열기": "Open in new tab",
@@ -18,16 +20,17 @@ const LABELS: Record<string, string> = {
   즐겨찾기: "Favorite",
   "알림 설정": "Remind me",
   보관: "Archive",
-  노트북: "Notebooks: Link notebooks",
+  "폴더에 넣기": "Add to folder: Folders",
   "색 지정": "Assign color: Add color",
   태그: "Tags: Assign to...",
   인쇄: "Print",
   게시: "Publish",
   "다른 형식으로 내보내기": "Export as",
+  내보내기: "Export as",
   "다른 형식으로 복사": "Copy as",
   "링크 복사": "Copy link",
   복제: "Duplicate",
-  "휴지통으로 옮기기": "Move to trash",
+  삭제: "Delete: Move to deleted notes",
 };
 export function CommandPalette({ open, onClose }: Readonly<{ open: boolean; onClose: () => void }>) {
   const s = useStore(),
@@ -158,8 +161,9 @@ export function CommandPalette({ open, onClose }: Readonly<{ open: boolean; onCl
           </button>
         </div>
         <nav className="command-filters" aria-label={t("명령 표시 범위")}>
-          {([['all','전체 명령'],['favorites','즐겨찾는 명령'],['recent','최근 실행'],['frequent','자주 실행']] as const).map(([value,label])=><button key={value} aria-pressed={filter===value} onClick={()=>{setFilter(value);setGroup(null);setSelected(0);}}>{t(label)}</button>)}
-          <button disabled={!Object.keys(history.usage).length} onClick={clearCommandHistory}>{t("명령 사용 기록 지우기")}</button>
+          <Segmented label={t("명령 표시 범위")} value={filter} onChange={(value)=>{setFilter(value);setGroup(null);setSelected(0);}}
+            options={([['all','전체 명령'],['favorites','즐겨찾는 명령'],['recent','최근 실행'],['frequent','자주 실행']] as const).map(([value,label])=>[value,t(label)] as const)} />
+          <button className="command-clear" disabled={!Object.keys(history.usage).length} onClick={clearCommandHistory}>{t("명령 사용 기록 지우기")}</button>
         </nav>
         <div className="command-results">
           <p>

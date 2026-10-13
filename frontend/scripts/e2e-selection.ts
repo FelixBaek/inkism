@@ -1,6 +1,8 @@
 import {chromium} from './browser-env.ts';
 import {waitSaved} from './save-state.ts';
 import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47846';
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 const page=await browser.newPage();
@@ -35,7 +37,7 @@ try {
  await page.setViewportSize({width:390,height:844});
  await root.click();await page.keyboard.press('Control+a');await menu.waitFor({state:'visible'});
  await page.waitForFunction(()=>{const r=document.querySelector('.selection-toolbar')?.getBoundingClientRect();return r && r.width>0 && r.x>=0 && r.right<=390;});
- await page.screenshot({path:'../.impeccable/review/react-selection-mobile.png',fullPage:true});
+ await page.screenshot({path:path.join(os.tmpdir(),'react-selection-mobile.png'),fullPage:true});
  await menu.getByRole('button',{name:'선택 글자 굵게',exact:true}).focus();await page.keyboard.press('Escape');
  await menu.waitFor({state:'hidden'});
  assert.deepEqual(errors,[]);

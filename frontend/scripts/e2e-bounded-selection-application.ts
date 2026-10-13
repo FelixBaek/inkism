@@ -45,27 +45,27 @@ try{
  await select();reads.length=0;
  await page.keyboard.press('Delete');await idle();await saved();
  const deleted=source.slice(0,seam-1)+source.slice(seam);
- assert.equal(await body(),deleted,'one selected character removed with exact outside bytes');
+ const deletedIds=assertBlockBytes(await body(),deleted,{added:1,message:'one selected character removed with exact outside bytes'});
  assert.ok(reads.length<=2&&reads.every(r=>r.offset>=location.offset-2&&r.limit<=2),'short selection reads only adjacent internal pieces');
- if(process.env.INKISM_LAZY!=='0')assert.ok(splices.length>0&&splices.every(s=>(s.edits??[s.content]).every(edit=>edit.start>0&&Buffer.byteLength(edit.expected)<=65536)),'bounded write range');
+ if(process.env.INKISM_LAZY!=='0')assert.ok(splices.length>0&&splices.every(s=>(s.edits??[s.content]).every(edit=>(edit.start>0||edit.expected==='<p>')&&Buffer.byteLength(edit.expected)<=65536)),'bounded write range');
  assert.ok((await editor.textContent()).length<33000);assert.ok(await page.locator('*').count()<1500);
  // The next character must land at the actual edit, rather than the start of
  // the prepared source range or a distant preview.
  await page.keyboard.insertText('후속');await saved();
  // Typing in the internal window identifies the giant paragraph around it by
  // one splice of its opening tag; every other byte is exact.
- assertBlockBytes(await body(),source.slice(0,seam-1)+'후속'+source.slice(seam),{added:1,message:'follow-up input retains exact caret'});
+ assertBlockBytes(await body(),source.slice(0,seam-1)+'후속'+source.slice(seam),{added:1,ids:deletedIds,message:'follow-up input retains exact caret'});
  await page.reload();await ready();
- await historyKey(page,'undo');await saved();assert.equal(await body(),deleted,'restart undo follow-up input');
+ await historyKey(page,'undo');await saved();assertBlockBytes(await body(),deleted,{added:1,ids:deletedIds,message:'restart undo follow-up input'});
  await historyKey(page,'undo');await saved();assert.equal(await body(),source,'restart undo selected deletion');
- await historyKey(page,'redo');await saved();assert.equal(await body(),deleted,'restart redo selected deletion');
+ await historyKey(page,'redo');await saved();assertBlockBytes(await body(),deleted,{added:1,ids:deletedIds,message:'restart redo selected deletion'});
  await historyKey(page,'undo');await saved();
  await page.reload();await ready();await select();
  // A read failure must keep the selection and source for an explicit retry.
  const fail=async route=>route.request().postDataJSON().op==='document_segments'?route.fulfill({status:503,json:{ok:false,error:'unavailable selection cache'}}):route.fallback();
  await page.route('**/api/rpc',fail);await page.keyboard.press('Delete');await page.locator('.window-error').waitFor();
  assert.equal(await body(),source,'failed read retains source');
- await page.unroute('**/api/rpc',fail);await editor.evaluate((el: any)=>el.editor.view.focus());await page.keyboard.press('Delete');await idle();await saved();assert.equal(await body(),deleted,'explicit repeated operation after failure');
+ await page.unroute('**/api/rpc',fail);await editor.evaluate((el: any)=>el.editor.view.focus());await page.keyboard.press('Delete');await idle();await saved();assertBlockBytes(await body(),deleted,{added:1,message:'explicit repeated operation after failure'});
  await historyKey(page,'undo');await saved();assert.equal(await body(),source);await page.reload();await ready();await select();
  let entered,release;const held=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve);
  const delay=async route=>{if(route.request().postDataJSON().op==='document_segments'){entered();await gate;}return route.fallback();};

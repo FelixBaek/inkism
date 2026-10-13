@@ -12,6 +12,7 @@ export function createMockEngine() {
   const notebooks = [];
   const historyByNote = new Map(); // id -> entries[]
   const indexJobs = []; // 색인 지연 시뮬레이션용
+  let trashDays = null;
 
   const now = () => Date.now();
   const summary = (n) => {
@@ -129,7 +130,7 @@ export function createMockEngine() {
     delete: ({ id }) => {
       const n = notes.get(id);
       if (!n) throw new Error("노트를 찾을 수 없습니다");
-      if (!n.trashed) throw new Error("휴지통의 노트만 삭제할 수 있습니다");
+      if (!n.trashed) throw new Error("지운 노트만 삭제할 수 있습니다");
       notes.delete(id);
       historyByNote.delete(id);
       return { deleted: true };
@@ -138,7 +139,7 @@ export function createMockEngine() {
     save_notebook: (args) => {
       if (args.id) {
         const nb = notebooks.find((x) => x.id === args.id);
-        if (!nb) throw new Error("노트북을 찾을 수 없습니다");
+        if (!nb) throw new Error("폴더를 찾을 수 없습니다");
         nb.name = args.name ?? nb.name;
         nb.color = args.color ?? nb.color;
         return nb;
@@ -161,6 +162,16 @@ export function createMockEngine() {
       }
       return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
     },
+    notebook_counts: () => {
+      const counts = {};
+      for (const n of notes.values()) if (n.notebook_id && !n.trashed && !n.archived) counts[n.notebook_id] = (counts[n.notebook_id] ?? 0) + 1;
+      return counts;
+    },
+    trash_retention_get: () => ({ days: trashDays }),
+    trash_retention_set: ({ days }) => ((trashDays = days ?? null), { days: trashDays }),
+    // 목업은 지운 시각을 따로 두지 않고 마지막 수정 시각을 쓴다.
+    trash_times: ({ ids }) => ({ days: trashDays, times: Object.fromEntries(ids.filter((id) => notes.get(id)?.trashed).map((id) => [id, notes.get(id).updated_at])) }),
+    trash_purge: () => ({ deleted: [], more: false }),
     stats: () => {
       const all = [...notes.values()];
       return {

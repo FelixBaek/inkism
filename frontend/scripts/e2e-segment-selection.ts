@@ -9,7 +9,7 @@ const server=await createServer({root:fileURLToPath(new URL('..',import.meta.url
   try{res.setHeader('Content-Type','text/html');res.end(await vite.transformIndexHtml('/__selection',`<script type="module">
    import {segmentPositionMap,saveSegmentSelection,restoreSegmentSelection} from '/src/lib/segment-selection.ts';
    import {WindowHistory} from '/src/lib/window-history.ts';
-   (window as any).fixture={segmentPositionMap,saveSegmentSelection,restoreSegmentSelection,WindowHistory};
+   window.fixture={segmentPositionMap,saveSegmentSelection,restoreSegmentSelection,WindowHistory};
   </script>`));}catch(error){next(error);}
  });},
 }]});

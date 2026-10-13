@@ -17,6 +17,22 @@ function dialogClassName(d: NonNullable<ReturnType<typeof useStore>["dialog"]>) 
   return "dialog";
 }
 
+/** 대화상자 제목 줄: 제목 + 오른쪽 닫기 버튼. */
+function DialogHead({ danger, children }: { danger?: boolean; children: React.ReactNode }) {
+  const store = useStore();
+  return (
+    <div className="dialog-title-row">
+      <h2 id="dialog-title" className={`dialog-title ${danger ? "danger" : ""}`}>
+        {children}
+      </h2>
+      {/* 처음 초점은 입력칸이나 동작 버튼에 둔다 */}
+      <button type="button" className="icon-btn" data-head-close aria-label={t("대화상자 닫기")} onClick={() => store.closeDialog()}>
+        <X size={16} aria-hidden />
+      </button>
+    </div>
+  );
+}
+
 /** 접근 가능한 대화상자 호스트. confirm()/prompt() 대신 이 구조를 사용한다. */
 export function DialogHost() {
   const store = useStore();
@@ -27,7 +43,7 @@ export function DialogHost() {
     if (!store.dialog) return;
     lastFocused.current = document.activeElement;
     const el = dialogRef.current;
-    const focusable = el?.querySelector<HTMLElement>("input, button, [tabindex]:not([tabindex='-1'])");
+    const focusable = el?.querySelector<HTMLElement>("input, button:not([data-head-close]), [tabindex]:not([tabindex='-1'])");
     (focusable ?? el)?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.isComposing || e.key === "Process") return;
@@ -74,10 +90,10 @@ export function DialogHost() {
         >
           {d.kind === "confirm" && (
             <>
-              <h2 id="dialog-title" className={`dialog-title ${d.options.danger ? "danger" : ""}`}>
+              <DialogHead danger={d.options.danger}>
                 {d.options.danger && <AlertTriangle size={18} aria-hidden />}
                 {d.options.title}
-              </h2>
+              </DialogHead>
               <p className="dialog-message">{d.options.message}</p>
               <div className="dialog-actions">
                 <button type="button" className="btn" onClick={() => store.closeDialog()}>
@@ -101,10 +117,10 @@ export function DialogHost() {
 
           {d.kind === "error" && (
             <>
-              <h2 id="dialog-title" className="dialog-title danger">
+              <DialogHead danger>
                 <AlertTriangle size={18} aria-hidden />
                 {d.title}
-              </h2>
+              </DialogHead>
               <p className="dialog-message">{d.message}</p>
               <div className="dialog-actions">
                 <button type="button" className="btn btn-primary" onClick={() => store.closeDialog()}>
@@ -116,9 +132,7 @@ export function DialogHost() {
 
           {d.kind === "imported" && (
             <>
-              <h2 id="dialog-title" className="dialog-title">
-                {t("백업 가져오기 완료")}
-              </h2>
+              <DialogHead>{t("백업 가져오기 완료")}</DialogHead>
               <p className="dialog-message">
                 {t("{n}개의 노트를 가져왔습니다. 기존 노트와 중복되지 않는 새 노트로 추가되었습니다.", { n: d.count })}
               </p>
@@ -170,9 +184,7 @@ function PromptForm() {
         submit();
       }}
     >
-      <h2 id="dialog-title" className="dialog-title">
-        {d.options.title}
-      </h2>
+      <DialogHead>{d.options.title}</DialogHead>
       <p className="dialog-message">{d.options.message}</p>
       <label className="field-label" htmlFor="dialog-field">
         {d.options.label}
@@ -197,10 +209,10 @@ function PromptForm() {
             id="dialog-description"
             className="text-field"
             rows={3}
-            style={{ resize: "vertical", font: "inherit", fontSize: 13.5, lineHeight: 1.5 }}
+            style={{ resize: "vertical" }}
             maxLength={1000}
             value={description}
-            placeholder={t("이 노트북에 대한 짧은 설명 (선택)")}
+            placeholder={t("이 폴더에 대한 짧은 설명 (선택)")}
             onChange={(e) => setDescription(e.target.value)}
           />
         </>

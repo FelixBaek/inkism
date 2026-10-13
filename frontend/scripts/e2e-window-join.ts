@@ -15,6 +15,8 @@ const jump=async offset=>{await page.getByLabel('이동할 블록 번호').fill(
 const saves=trackSaves(page),saved=()=>saves.saved();
 const undo=()=>historyKey(page,'undo');
 const merged=html.replace(block(31)+block(32),block(31).slice(0,-4)+block(32).slice(3));
+// The edited (joined) block gains exactly one ink-block id; everything else stays byte-identical.
+const joined=async()=>{const content=(await rpc('get',{id:note.id})).content,ids=content.match(/ id="ink-block-[0-9a-f-]{36}"/g)||[];assert.equal(ids.length,1,content.slice(0,200));assert.equal(content.replace(ids[0],''),merged);};
 try {
  await page.goto(base+'/?virtual=1'+(process.env.INKISM_LAZY==='1'?'&lazy=1':''));await page.getByRole('button',{name:'노트 열기: '+title,exact:true}).click();await at(0);
  await jump(32);await page.locator('.tiptap-prose p').first().click();await page.keyboard.press('Home');await page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.state.selection.from===1);await page.keyboard.press('Backspace');await at(31);await page.waitForFunction(()=>document.querySelectorAll('.tiptap-prose p').length===1);await saved();

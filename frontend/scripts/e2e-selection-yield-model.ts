@@ -88,12 +88,15 @@ try{
    const begin=performance.now();let actual;
    try{actual=await changeSelectionAsync(prepared,fixture.html===undefined?{kind:'slice',slice:fixture.slice.toJSON()}:{kind:'paste',html:fixture.html});}finally{clearInterval(timer);}
    const duration=performance.now()-begin;
-   if(actual.replacement!==expected)throw Error('native HTML differs: '+fixture.name);
+   const ids=[...actual.replacement.matchAll(/ id="(ink-block-[0-9a-f-]{36})"/g)];
+   let expectedIds=0;native.doc.descendants(node=>{if(Object.hasOwn(node.attrs,'id')&&!node.attrs.id)expectedIds++;});
+   if(ids.length!==expectedIds||new Set(ids.map(v=>v[1])).size!==ids.length)throw Error('new block identities differ: '+fixture.name);
+   if(actual.replacement.replace(/ id="ink-block-[0-9a-f-]{36}"/g,'')!==expected)throw Error('native HTML differs: '+fixture.name);
     if(fixture.size>=1024*1024&&ticks<2)throw Error('UI timer did not run during calculation: '+fixture.name);
    const window=actual.previewWindow,internal=window.internal;
    const shown={ordinal:0,byte_offset:window.byteStart,source:window.raw,start_context:internal?.start_context??[],end_context:internal?.end_context??[]};
    const point=segmentPositionMap(shown,schema).point(actual.selection.head);
-   const full=segmentPositionMap({ordinal:0,byte_offset:0,source:expected,start_context:[],end_context:[]},schema);
+   const full=segmentPositionMap({ordinal:0,byte_offset:0,source:actual.replacement,start_context:[],end_context:[]},schema);
    if(full.position(point.byte,point.within)!==native.selection.head)throw Error('native cursor differs: '+fixture.name);
    if(prepared.before!==original||prepared.state.doc!==originalDoc)throw Error('calculation mutated prepared source');
    measurements.push({name:fixture.name,duration,maxGap,ticks});

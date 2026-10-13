@@ -15,36 +15,152 @@
 .split-primary > .editor-workspace {
   min-height: 0;
 }
+/* 분할 편집 (Figma 05 34:7): 오른쪽 창도 탭 줄(rail) → 도구줄(raised) → 본문. */
 .split-controls {
   display: flex;
-  gap: 6px;
-  padding: 4px 8px;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 4px;
   border-bottom: 1px solid var(--border);
+  background: var(--raised);
+  font-size: var(--fs-caption);
   flex-shrink: 0;
+}
+.split-controls > span {
+  color: var(--muted);
+  white-space: nowrap;
 }
 .split-controls select {
   min-width: 0;
   flex: 1;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  background: var(--hover);
+  color: var(--text);
+  font-size: var(--fs-caption);
 }
+/* 오른쪽 창 순서 (Figma 05): 탭 → 도구줄(분할 동작 · 서식 도구) → 경고 → 제목 → 태그 → 본문 */
 .split-secondary {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--border);
+  background: var(--canvas);
   overflow: hidden;
+  position: relative;
 }
-.split-secondary h2 {
-  font-size: 16px;
-  margin: 10px 16px;
+.split-secondary > * {
+  order: 6;
+}
+.split-secondary > :is(.split-tabs, .split-controls) {
+  order: 0;
+}
+.split-rich {
+  display: contents;
+}
+.split-rich > :is(.editor-toolbar, .tb-row-pinned, .callout-tools, .table-tools, .csv-file-tools) {
+  order: 1;
+}
+.split-secondary > .split-title {
+  order: 3;
+}
+.split-rich > .editor-scroll {
+  order: 6;
+  flex: 1;
+  min-height: 0;
+}
+.split-rich > .find-replace {
+  position: absolute;
+  top: 84px;
+  right: 24px;
+  z-index: 20;
+  width: min(440px, calc(100% - 48px));
+}
+.split-title {
+  margin: 32px 32px 0;
+}
+.split-title input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+}
+.split-title input:focus {
+  outline: none;
+}
+.split-title input:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.split-secondary > .split-tags {
+  order: 4;
+  flex: none;
+  padding: 18px 32px 0;
+}
+.split-secondary > .source-editor {
+  margin-top: 18px;
+}
+.split-secondary .split-controls .mode-toggle {
+  flex: none;
 }
 .split-secondary .source-editor {
   min-height: 0;
   flex: 1;
+  margin: 0 32px 32px;
 }
-.split-secondary [role="alert"] {
-  padding: 8px;
-  color: var(--danger);
+.split-secondary .source-editor .cm-editor {
+  background: var(--raised);
+}
+/* 충돌·저장 실패 경고: 오른쪽 창 안 warning 띠 */
+.split-secondary > [role="alert"] {
+  order: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--fs-body);
+  font-weight: 500;
+}
+.split-secondary > [role="alert"] > p {
+  flex-basis: 100%;
+  margin: 0 0 4px;
+  font-size: var(--fs-small);
+  font-weight: 400;
+}
+.split-secondary > [role="alert"] > button {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  background: var(--hover);
+  color: var(--text);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  cursor: pointer;
+}
+.split-secondary > [role="alert"] > button:first-of-type {
+  border-color: var(--green);
+  background: var(--green);
+  color: var(--on-accent);
+}
+.split-secondary > [role="alert"] > button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.split-workspace > [role="alert"] {
+  padding: 12px 20px;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 @media (max-width: 900px) {
   .split-workspace.is-split {
@@ -58,27 +174,40 @@
 .split-tabs {
   display: flex;
   flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 4px;
   overflow-x: auto;
   min-width: 0;
-  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 .split-tabs > div {
   display: flex;
   flex-shrink: 0;
-  max-width: 220px;
+  align-items: center;
+  max-width: 180px;
+  height: 30px;
+  border: 1px solid transparent;
+}
+.split-tabs > div:has([aria-selected="true"]) {
+  background: var(--hover);
+  border-color: var(--border);
 }
 .split-tabs button {
   border: 0;
   background: transparent;
-  color: inherit;
-  padding: 7px 9px;
+  color: var(--text);
+  padding: 0 8px 0 12px;
+  font-size: var(--fs-caption);
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
 }
-.split-tabs [aria-selected="true"] {
-  background: var(--active);
-  color: var(--green);
+.split-tabs button + button {
+  padding: 0 8px 0 0;
 }
 
 .history-limit-notice {
@@ -93,7 +222,9 @@
 }
 .split-top-row {
   align-items: center;
-  min-height: 41px;
+  justify-content: flex-end;
+  min-height: 36px;
+  background: var(--surface);
 }
 .split-top-actions {
   margin-left: auto;
@@ -106,8 +237,20 @@
   min-height: 28px;
   height: 28px;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: var(--fs-caption);
 }
 .split-top-row .inspector-toggle-button {
   padding: 0 10px;
+}
+/* 서식 편집일 때 제목·태그를 본문 글 시작선(블록 손잡이 자리 72px)에 맞춘다. */
+.split-secondary:has(.block-gutter) > .split-title {
+  margin-left: 72px;
+}
+.split-secondary:has(.block-gutter) > .split-tags {
+  padding-left: 72px;
+}
+.split-rich > .csv-file-tools {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px 0;
 }

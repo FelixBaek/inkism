@@ -1,4 +1,4 @@
-/* 노트북 트리: 하위 노트북 접기 단추. 줄 높이는 side-item을 따른다. */
+/* 폴더 트리: 하위 폴더 접기 단추. 줄 높이는 side-item을 따른다. */
 .side-caret {
   display: inline-flex;
   align-items: center;

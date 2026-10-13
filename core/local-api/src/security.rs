@@ -57,6 +57,16 @@ fn controller(security: &dyn crate::SecurityController, r: &Request) -> Response
                 return Response::fail(409, e);
             }
         }
+        "/api/security/disable" => {
+            let status = security.status();
+            if !status.available || !status.configured || status.locked {
+                return Response::fail(409, "잠금을 해제한 상태에서만 끌 수 있습니다");
+            }
+            // Always a full Google login inside; there is no body or flag to skip it.
+            if let Err(e) = security.disable(Instant::now() + LOGIN_TIMEOUT) {
+                return Response::fail(409, e);
+            }
+        }
         "/api/security/cancel" => security.cancel(),
         "/api/security/lock" => {
             if let Err(e) = security.lock() {
@@ -135,6 +145,10 @@ mod tests {
         fn lock(&self) -> Result<()> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             self.lock_err.map_or(Ok(()), |e| Err(e.into()))
+        }
+        fn disable(&self, _deadline: Deadline) -> Result<()> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.login_err.map_or(Ok(()), |e| Err(e.into()))
         }
     }
 
@@ -269,6 +283,7 @@ mod tests {
             provider: "google".into(),
             setup_required: true,
             pending: true,
+            account_hint: "s***@example.com".into(),
             ..Default::default()
         };
         let fake = Fake::new(status);
@@ -297,12 +312,17 @@ mod tests {
             "provider",
             "setup_required",
             "pending",
+            "account_hint",
         ];
         assert!(v["ok"] == true && data.len() == allowed.len(), "{v}");
         assert!(
             data.keys().all(|k| allowed.contains(&k.as_str())),
             "nonpublic status field: {v}"
         );
+        // Only a masked account: one visible character before `***@`.
+        let hint = data["account_hint"].as_str().unwrap();
+        let (local, _) = hint.split_once('@').unwrap();
+        assert!(local.chars().count() == 4 && local.ends_with("***"), "unmasked account: {hint}");
     }
 
     #[test]
@@ -479,5 +499,37 @@ mod tests {
             "{}",
             text(&out)
         );
+    }
+
+    #[test]
+    fn disable_only_from_unlocked_configured_state_through_controller() {
+        let configured = SecurityStatus {
+            available: true,
+            configured: true,
+            ..Default::default()
+        };
+        for (status, ok_expected) in [
+            (configured.clone(), true),
+            (SecurityStatus { locked: true, ..configured.clone() }, false),
+            (SecurityStatus { configured: false, ..configured.clone() }, false),
+            (SecurityStatus { available: false, ..configured.clone() }, false),
+        ] {
+            let fake = Fake::new(status);
+            let out = call(&handler(&fake), "POST", "/api/security/disable", "{}");
+            assert_eq!(out.status == 200, ok_expected, "{}", text(&out));
+            assert_eq!(fake.calls(), usize::from(ok_expected));
+        }
+        // GET or a non-empty body never reaches the controller.
+        let fake = Fake::new(configured.clone());
+        assert_ne!(call(&handler(&fake), "GET", "/api/security/disable", "").status, 200);
+        assert_ne!(call(&handler(&fake), "POST", "/api/security/disable", r#"{"skip_login":true}"#).status, 200);
+        assert_eq!(fake.calls(), 0);
+        // A failed re-login is reported and nothing else happens.
+        let fake = Arc::new(Fake {
+            status: configured,
+            login_err: Some("다른 계정"),
+            ..Fake::default()
+        });
+        assert_eq!(call(&handler(&fake), "POST", "/api/security/disable", "{}").status, 409);
     }
 }

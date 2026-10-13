@@ -18,47 +18,68 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+/* 내보내기 팝업: 기본 480px, 미리보기를 열면 넓어진다 */
 .preview-dialog {
-  width: min(1040px, 94vw);
-  max-width: 94vw;
-  height: 90vh;
+  width: min(480px, calc(100vw - 32px));
   max-height: 90vh;
   padding: 20px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--canvas);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: var(--raised);
   color: var(--text);
   overflow: auto;
 }
-.preview-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.4);
+.preview-dialog.is-previewing {
+  width: min(1040px, 94vw);
+  max-width: 94vw;
+  height: 90vh;
 }
-.preview-dialog header,
-.preview-dialog footer {
+.preview-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.preview-dialog::backdrop {
+  background: var(--scrim);
+}
+.preview-dialog > p:not(.dialog-note) {
+  margin: 0 0 12px;
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+.export-formats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.export-formats .field-label {
+  margin: 0 0 1px;
+}
+.export-format {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+  cursor: pointer;
 }
-.preview-dialog header {
-  justify-content: space-between;
+.export-tools {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 12px;
 }
-.preview-dialog h2 {
-  margin: 0;
-  font-size: 18px;
-}
-.preview-dialog p {
-  font-size: 13px;
+.preview-busy {
+  display: block;
+  margin: 0 0 12px;
+  font-size: var(--fs-small);
   color: var(--muted);
 }
+/* 미리보기 문서는 종이 그대로 보여 준다 */
 .preview-dialog iframe {
+  flex: 1;
   width: 100%;
-  height: calc(100% - 190px);
   min-height: 240px;
+  margin: 0 0 12px;
   border: 1px solid var(--border);
   background: white;
-}
-.preview-dialog footer {
-  justify-content: flex-end;
-  margin-top: 12px;
 }

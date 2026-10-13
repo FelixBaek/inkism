@@ -989,9 +989,12 @@ export function WindowedRichEditor({
     prepared: PreparedSelection,
     result: ReturnType<typeof changeSelection>,
     selection: DocumentSelection,
+    inputCurrent: () => boolean,
   ) => {
     const tags = await boundaryTagEdits(draft, result.tags, prepared.check);
     prepared.check();
+    // The tag lookup also yields: input accepted while it waits must be replayed.
+    if (!inputCurrent()) return false;
     const { regionFrom, source, edits, historyFrom, relative } = regionSplice(draft, tags, result, range);
     applyRegionSplice(draft, edits, result, source);
     history.current.record({
@@ -1058,6 +1061,7 @@ export function WindowedRichEditor({
     retainHistory();
     refreshHistory();
     if (scroll.current) layoutScroll.current = geometry().before;
+    return true;
   };
   const failSelectionRun = (e: unknown) => {
     if (composition.current?.pending) composition.current.failed = true;
@@ -1108,6 +1112,31 @@ export function WindowedRichEditor({
       { completeBlocks },
     );
   };
+  const commitLatestSelection = async (
+    operation: SelectionOperation | "cut" | (() => Promise<SelectionOperation>),
+    prepared: PreparedSelection, draft: Draft, range: { from: number; to: number },
+    selection: DocumentSelection, check: () => void,
+  ) => {
+      const deadline = Date.now() + 30000;
+      for (;;) {
+        const capture = composition.current, inputState = capture?.editor.state;
+        const inputCurrent = () => composition.current === capture && !composing.current &&
+          (!capture || (!capture.editor.isDestroyed && capture.editor.state === inputState));
+        let result: ReturnType<typeof changeSelection>;
+        if (typeof operation === "function") {
+          result = await changeProvisionalSelection(prepared, operation);
+        } else {
+          const resolved = resolvedSelectionOperation(operation as SelectionOperation | "cut");
+          result = resolved.kind === "block"
+            ? await changeBlockSelectionAsync(prepared, resolved, () => followingBlockInput(check))
+            : changeSelection(prepared, resolved);
+        }
+        prepared.check();
+        if (await commitSelection(draft, range, prepared, result, selection, inputCurrent)) break;
+        if (Date.now() > deadline)
+          throw new Error(t("계속 입력 중이어서 반영을 중단했습니다. 입력과 원문을 유지합니다. 잠시 후 다시 시도해 주세요."));
+      }
+  };
   const runSelection = async (operation: SelectionOperation | "copy" | "cut" | (() => Promise<SelectionOperation>)) => {
     if (operation !== "copy" && isReadOnly()) return false;
     const selection = documentSelected.current;
@@ -1142,18 +1171,7 @@ export function WindowedRichEditor({
         ? { from: 0, to: 0 }
         : await locateBlockRange(draft.content, prepared.byteStart, prepared.before);
       prepared.check();
-      let result: ReturnType<typeof changeSelection>;
-      if (typeof operation === "function") {
-        result = await changeProvisionalSelection(prepared, operation);
-      } else {
-        const resolved = resolvedSelectionOperation(operation as SelectionOperation | "cut");
-        result =
-          resolved.kind === "block"
-            ? await changeBlockSelectionAsync(prepared, resolved, () => followingBlockInput(check))
-            : changeSelection(prepared, resolved);
-      }
-      prepared.check();
-      await commitSelection(draft, range, prepared, result, selection);
+      await commitLatestSelection(operation, prepared, draft, range, selection, check);
       return true;
     } catch (e) {
       failSelectionRun(e);
@@ -1436,14 +1454,16 @@ export function WindowedRichEditor({
       releaseDragElement.current?.();
       const rect = element.getBoundingClientRect();
       event.dataTransfer.setDragImage(element, 0, 0);
-      scroll.current.appendChild(element);
+      const host = scroll.current;
       const opacity = element.style.opacity,
         pointer = element.style.pointerEvents,
         width = element.style.width,
         height = element.style.height;
       element.style.width = rect.width + "px";
       element.style.height = rect.height + "px";
+      // Chromium aborts a native drag whose source moves during dragstart.
       const frame = requestAnimationFrame(() => {
+        host.appendChild(element);
         element.style.opacity = "0";
         element.style.pointerEvents = "none";
       });
@@ -1672,6 +1692,7 @@ export function WindowedRichEditor({
     // Opening tags outside the region that received a block identity precede
     // it: splice them first (bounded: the tags alone), then the region.
     const tags = await boundaryTagEdits(draft, result.tags, check);
+    check();
     const { regionFrom, source, edits, historyFrom, relative } = regionSplice(draft, tags, result, {
       from: range.from,
       to: range.from + result.expected.length,
@@ -1967,6 +1988,9 @@ export function WindowedRichEditor({
     return true;
   };
   const acceptPendingTransaction = (capture: NonNullable<typeof composition.current>, tr: Transaction) => {
+    // Plugin follow-ups (e.g. block IDs) start from the not-yet-shown state; they
+    // must not rewrite the provisional projection.
+    if (tr.before !== capture.editor.state.doc) return true;
     try {
       capture.pending!.accept(capture.editor.state, tr);
       // Reproject before an accepted transaction could grow the visible DOM.

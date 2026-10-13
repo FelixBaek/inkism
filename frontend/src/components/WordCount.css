@@ -9,7 +9,7 @@
   font: inherit;
   padding: 2px 6px;
   margin: -2px -6px;
-  border-radius: 4px;
+  border-radius: 0;
   cursor: pointer;
 }
 .word-count-button:hover,
@@ -25,7 +25,7 @@
   min-width: 180px;
   padding: 12px 14px 8px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 0;
   background: var(--surface, var(--canvas));
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.35);
   color: var(--text);
@@ -54,7 +54,7 @@
   color: var(--muted);
   cursor: pointer;
   padding: 2px;
-  border-radius: 4px;
+  border-radius: 0;
 }
 .word-count-close:hover {
   color: var(--text);

@@ -1,0 +1,8 @@
+InkismFlags.woff2: flags-only subset of Noto-COLRv1.ttf, Noto Emoji v2.047.
+Source: https://github.com/googlefonts/noto-emoji/tree/v2.047/fonts
+License: NOTO-EMOJI-LICENSE.txt (SIL Open Font License 1.1).
+
+Rebuild using fontTools with WOFF support:
+pyftsubset Noto-COLRv1.ttf --unicodes=U+1F1E6-1F1FF,U+1F3F4,U+E0061-E007A,U+E007F --flavor=woff2 --output-file=InkismFlags.woff2
+
+Only flag glyphs are included. Text remains standard Unicode, not images.

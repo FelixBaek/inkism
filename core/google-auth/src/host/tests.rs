@@ -861,3 +861,111 @@ mod dpapi {
         );
     }
 }
+
+/// Provider that also reports a (claimed) e-mail; only its masked form may survive.
+struct HintProvider(Identity, &'static str);
+impl Provider for HintProvider {
+    fn login(&self, _: &Context) -> Result<(Identity, String), BoxError> {
+        Ok((self.0.clone(), String::new()))
+    }
+    fn login_with_hint(&self, _: &Context) -> Result<(Identity, String, String), BoxError> {
+        Ok((self.0.clone(), String::new(), mask_email(self.1)))
+    }
+    fn cancel(&self) {}
+}
+
+#[test]
+fn masked_email_only_is_stored_and_reported() {
+    assert_eq!(mask_email("felix.baek@Example.com"), "f***@example.com");
+    for bad in ["", "no-at", "@example.com", "a@b@c.com", "a@localhost", "a@exa mple.com"] {
+        assert_eq!(mask_email(bad), "", "{bad}");
+    }
+    for bad in ["felix@example.com", "f**@example.com", "***@example.com", "f***@", "f***@ex ample.com"] {
+        assert!(!valid_hint(bad), "{bad}");
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("google-account.bin");
+    let fs_store: Arc<dyn Store> = Arc::new(prefix_store(path.clone()));
+    let p: Option<Arc<dyn Provider>> = Some(Arc::new(HintProvider(account(), "secret.person@example.com")));
+    let c = Controller::new(p.clone(), Some(fs_store.clone()));
+    attach_ok(&c);
+    c.login(&bg()).unwrap();
+    let status = c.status();
+    assert_eq!(status.account_hint, "s***@example.com");
+    let json = serde_json::to_string(&status).unwrap();
+    assert!(!json.contains("secret.person"), "full address in status: {json}");
+    for entry in std::fs::read_dir(dir.path()).unwrap() {
+        let raw = std::fs::read(entry.unwrap().path()).unwrap();
+        assert!(!String::from_utf8_lossy(&raw).contains("secret.person"), "full address on disk");
+    }
+    // Restart reads the hint back; a binding written before hints existed shows none.
+    let again = Controller::new(p.clone(), Some(fs_store.clone()));
+    assert_eq!(again.status().account_hint, "s***@example.com");
+    std::fs::remove_file(dir.path().join("google-account.bin.hint")).unwrap();
+    let old = Controller::new(p, Some(fs_store));
+    assert!(old.status().configured && old.status().account_hint.is_empty());
+}
+
+#[test]
+fn disable_requires_same_account_reauthentication() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("google-account.bin");
+    let fs_store: Arc<dyn Store> = Arc::new(prefix_store(path.clone()));
+    let enroll = Controller::new(provider(account()), Some(fs_store.clone()));
+    attach_ok(&enroll);
+    enroll.login(&bg()).unwrap();
+    assert!(path.exists());
+
+    // While locked, disabling is refused before any login is attempted.
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counted = calls.clone();
+    let locked = Controller::new(
+        provider_fn(move |_| {
+            counted.fetch_add(1, Ordering::SeqCst);
+            Ok(account())
+        }),
+        Some(fs_store.clone()),
+    );
+    attach_ok(&locked);
+    assert!(locked.status().locked);
+    assert!(locked.disable(&bg()).is_err());
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+
+    // Another account, a failed login or a cancelled login never removes the binding.
+    for p in [
+        provider(other("someone-else")),
+        provider_fn(|_| Err("network".into())),
+        provider(Identity { issuer: "https://evil.example".into(), ..account() }),
+    ] {
+        let c = Controller::new(p, Some(fs_store.clone()));
+        attach_ok(&c);
+        c.lock_state().gate.as_ref().unwrap().unlock_with_setup(&bg(), &mut |_| Ok(())).unwrap();
+        assert!(c.disable(&bg()).is_err());
+        assert!(c.status().configured && path.exists(), "binding removed without matching re-login");
+    }
+    let cancelled = bg().child();
+    cancelled.cancel();
+    let c = Controller::new(provider(account()), Some(fs_store.clone()));
+    attach_ok(&c);
+    c.lock_state().gate.as_ref().unwrap().unlock_with_setup(&bg(), &mut |_| Ok(())).unwrap();
+    assert!(c.disable(&cancelled).is_err());
+    assert!(path.exists());
+
+    // A store that cannot delete keeps the lock configured.
+    let s = MemoryStore::bound();
+    let m = Controller::new(provider(account()), store(&s));
+    attach_ok(&m);
+    m.lock_state().gate.as_ref().unwrap().unlock_with_setup(&bg(), &mut |_| Ok(())).unwrap();
+    assert!(m.disable(&bg()).is_err());
+    assert!(m.status().configured);
+
+    // Only the same issuer+subject after a fresh login turns the lock off.
+    let c = Controller::new(provider(account()), Some(fs_store));
+    attach_ok(&c);
+    c.lock_state().gate.as_ref().unwrap().unlock_with_setup(&bg(), &mut |_| Ok(())).unwrap();
+    c.disable(&bg()).unwrap();
+    let status = c.status();
+    assert!(!status.configured && !status.locked && status.account_hint.is_empty());
+    assert!(!path.exists());
+    assert!(c.lock().is_err(), "nothing left to lock with");
+}
