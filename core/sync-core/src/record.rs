@@ -36,17 +36,26 @@ impl ChangePayload {
         serde_json::to_vec(self)
     }
 
-    /// Parse decrypted JSON bytes once and refuse a newer payload schema.
+    /// Read the schema version before interpreting any version-specific fields.
     /// Versions through v1 retain their existing decoding compatibility.
     pub fn decode(bytes: &[u8]) -> Result<Self> {
-        let payload: Self = serde_json::from_slice(bytes)?;
-        if payload.version > PAYLOAD_VERSION {
+        #[derive(Deserialize)]
+        struct EnvelopeVersion {
+            version: u32,
+        }
+
+        // Future schemas may remove or change any of the v1 fields. A small
+        // header decode skips those fields without treating them as corrupt v1.
+        // Keep the typed decoder for supported schemas, including its duplicate
+        // field and type checks, rather than normalizing through a JSON Value.
+        let envelope: EnvelopeVersion = serde_json::from_slice(bytes)?;
+        if envelope.version > PAYLOAD_VERSION {
             return Err(SyncError::UnsupportedPayloadVersion {
-                version: payload.version,
+                version: envelope.version,
                 supported: PAYLOAD_VERSION,
             });
         }
-        Ok(payload)
+        Ok(serde_json::from_slice(bytes)?)
     }
 
     /// Deterministic total order used to pick a winner under conflict.
