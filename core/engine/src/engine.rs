@@ -135,8 +135,6 @@ impl Engine {
                 v
             }
             "document_render" => crate::source_format::document_render(conn, &req)?,
-            "collaboration_binding_get" => crate::collaboration_bindings::get(conn, &req)?,
-            "collaboration_binding_set" => crate::collaboration_bindings::set(conn, &req)?,
             "convert_content" => {
                 let v = ops_notes::convert_content(conn, &req)?;
                 self.wakeup.notify();
@@ -229,6 +227,7 @@ impl Engine {
             "history_name_current" | "history_rename" | "history_delete_named" => crate::named_versions::change(conn,&req,op)?,
             "history_body" => crate::named_versions::body(conn,&req)?,
             "history" => ops_notes::history(conn, &req)?,
+            "history_sealed" => crate::encrypted_versions::sealed(conn, &req)?,
             "restore" => {
                 let v = ops_notes::restore(conn, &req)?;
                 self.wakeup.notify();

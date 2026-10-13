@@ -19,3 +19,35 @@ fn named_versions_encrypt_compare_restore_backup_and_unlock(){
  ok(&b,json!({"op":"vault_unlock_note","id":id,"revision":items["items"][0]["revision"]}));let plain=ok(&b,json!({"op":"history","id":id}));assert_eq!(plain.as_array().unwrap().len(),2);let release=plain.as_array().unwrap().iter().find(|v|v["label"]=="Release").unwrap();assert_eq!(ok(&b,json!({"op":"history_body","id":id,"history_id":release["id"]}))["content"],"SECRET named body");
  assert!(restored["revision"].as_i64().unwrap()>locked["revision"].as_i64().unwrap());
 }
+
+/// A snapshot that stays sealed under a note that is no longer locked (as a
+/// sync can leave it) is named by `history_sealed` without plaintext, and the
+/// recovery path the history explains (lock the note again, then unlock it)
+/// brings it back as a plain named version byte for byte.
+#[test]
+fn sealed_version_under_plain_note_is_listed_and_recovered_by_relock(){
+ let dir=tempfile::tempdir().unwrap();let path=dir.path().join("notes.db");let a=AppCore::open(path.to_str().unwrap()).unwrap();
+ let n=ok(&a,json!({"op":"save","note":{"title":"t","content":"<p>SEALED-ORIGINAL</p>","text":"SEALED-ORIGINAL"}}));
+ ok(&a,json!({"op":"history_name_current","id":n["id"],"revision":n["revision"],"label":"Sealed"}));
+ ok(&a,json!({"op":"vault_create","password":"password"}));
+ let rev=|a:&AppCore|ok(a,json!({"op":"list","view":"all"}))["items"][0]["revision"].clone();
+ ok(&a,json!({"op":"vault_lock_note","id":n["id"],"revision":rev(&a)}));
+ let id=n["id"].as_str().unwrap();
+ let c=rusqlite::Connection::open(&path).unwrap();
+ let (hid,data):(String,String)=c.query_row("SELECT id,data FROM encrypted_named_versions WHERE note_id=?1",[id],|r|Ok((r.get(0)?,r.get(1)?))).unwrap();
+ ok(&a,json!({"op":"vault_unlock_note","id":id,"revision":rev(&a)}));
+ // Put the sealed row back under the now plain note.
+ c.execute("DELETE FROM history WHERE id=?1",[&hid]).unwrap();
+ c.execute("INSERT INTO encrypted_named_versions(id,note_id,data) VALUES(?1,?2,?3)",rusqlite::params![hid,id,data]).unwrap();
+ let plain=ok(&a,json!({"op":"history","id":id}));assert!(plain.as_array().unwrap().iter().all(|h|h["id"]!=hid.as_str()),"{plain}");
+ let sealed=ok(&a,json!({"op":"history_sealed","id":id}));
+ assert_eq!(sealed,json!([{"id":hid,"label":"Sealed","title":"t","created_at":sealed[0]["created_at"]}]));
+ assert!(!sealed.to_string().contains("SEALED-ORIGINAL")&&!sealed.to_string().contains("ciphertext"));
+ // Recovery: lock again, read it in the vault, unlock: back as plain history.
+ ok(&a,json!({"op":"vault_lock_note","id":id,"revision":rev(&a)}));
+ let v=ok(&a,json!({"op":"vault_versions","id":id}));assert!(v["items"].as_array().unwrap().iter().any(|x|x["id"]==hid.as_str()),"{v}");
+ assert_eq!(ok(&a,json!({"op":"vault_versions","action":"body","id":id,"history_id":hid}))["content"],"<p>SEALED-ORIGINAL</p>");
+ ok(&a,json!({"op":"vault_unlock_note","id":id,"revision":rev(&a)}));
+ assert_eq!(ok(&a,json!({"op":"history_sealed","id":id})),json!([]));
+ assert_eq!(ok(&a,json!({"op":"history_body","id":id,"history_id":hid}))["content"],"<p>SEALED-ORIGINAL</p>");
+}

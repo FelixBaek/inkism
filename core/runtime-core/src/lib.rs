@@ -127,6 +127,10 @@ struct WorkerState {
     /// Notes whose remote changes wait for this device's vault key (last
     /// round). Not an error: they apply after `vault_unlock`.
     vault_key_required: Vec<String>,
+    /// Records written by a newer app version (a newer payload schema or an
+    /// entity kind this version cannot decode) in the last round. Held pending,
+    /// not an error; they apply after the app is updated.
+    unsupported_records: usize,
 }
 
 struct Shared {
@@ -145,6 +149,7 @@ impl Shared {
                 done_gen: 0,
                 shutdown: false,
                 vault_key_required: Vec::new(),
+                unsupported_records: 0,
             }),
             cv: Condvar::new(),
         }
@@ -269,25 +274,33 @@ impl Svc {
         // still makes progress, bounded so a permanent failure ends the round.
         let mut last = None;
         let mut waiting = std::collections::BTreeSet::new();
+        let mut unsupported = 0;
         for _ in 0..3 {
-            let (applied, error, wait) = self.apply_pending_pass(sync)?;
+            let (applied, error, wait, newer) = self.apply_pending_pass(sync)?;
             waiting = wait;
+            unsupported = newer;
             last = error;
             if (last.is_none() && waiting.is_empty()) || applied == 0 {
                 break;
             }
         }
-        lock_ok(&self.shared.state).vault_key_required = waiting.into_iter().collect();
+        {
+            let mut st = lock_ok(&self.shared.state);
+            st.vault_key_required = waiting.into_iter().collect();
+            st.unsupported_records = unsupported;
+        }
         match last {
             Some(e) => Err(e),
             None => Ok(()),
         }
     }
 
-    /// One traversal; returns the number of applied records and the first
-    /// record failure (left pending).
-    fn apply_pending_pass(&self, sync: &SyncEngine) -> Result<(usize, Option<RuntimeError>, std::collections::BTreeSet<String>)> {
+    /// One traversal; returns the number of applied records, the first
+    /// record failure (left pending), the notes waiting for the vault key and
+    /// the number of records from a newer app version (left pending).
+    fn apply_pending_pass(&self, sync: &SyncEngine) -> Result<(usize, Option<RuntimeError>, std::collections::BTreeSet<String>, usize)> {
         let mut applied = 0usize;
+        let mut unsupported = 0usize;
         let mut waiting = std::collections::BTreeSet::new();
         let sealer = |key_id: &str, note: &str, row: &Value| vault::seal_version(&self.vault, key_id, note, row);
         let mut cursor = None;
@@ -297,22 +310,27 @@ impl Svc {
             // Keep excluded events durable. If the user expands the scope
             // later, the same event can then be applied; acknowledging here
             // would make that expansion lose data permanently.
-            // A record this version cannot decode (for example a newer
+            // A record this version cannot decode (a newer payload schema or
             // entity kind) stays pending and reported; it must not stop the
             // remaining records from applying.
-            match sync.resolve_pending(&key.event_id) {
+            let inc = match sync.resolve_pending(&key.event_id) {
                 Ok(Some(inc)) => match self.with_host(|conn| scope_allows_host(conn, self.config().as_ref().map(|c| &c.scope), &inc.entity)) {
-                    Ok(true) => {}
+                    Ok(true) => Some(inc),
                     Ok(false) => continue,
                     Err(e) => { first_error.get_or_insert(e); continue; }
                 },
-                Ok(None) => {}
+                Ok(None) => None,
+                Err(e) if is_newer_record(&e) => { unsupported += 1; continue; }
                 Err(e) => { first_error.get_or_insert(e.into()); continue; }
-            }
+            };
             // Download and verify before acquiring the note lock. Re-resolve
             // under that lock afterwards so concurrent local edits still win
             // or become conflict copies according to the existing rules.
-            if let Err(e) = self.receive_pending(sync, &key.event_id) {
+            // The resolution above is reused here: decoding a large record
+            // again only to read its attachment list doubled the work.
+            let received = self.receive_pending(sync, inc.as_ref());
+            drop(inc);
+            if let Err(e) = received {
                 first_error.get_or_insert(e);
                 continue;
             }
@@ -342,12 +360,12 @@ impl Svc {
                 applied += 1;
             }
         }
-        Ok((applied, first_error, waiting))
+        Ok((applied, first_error, waiting, unsupported))
     }
 
     /// Download and verify a pending change's attachments without the note lock.
-    fn receive_pending(&self, sync: &SyncEngine, event_id: &str) -> Result<()> {
-        let Some(inc) = sync.resolve_pending(event_id)? else {
+    fn receive_pending(&self, sync: &SyncEngine, inc: Option<&sync_core::Incoming>) -> Result<()> {
+        let Some(inc) = inc else {
             return Ok(());
         };
         // A newer applied version can supersede an old failure whose
@@ -404,6 +422,13 @@ impl Svc {
             None => 0,
         }
     }
+}
+
+/// An authenticated record with a newer payload schema or entity kind stays
+/// pending until this app can interpret it after an update.
+fn is_newer_record(e: &sync_core::SyncError) -> bool {
+    matches!(e, sync_core::SyncError::UnsupportedPayloadVersion { .. })
+        || matches!(e, sync_core::SyncError::Protocol(m) if m.starts_with("unknown variant"))
 }
 
 /// Re-resolve a pending change under the note lock and apply it.
@@ -935,9 +960,9 @@ impl AppCore {
 
     fn sync_status(&self) -> Value {
         let config = self.svc.config();
-        let (running, last_sync, error, vault_key_required) = {
+        let (running, last_sync, error, vault_key_required, unsupported_records) = {
             let st = lock_ok(&self.svc.shared.state);
-            (st.running, st.last_sync, st.error.clone(), st.vault_key_required.clone())
+            (st.running, st.last_sync, st.error.clone(), st.vault_key_required.clone(), st.unsupported_records)
         };
         json!({
             "configured": config.is_some(),
@@ -949,6 +974,8 @@ impl AppCore {
             // Note ids whose incoming changes wait for `vault_unlock` on this
             // device (named snapshot vs. vault lock); not a sync failure.
             "vault_key_required": vault_key_required,
+            // Records from a newer app version, held until this app updates.
+            "unsupported_records": unsupported_records,
             "server_url": config.as_ref().map(|c| c.server_url.clone()),
             "scope": config.as_ref().map(|c| c.scope.clone()),
         })

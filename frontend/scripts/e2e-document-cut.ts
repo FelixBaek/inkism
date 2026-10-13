@@ -1,4 +1,5 @@
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
+import {waitSaved} from './save-state.ts';
 import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48024';
 const rpc=async(op,args={})=>{const v=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
@@ -13,7 +14,7 @@ try {
   const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base+'/?virtual=1'+(mode==='lazy'?'&lazy=1':''));
   await page.locator('[data-window-start="0"]').waitFor();
-  const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+  const saved=()=>waitSaved(page);
   if(mode==='denied')await page.evaluate(()=>{navigator.clipboard.write=async()=>{throw new DOMException('denied','NotAllowedError');};});
   if(mode==='typing'||mode==='switch')await page.evaluate(()=>{navigator.clipboard.write=()=>new Promise(resolve=>{(window as any).finishCut=resolve;});});
   await page.getByRole('button',{name:'문서 전체 잘라내기',exact:true}).click();

@@ -37,7 +37,7 @@ const SAVE_OPS=new Set(['save','document_splice','document_splice_html','documen
  * times out naming that cause rather than racing ahead to stale storage. */
 export function trackSaves(page:Page){
  let finished=0,consumed=0;
- const done=(request:any)=>{if(!request.url().endsWith('/api/rpc')){return;}try{if(SAVE_OPS.has(request.postDataJSON()?.op))finished++;}catch{}};
+ const done=(request:any)=>{if(!request.url().endsWith('/api/rpc'))return;try{if(SAVE_OPS.has(request.postDataJSON()?.op))finished++;}catch{}};
  page.on('requestfinished',done);page.on('requestfailed',done);
  return {
   get count(){return finished;},

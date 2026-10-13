@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';import {chromium} from 'playwright-core';
+import assert from 'node:assert/strict';import {chromium} from './browser-env.ts';
 const base=process.env.INKISM_URL!;async function rpc(op:string,args:any={}){const r=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(r.ok,true,JSON.stringify(r));return r.data;}
 const prefix='<!-- untouched -->\r\n',a='# Alpha\r\nFirst **exact**\r\n## Child\r\nChild body\r\n',b='# Beta\r\nLast body\r\n';const original=prefix+a+b;
 const note=await rpc('save',{note:{title:'Markdown outline browser',content:original,content_format:'markdown'}});await rpc('workspace_set',{ids:[note.id],active:note.id,locations:{}});

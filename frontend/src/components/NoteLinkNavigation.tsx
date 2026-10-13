@@ -1,7 +1,7 @@
 import {AnchorRepairDialog} from "./AnchorRepairDialog";
 import {useEffect,useRef} from 'react';
 import {useStore} from '../store';
-import {api,rpc} from '../api';
+import {api,rpc,hasRpcDiagnostic} from '../api';
 import type {Note} from '../types';
 import {referencePreview} from '../lib/reference-preview';
 import {referenceRead} from '../lib/reference-read';
@@ -31,7 +31,7 @@ export function NoteLinkNavigation(){
     const resolved=await knowledge.resolve(ref.target);
     if(resolved.items.length!==1)throw new Error(t('대상 노트가 없거나 같은 이름이 여러 개입니다. 속성과 노트 연결에서 확인해 주세요.'));
     const id=resolved.items[0].id;let note:Note|undefined,anchor:NoteAnchor|string=decodeURIComponent(ref.anchor);
-    if(ref.anchor){try{note=await rpc<Note>('get',{id,max_body_bytes:2*1024*1024},{signal:controller.signal});}catch(error){if(controller.signal.aborted||!(error instanceof Error)||!error.message.includes('note body exceeds read budget'))throw error;const preview=await referenceRead(()=>referencePreview(id,ref.anchor,resolved.redirect_sources??[],controller.signal),controller.signal);note=preview.note;anchor=preview.anchor??anchor;}if(('locked'in note&&note.locked)||note.trashed)throw new Error(t('이 노트는 미리 볼 수 없습니다.'));await api.documentInfo(id,note.revision);}
+    if(ref.anchor){try{note=await rpc<Note>('get',{id,max_body_bytes:2*1024*1024},{signal:controller.signal});}catch(error){if(controller.signal.aborted||!hasRpcDiagnostic(error,'body_read_budget'))throw error;const preview=await referenceRead(()=>referencePreview(id,ref.anchor,resolved.redirect_sources??[],controller.signal),controller.signal);note=preview.note;anchor=preview.anchor??anchor;}if(('locked'in note&&note.locked)||note.trashed)throw new Error(t('이 노트는 미리 볼 수 없습니다.'));await api.documentInfo(id,note.revision);}
     if(controller.signal.aborted||latest.current.readDraft()?.id!==origin)return;
     window.dispatchEvent(new Event('inkism-close-knowledge'));
     await store.selectNote(id);
