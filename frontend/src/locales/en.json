@@ -479,7 +479,6 @@
   "노트가 커서 문단 비교를 생략했어요. 복원이나 사본 저장은 할 수 있어요.": "The note is too large for a paragraph comparison. You can still restore or save a copy.",
   "노트는 기기에서 암호화한 뒤 보내므로 서버는 내용을 볼 수 없습니다.": "Notes are encrypted on your device before sending, so the server can't read them.",
   "노트당 최대 200개, 전체 최대 5,000개 결과를 표시합니다.": "Show up to 200 results per note and 5,000 results in total.",
-  "노트를 Markdown·HTML·텍스트 파일과 첨부파일로 내보냅니다. 잠긴 노트와 지운 노트는 제외됩니다.": "Export notes as Markdown, HTML or text files with attachments. Locked and deleted notes are excluded.",
   "노트를 만들면 이 폴더에 저장됩니다": "Notes you create will be saved in this folder",
   "노트를 먼저 선택해 주세요.": "Select a note first.",
   "노트를 불러오는 중…": "Loading note…",
@@ -2390,5 +2389,7 @@
   "글 다듬기·요약 등 AI 메뉴: 고른 글(없으면 노트 전체 글)과 요청": "AI menu (polish, summarize, …): the selected text (or the whole note if none) and the request",
   "AI 블록: 블록에 적은 요청만": "AI block: only the request written in the block",
   "용어 풀이: 고른 용어와 앞뒤 약 1,200자": "Term definition: the selected term and about 1,200 characters around it",
-  "내 노트에 묻기: 질문과 검색으로 찾은 노트 구절(최대 8개, 12,000자). 잠긴 노트와 휴지통은 보내지 않습니다.": "Ask my notes: the question and note passages found by search (up to 8, 12,000 characters). Locked and trashed notes are never sent."
+  "내 노트에 묻기: 질문과 검색으로 찾은 노트 구절(최대 8개, 12,000자). 잠긴 노트와 휴지통은 보내지 않습니다.": "Ask my notes: the question and note passages found by search (up to 8, 12,000 characters). Locked and trashed notes are never sent.",
+  "잠긴 노트 {count}개는 내용 없이 목록 파일에만 표시했습니다.": "Locked notes ({count}) were listed in the manifest file without their content.",
+  "노트를 Markdown 파일(머리말에 제목·태그·속성 포함)과 첨부파일로 내보냅니다. Markdown으로 보존할 수 없는 노트는 HTML·텍스트 원본으로 내보냅니다. 잠긴 노트와 지운 노트는 제외됩니다.": "Exports notes as Markdown files (with title, tags and properties in the front matter) plus attachments. Notes that cannot be preserved as Markdown are exported as their original HTML or text. Locked and deleted notes are excluded."
 }
