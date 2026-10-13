@@ -163,21 +163,13 @@ export function contextIdentifiable(segment: Pick<DocumentSegment, "start_contex
     (a) => !identityTag.test(a.tag) || a.at !== undefined || ancestorElement(a).hasAttribute("id"),
   );
 }
-/** Opening tags outside a bounded segment that `edited` gave a new block
- * identity (the block that encloses the whole window, e.g. a giant paragraph
- * or table cell). Returns the exact splices of those tags alone (sequential, in
- * UTF-8 bytes) and the segment as it reads after them: contexts with the new
- * tags and every later offset shifted. Nothing else outside the window changes. */
-export function contextIdentity(
-  segment: DocumentSegment,
-  edited: string,
-): { segment: DocumentSegment; tags: BodySplice[] } {
-  if (!segment.start_context.length || !/\sid=/.test(edited)) return { segment, tags: [] };
+/** Outside opening tags whose block `edited` gave a new identity, in context order. */
+function identityRewrites(context: SegmentAncestor[], edited: string): { at: number; open: string; next: string }[] {
   const template = document.createElement("template");
   template.innerHTML = edited;
   let node: Node | null = template.content.firstChild;
   const rewrites: { at: number; open: string; next: string }[] = [];
-  for (const ancestor of segment.start_context) {
+  for (const ancestor of context) {
     if (!sameAncestor(node, ancestor)) break;
     const id = node.getAttribute("id");
     if (id && /^ink-block-[0-9a-f-]{36}$/.test(id) && !ancestorElement(ancestor).hasAttribute("id")) {
@@ -188,6 +180,19 @@ export function contextIdentity(
     node = node.firstChild;
     while (ancestor.prelude && node instanceof Element && node.localName === "colgroup") node = node.nextSibling;
   }
+  return rewrites;
+}
+/** Opening tags outside a bounded segment that `edited` gave a new block
+ * identity (the block that encloses the whole window, e.g. a giant paragraph
+ * or table cell). Returns the exact splices of those tags alone (sequential, in
+ * UTF-8 bytes) and the segment as it reads after them: contexts with the new
+ * tags and every later offset shifted. Nothing else outside the window changes. */
+export function contextIdentity(
+  segment: DocumentSegment,
+  edited: string,
+): { segment: DocumentSegment; tags: BodySplice[] } {
+  if (!segment.start_context.length || !/\sid=/.test(edited)) return { segment, tags: [] };
+  const rewrites = identityRewrites(segment.start_context, edited);
   if (!rewrites.length) return { segment, tags: [] };
   rewrites.sort((a, b) => a.at - b.at);
   const tags: BodySplice[] = [];

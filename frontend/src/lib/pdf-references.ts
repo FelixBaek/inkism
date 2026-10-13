@@ -16,7 +16,7 @@ function htmlAttributes(opening:string){
  const attributes:{name:string;value:string;from:number;to:number}[]=[];let offset=tag[0].length;
  while(offset<opening.length){
   const rest=opening.slice(offset);if(/^\s*\/?>$/.test(rest))return attributes;
-  const attr=/^(\s+)([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/.exec(rest);
+  const attr=/^(\s+)([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/.exec(rest);
   if(!attr)return undefined;
   attributes.push({name:attr[2].toLowerCase(),value:attr[3]??attr[4]??attr[5]??'',from:offset,to:offset+attr[0].length});offset+=attr[0].length;
  }
@@ -31,8 +31,8 @@ function elementEnd(source:string,contentStart:number,tag:string){
  tokens.lastIndex=contentStart;let depth=1,token:RegExpExecArray|null;
  while((token=tokens.exec(source))){
   if(token[2]?.toLowerCase()!==tag.toLowerCase())continue;
-  if(/^<\//.test(token[0])){if(--depth===0)return {from:token.index,to:tokens.lastIndex};}
-  else if(tag.toLowerCase()==='a'||tag.toLowerCase()==='p'||(!/\/>$/.test(token[0])&&++depth>128))return undefined;
+  if(token[0].startsWith('</')){if(--depth===0)return {from:token.index,to:tokens.lastIndex};}
+  else if(tag.toLowerCase()==='a'||tag.toLowerCase()==='p'||(!token[0].endsWith('/>')&&++depth>128))return undefined;
  }
  return undefined;
 }
@@ -51,14 +51,14 @@ function paragraphMarker(body:string,id:string,labels:Map<string,Set<string>>){
  if(!marker)return '';
  const template=document.createElement('template');template.innerHTML=marker[0];
  const sup=template.content.querySelector('sup')!,text=(sup.textContent??'').trim();
- return sup.hasAttribute('data-ink-footnote')||text===id||labels.get(id)?.has(text)?marker[0]:'';
+ return 'inkFootnote' in sup.dataset||text===id||labels.get(id)?.has(text)?marker[0]:'';
 }
 export function extractFootnotes(source:string,format='markdown'):Footnote[]{
  const result:Footnote[]=[];
  if(format==='html'){
   const labels=htmlReferenceLabels(source);
   for(const m of source.matchAll(htmlTokens())){
-   if(!/^(p|li)$/i.test(m[2]??'')||/^<\//.test(m[0]))continue;
+   if(!/^(p|li)$/i.test(m[2]??'')||m[0].startsWith('</'))continue;
    const attr=/^fn[-:]?([\w-]+)$/i.exec(htmlAttribute(m[0],'id')?.value??'');if(!attr)continue;
    const start=m.index!,contentStart=start+m[0].length;
    const end=elementEnd(source,contentStart,m[2]);if(!end)continue;
@@ -99,36 +99,52 @@ export function setFootnote(source:string,format:string,id:string,text:string,re
  if(found&&!replace)throw new Error(t("이미 있는 각주 이름입니다."));
  if(replace&&!found)throw new Error(t("각주가 변경되었습니다. 다시 불러와 주세요."));
  if(definitions.filter(note=>note.id===id).length>1)throw new Error(t('이미 있는 각주 이름입니다.'));
- if(found&&replace&&found.text===text)return source;
- if(found&&format==='html'&&definitions.some(other=>other!==found&&other.from!<found.to!&&other.to!>found.from!))
-  throw new Error(t('각주 구조가 모호하여 정리할 수 없습니다. 각주와 참조를 확인해 주세요.'));
- if(format==='html'&&!found)for(const token of source.matchAll(htmlTokens())){
-  const ids=htmlAttributes(token[0])?.filter(attr=>attr.name==='id');
-  if(token[3]||(token[0].startsWith('<!--')&&!token[0].endsWith('-->'))||(token[1]&&!new RegExp(`</${token[1]}\\s*>$`,'i').test(token[0]))||ids?.some(attr=>/^fn[-:]?([\w-]+)$/i.exec(attr.value)?.[1]===id)||(ids&&ids.length>1&&ids.some(attr=>/^fn[-:]?[\w-]+$/i.test(attr.value))))
-   throw new Error(t('각주 구조가 모호하여 정리할 수 없습니다. 각주와 참조를 확인해 주세요.'));
- }
  const newline=source.includes('\r\n')?'\r\n':'\n';
  const lines=text.replace(/\r\n?/g,'\n').split('\n');
- let definition=format==='html'?`<p id="fn-${id}"><sup>${escape(id)}</sup> ${lines.map(escape).join('<br>')}</p>`:`[^${id}]: ${lines[0]}`+lines.slice(1).map(line=>newline+'    '+line).join('');
- if(found&&format==='html'){
-  const original=source.slice(found.from,found.to),opening=/^<(p|li)\b(?:"[^"]*"|'[^']*'|[^'">])*?>/i.exec(original);
-  if(opening){
-   const chunks:string[]=[],tokens=htmlTokens();let token:RegExpExecArray|null;
-   while((token=tokens.exec(original))){
-    if(!/^<a\b/i.test(token[0]))continue;
-    const href=htmlAttribute(token[0],'href')?.value,classes=htmlAttribute(token[0],'class')?.value.split(/\s+/);
-    if(!href?.startsWith('#fnref')&&!classes?.includes('footnote-backref'))continue;
-    const end=elementEnd(original,tokens.lastIndex,'a');
-    if(!end)throw new Error(t('각주 구조가 모호하여 정리할 수 없습니다. 각주와 참조를 확인해 주세요.'));
-    chunks.push(original.slice(token.index,end.to));tokens.lastIndex=end.to;
-   }
-   const backlinks=chunks.join('');
-   const label=opening[1].toLowerCase()==='p'?paragraphMarker(original.slice(opening[0].length),id,htmlReferenceLabels(source)):'';
-   definition=opening[0]+label+lines.map(escape).join('<br>')+backlinks+`</${opening[1]}>`;
-  }
+ if(!found){
+  if(format==='markdown')return source+newline+newline+`[^${id}]`+newline+newline+markdownDefinition(id,lines,newline)+newline;
+  assertHtmlInsertable(source,id);
+  return source+`<p><sup><a href="#fn-${id}">${escape(id)}</a></sup></p>`+htmlDefinition(id,lines);
  }
- if(found)return source.slice(0,found.from!)+definition+source.slice(found.to!);
- return format==='html'?source+`<p><sup><a href="#fn-${id}">${escape(id)}</a></sup></p>`+definition:source+newline+newline+`[^${id}]`+newline+newline+definition+newline;
+ if(found.text===text)return source;
+ if(format==='markdown')return source.slice(0,found.from!)+markdownDefinition(id,lines,newline)+source.slice(found.to!);
+ if(definitions.some(other=>other!==found&&other.from!<found.to!&&other.to!>found.from!))
+  throw new Error(t('각주 구조가 모호하여 정리할 수 없습니다. 각주와 참조를 확인해 주세요.'));
+ return source.slice(0,found.from!)+htmlReplacement(source,found,id,lines)+source.slice(found.to!);
+}
+const markdownDefinition=(id:string,lines:string[],newline:string)=>`[^${id}]: ${lines[0]}`+lines.slice(1).map(line=>newline+'    '+line).join('');
+const htmlDefinition=(id:string,lines:string[])=>`<p id="fn-${id}"><sup>${escape(id)}</sup> ${lines.map(escape).join('<br>')}</p>`;
+/** A new HTML definition must not meet an unterminated token or an existing/ambiguous fn id. */
+function assertHtmlInsertable(source:string,id:string){
+ for(const token of source.matchAll(htmlTokens()))if(ambiguousHtmlToken(token,id))
+  throw new Error(t('각주 구조가 모호하여 정리할 수 없습니다. 각주와 참조를 확인해 주세요.'));
+}
+function ambiguousHtmlToken(token:RegExpMatchArray,id:string){
+ if(token[3]||(token[0].startsWith('<!--')&&!token[0].endsWith('-->')))return true;
+ if(token[1]&&!new RegExp(String.raw`</${token[1]}\s*>$`,'i').test(token[0]))return true;
+ const ids=htmlAttributes(token[0])?.filter(attr=>attr.name==='id');
+ if(ids?.some(attr=>/^fn[-:]?([\w-]+)$/i.exec(attr.value)?.[1]===id))return true;
+ return !!ids&&ids.length>1&&ids.some(attr=>/^fn[-:]?[\w-]+$/i.test(attr.value));
+}
+/** Replace an HTML definition's body, keeping its opening tag, marker and backlinks. */
+function htmlReplacement(source:string,found:Footnote,id:string,lines:string[]){
+ const original=source.slice(found.from,found.to),opening=/^<(p|li)\b(?:"[^"]*"|'[^']*'|[^'">])*?>/i.exec(original);
+ if(!opening)return htmlDefinition(id,lines);
+ const backlinks=footnoteBacklinks(original);
+ const label=opening[1].toLowerCase()==='p'?paragraphMarker(original.slice(opening[0].length),id,htmlReferenceLabels(source)):'';
+ return opening[0]+label+lines.map(escape).join('<br>')+backlinks+`</${opening[1]}>`;
+}
+function footnoteBacklinks(original:string){
+ const chunks:string[]=[],tokens=htmlTokens();let token:RegExpExecArray|null;
+ while((token=tokens.exec(original))){
+  if(!/^<a\b/i.test(token[0]))continue;
+  const href=htmlAttribute(token[0],'href')?.value,classes=htmlAttribute(token[0],'class')?.value.split(/\s+/);
+  if(!href?.startsWith('#fnref')&&!classes?.includes('footnote-backref'))continue;
+  const end=elementEnd(original,tokens.lastIndex,'a');
+  if(!end)throw new Error(t('각주 구조가 모호하여 정리할 수 없습니다. 각주와 참조를 확인해 주세요.'));
+  chunks.push(original.slice(token.index,end.to));tokens.lastIndex=end.to;
+ }
+ return chunks.join('');
 }
 
 /** Remove one definition and its real references without reparsing the
@@ -141,15 +157,15 @@ export function removeFootnote(source:string,format:string,id:string):string{
  if(definitions.some(other=>other!==note&&other.from!<note.to!&&other.to!>note.from!))
   throw new Error(t('각주 구조가 모호하여 정리할 수 없습니다. 각주와 참조를 확인해 주세요.'));
  const edits:SourceEdit[]=[{from:note.from!,to:note.to!,text:''}];
- for(const ref of footnoteReferences(source,format))if(ref.id===id&&!(ref.from>=note.from!&&ref.from<note.to!)){
-  if(format==='markdown')edits.push({from:ref.from,to:ref.to,text:''});
-  else{
-   const end=elementEnd(source,ref.to,'a');
-   if(!end)throw new Error(t('각주 구조가 모호하여 정리할 수 없습니다. 각주와 참조를 확인해 주세요.'));
-   edits.push({from:ref.from,to:end.to,text:''});
-  }
- }
+ for(const ref of footnoteReferences(source,format))
+  if(ref.id===id&&!(ref.from>=note.from!&&ref.from<note.to!))edits.push(referenceRemoval(source,format,ref));
  return applySourceEdits(source,edits);
+}
+function referenceRemoval(source:string,format:string,ref:FootnoteReference):SourceEdit{
+ if(format==='markdown')return {from:ref.from,to:ref.to,text:''};
+ const end=elementEnd(source,ref.to,'a');
+ if(!end)throw new Error(t('각주 구조가 모호하여 정리할 수 없습니다. 각주와 참조를 확인해 주세요.'));
+ return {from:ref.from,to:end.to,text:''};
 }
 
 /** Append a citation without reparsing or normalizing the surrounding source. */

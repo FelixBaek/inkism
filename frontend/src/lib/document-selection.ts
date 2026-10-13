@@ -792,11 +792,10 @@ function* changeSelectionWork(
   const textSelection = transformed.selection instanceof TextSelection;
   const nodeSelection = transformed.selection instanceof NodeSelection;
   const sourceSelection = textSelection || nodeSelection;
-  const positions = textSelection
-    ? [transformed.selection.anchor, transformed.selection.head].map((pos) => pos - mappedFrom + slice.openStart)
-    : nodeSelection
-      ? [transformed.selection.from, transformed.selection.to].map((pos) => pos - mappedFrom + slice.openStart)
-    : [];
+  let ends: number[] = [];
+  if (textSelection) ends = [transformed.selection.anchor, transformed.selection.head];
+  else if (nodeSelection) ends = [transformed.selection.from, transformed.selection.to];
+  const positions = ends.map((pos) => pos - mappedFrom + slice.openStart);
   const { projected, points, tags } = yield* projectRegion(prepared, transformed, region, slice, positions, sourceSelection);
   const old = encoder.encode(prepared.before),
     replacement =
@@ -807,6 +806,7 @@ function* changeSelectionWork(
   prepared.check();
   const rebased = rebaseSegmentIdentity(prepared.region, tags);
   const afterRegion = { ...rebased, source: replacement };
+  const selectionMode = nodeSelection ? "node" : "text";
   const nearby =
     points.length === 2
       ? yield* previewSourceRegionWork(
@@ -816,7 +816,7 @@ function* changeSelectionWork(
           schema,
           prepared.blockOffset,
           prepared.segmentTotal,
-          nodeSelection ? "node" : "text",
+          selectionMode,
         )
       : previewSelectionRegion(
           afterRegion,

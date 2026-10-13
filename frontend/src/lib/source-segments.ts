@@ -49,29 +49,35 @@ function dataType(token: string): string | undefined {
   if (!name) return;
   let at = name[0].length;
   while (at < token.length) {
-    while (/\s/.test(token[at] ?? "")) at++;
+    at = skipSpace(token, at);
     if (token[at] === ">" || token[at] === "/") return;
     const attr = /^[^\s=/>]+/.exec(token.slice(at));
     if (!attr) return;
-    at += attr[0].length;
-    while (/\s/.test(token[at] ?? "")) at++;
-    let value: string | undefined;
-    if (token[at] === "=") {
-      at++;
-      while (/\s/.test(token[at] ?? "")) at++;
-      const quote = token[at];
-      if (quote === '"' || quote === "'") {
-        const end = token.indexOf(quote, ++at);
-        if (end < 0) return;
-        value = token.slice(at, end); at = end + 1;
-      } else {
-        const unquoted = /^[^\s>]+/.exec(token.slice(at));
-        if (!unquoted) return;
-        value = unquoted[0]; at += value.length;
-      }
-    }
-    if (attr[0].toLowerCase() === "data-type") return value;
+    const parsed = attributeValue(token, at + attr[0].length);
+    if (!parsed) return;
+    if (attr[0].toLowerCase() === "data-type") return parsed.value;
+    at = parsed.at;
   }
+}
+
+function skipSpace(token: string, at: number): number {
+  while (/\s/.test(token[at] ?? "")) at++;
+  return at;
+}
+
+/** The optional `=value` after an attribute name ending at `at`, and the offset
+ * after it; null when the value is malformed. */
+function attributeValue(token: string, at: number): { value?: string; at: number } | null {
+  at = skipSpace(token, at);
+  if (token[at] !== "=") return { at };
+  at = skipSpace(token, at + 1);
+  const quote = token[at];
+  if (quote === '"' || quote === "'") {
+    const end = token.indexOf(quote, at + 1);
+    return end < 0 ? null : { value: token.slice(at + 1, end), at: end + 1 };
+  }
+  const unquoted = /^[^\s>]+/.exec(token.slice(at));
+  return unquoted ? { value: unquoted[0], at: at + unquoted[0].length } : null;
 }
 
 /** Canonical math HTML represents a leaf, not editable span/div content.
@@ -140,6 +146,15 @@ function softBoundary(stack: SegmentAncestor[], pending: number, closingNext: bo
   return pending >= 16384 && !closingNext && !stack.some((a) => ["tr", "li", "colgroup"].includes(a.tag));
 }
 
+/** The token at `at` (a known math leaf whole) and its UTF-8 size. */
+function nextToken(source: string, at: number, encoder: TextEncoder) {
+  const openingEnd = tokenEnd(source, at),
+    leafEnd = source[at] === "<" ? mathLeafEnd(source, at, openingEnd) : undefined,
+    end = leafEnd ?? openingEnd,
+    token = source.slice(at, end);
+  return { leafEnd, end, token, size: tokenSize(source, at, token, encoder) };
+}
+
 /** Pure source scanner shared by the synchronous editor and its worker. */
 export function* modelSourceSegments(
   source: string,
@@ -172,12 +187,9 @@ export function* modelSourceSegments(
   };
   let cutIndex = firstCut(cuts, byteOffset);
   while (at < source.length) {
-    const openingEnd = tokenEnd(source, at),
-      leafEnd = source[at] === "<" ? mathLeafEnd(source, at, openingEnd) : undefined,
-      end = leafEnd ?? openingEnd,
-      token = source.slice(at, end);
-    const size = tokenSize(source, at, token, encoder);
-    if (cuts[cutIndex] !== undefined && cuts[cutIndex] < byteOffset + bytes + size)
+    const { leafEnd, end, token, size } = nextToken(source, at, encoder);
+    // A past-the-end cut is undefined and compares false.
+    if (cuts[cutIndex] < byteOffset + bytes + size)
       throw new Error("원문 토큰 내부에서 줄 경계를 자를 수 없습니다.");
     if (bytes - startBytes + size > 32768 && at > start) yield take();
     if (size > 32768) throw new Error("큰 서식 토큰의 표시 범위를 준비하지 못했습니다. 원문을 유지합니다.");
@@ -188,7 +200,7 @@ export function* modelSourceSegments(
     // alone would fill an empty synthetic list with a phantom item.
     const closingNext = source.startsWith("</", at);
     const forced = cuts[cutIndex] === byteOffset + bytes;
-    if (forced) cutIndex++;
+    cutIndex += Number(forced);
     if (forced || !stack.length || softBoundary(stack, bytes - startBytes, closingNext)) yield take();
   }
   if (at > start) yield take();

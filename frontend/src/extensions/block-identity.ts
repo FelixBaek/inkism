@@ -15,7 +15,8 @@ const pendingIdentity=new PluginKey<PendingIdentity>('blockIdentityPending');
  * that touched them had ended. */
 export const blockIdentityTransaction=(tr:Transaction):'appended'|'deferred'|undefined=>{
  const meta=tr.getMeta(pendingIdentity);
- return meta==='appended'?'appended':meta==='assigned'?'deferred':undefined;
+ if(meta==='appended')return 'appended';
+ return meta==='assigned'?'deferred':undefined;
 };
 /** Real user edits (or a user paste). Windowed editor projection/reconciliation
  * transactions deliberately do not enter history and never acquire IDs. */
@@ -50,7 +51,7 @@ function editedRanges(transactions:readonly Transaction[],include:(tr:Transactio
 function assignIds(doc:PMNode,tr:Transform,ranges:Range[],allow:(pos:number)=>boolean=()=>true){
  const size=doc.content.size;
  const give=(node:PMNode,pos:number)=>{
-  if(node.isText||!Object.prototype.hasOwnProperty.call(node.attrs,'id')||node.attrs.id||!allow(pos))return;
+  if(node.isText||!Object.hasOwn(node.attrs,'id')||node.attrs.id||!allow(pos))return;
   if(tr.doc.nodeAt(pos)?.attrs.id)return;
   tr.setNodeMarkup(pos,undefined,{...node.attrs,id:newBlockId()});
  };
@@ -80,6 +81,20 @@ export function* identifyTouchedBlocksWork(doc:PMNode,mapping:Mapping,options:{f
  // tokens. Such maps leave every integer position unchanged. Without mirrors
  // they need no quadratic pass through all later maps. Other edits keep the
  // original mapping rule (including insertion/deletion biases).
+ const integerIdentity=yield* integerIdentityMapping(mapping);
+ const ranges=yield* changedRanges(mapping,first,integerIdentity);
+ const allowed=(node:PMNode,pos:number)=>!node.isText&&Object.hasOwn(node.attrs,'id')&&!node.attrs.id&&pos>=from&&pos<to;
+ const {intervals,zero}=yield* splitRanges(doc,ranges,allowed);
+ const merged=yield* mergeIntervals(intervals);
+ const zeroPositions=[...zero].sort((a,b)=>a-b);
+ return yield* rebuildTouched(doc,-1,{
+  allowed,zero,
+  overlaps:(pos,end)=>{const at=lowerBound(merged.length,i=>merged[i][1]<=pos);return at<merged.length&&merged[at][0]<end;},
+  containsZero:(pos,end)=>{const at=lowerBound(zeroPositions.length,i=>zeroPositions[i]<pos);return at<zeroPositions.length&&zeroPositions[at]<end;},
+ });
+}
+/** Whether every map only replaces one-position tokens, without mirrors. */
+function* integerIdentityMapping(mapping:Mapping):EditWork<boolean>{
  let integerIdentity=true;
  for(let i=0;i<mapping.maps.length;i++){
   if(mapping.getMirror(i)!==undefined)integerIdentity=false;
@@ -88,6 +103,9 @@ export function* identifyTouchedBlocksWork(doc:PMNode,mapping:Mapping,options:{f
   });
   yield;
  }
+ return integerIdentity;
+}
+function* changedRanges(mapping:Mapping,first:number,integerIdentity:boolean):EditWork<Range[]>{
  const ranges:Range[]=[];
  for(let i=0;i<mapping.maps.length;i++){
   if(i<first)continue;
@@ -95,8 +113,11 @@ export function* identifyTouchedBlocksWork(doc:PMNode,mapping:Mapping,options:{f
   mapping.maps[i].forEach((_a,_b,a,b)=>{ranges.push(rest?[rest.map(a,-1),rest.map(b,1)]:[a,b]);});
   yield;
  }
+ return ranges;
+}
+/** Non-empty ranges, and the allowed blocks around each pure deletion point. */
+function* splitRanges(doc:PMNode,ranges:Range[],allowed:(node:PMNode,pos:number)=>boolean):EditWork<{intervals:Range[];zero:Set<number>}>{
  const size=doc.content.size,intervals:Range[]=[],zero=new Set<number>();
- const allowed=(node:PMNode,pos:number)=>!node.isText&&Object.prototype.hasOwnProperty.call(node.attrs,'id')&&!node.attrs.id&&pos>=from&&pos<to;
  for(const [rawFrom,rawTo] of ranges){
   const a=Math.max(0,Math.min(size,rawFrom)),b=Math.max(a,Math.min(size,rawTo));
   if(b>a)intervals.push([a,b]);
@@ -106,6 +127,9 @@ export function* identifyTouchedBlocksWork(doc:PMNode,mapping:Mapping,options:{f
   }
   yield;
  }
+ return {intervals,zero};
+}
+function* mergeIntervals(intervals:Range[]):EditWork<Range[]>{
  intervals.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
  const merged:Range[]=[];
  for(const interval of intervals){
@@ -113,32 +137,34 @@ export function* identifyTouchedBlocksWork(doc:PMNode,mapping:Mapping,options:{f
   if(last&&interval[0]<=last[1])last[1]=Math.max(last[1],interval[1]);else merged.push(interval);
   yield;
  }
- const zeroPositions=[...zero].sort((a,b)=>a-b);
- const overlaps=(pos:number,end:number)=>{
-  let low=0,high=merged.length;
-  while(low<high){const mid=(low+high)>>>1;if(merged[mid][1]<=pos)low=mid+1;else high=mid;}
-  return low<merged.length&&merged[low][0]<end;
- };
- const containsZero=(pos:number,end:number)=>{
-  let low=0,high=zeroPositions.length;
-  while(low<high){const mid=(low+high)>>>1;if(zeroPositions[mid]<pos)low=mid+1;else high=mid;}
-  return low<zeroPositions.length&&zeroPositions[low]<end;
- };
- function* rebuild(node:PMNode,pos:number):EditWork<PMNode>{
-  const touched=overlaps(pos,pos+node.nodeSize),assign=pos>=0&&allowed(node,pos)&&(touched||zero.has(pos));
-  let children:PMNode[]|undefined,offset=pos+1;
-  for(let i=0;i<node.childCount;i++){
-   const child=node.child(i),end=offset+child.nodeSize;
-   const next=overlaps(offset,end)||containsZero(offset,end)?yield* rebuild(child,offset):child;
-   if(next!==child&&!children){children=[];for(let j=0;j<i;j++)children.push(node.child(j));}
-   children?.push(next);offset=end;
-   yield;
-  }
-  const content=children?Fragment.fromArray(children):node.content;
+ return merged;
+}
+/** First index in [0, length) for which `before` is false (binary search). */
+function lowerBound(length:number,before:(index:number)=>boolean){
+ let low=0,high=length;
+ while(low<high){const mid=(low+high)>>>1;if(before(mid))low=mid+1;else high=mid;}
+ return low;
+}
+type TouchedBlocks={
+ allowed:(node:PMNode,pos:number)=>boolean;
+ zero:Set<number>;
+ overlaps:(pos:number,end:number)=>boolean;
+ containsZero:(pos:number,end:number)=>boolean;
+};
+function* rebuildTouched(node:PMNode,pos:number,touched:TouchedBlocks):EditWork<PMNode>{
+ const assign=pos>=0&&touched.allowed(node,pos)&&(touched.overlaps(pos,pos+node.nodeSize)||touched.zero.has(pos));
+ let children:PMNode[]|undefined,offset=pos+1;
+ for(let i=0;i<node.childCount;i++){
+  const child=node.child(i),end=offset+child.nodeSize;
+  const next=touched.overlaps(offset,end)||touched.containsZero(offset,end)?yield* rebuildTouched(child,offset,touched):child;
+  if(next!==child&&!children)children=Array.from({length:i},(_,j)=>node.child(j));
+  children?.push(next);offset=end;
   yield;
-  return assign?node.type.create({...node.attrs,id:newBlockId()},content,node.marks):children?node.copy(content):node;
  }
- return yield* rebuild(doc,-1);
+ const content=children?Fragment.fromArray(children):node.content;
+ yield;
+ if(assign)return node.type.create({...node.attrs,id:newBlockId()},content,node.marks);
+ return children?node.copy(content):node;
 }
 /** Attribute-only changes keep positions, but ProseMirror maps a NodeSelection
  * through a markup change as deleted. Keep the user's selected block selected
@@ -198,7 +224,7 @@ export const BlockIdentity=Extension.create({
     if(!view.isDestroyed&&view.state===before&&tr.docChanged)
      view.dispatch(view.state.tr.setMeta(pendingIdentity,'assigned').setMeta('addToHistory',false));
    };
-   const schedule=()=>{if(timer===undefined)timer=setTimeout(assign,0);};
+   const schedule=()=>{timer??=setTimeout(assign,0);};
    view.dom.addEventListener('compositionend',schedule);
    return {
     update(next){if(!next.composing&&pendingIdentity.getState(next.state))schedule();},

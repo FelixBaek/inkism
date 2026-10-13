@@ -1,4 +1,4 @@
-import type { Schema } from "@tiptap/pm/model";
+import type { Node as PMNode, Schema } from "@tiptap/pm/model";
 import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import type { DocumentSegment } from "../types";
 import { sourceSegmentWork } from "./source-segment-work";
@@ -77,6 +77,42 @@ export function* previewSourceRegionWork(
   totalSegments?: number,
   selectionMode: "text" | "node" = "text",
 ): EditWork<{ window: WindowPreview; selection: Record<string, unknown> } | null> {
+  const picked = yield* pickRegionPiece(region, anchorPoint, headPoint, selectionMode);
+  if (!picked.chosen) return null;
+  const chosen = selectionMode === "node" ? joinNodePieces(picked.chosen, picked.nodePieces, anchorPoint, headPoint) : picked.chosen;
+  // A head exactly on a seam selects the next piece; at the region's last
+  // endpoint it stays on the last piece.
+  const inspected = inspectSegment(chosen.segment);
+  if (!inspected.editable) throw new Error(t("편집 결과의 표시 구간을 보존하지 못했습니다."));
+  // Cut both endpoints into the displayed piece and rebuild the selection in
+  // its own model, as a mounted window would restore it.
+  const cut = (point: { byte: number; within: number }) => {
+    if (point.byte < chosen.segment.byte_offset) return { byte: chosen.segment.byte_offset, within: 0 };
+    return point.byte > chosen.end ? { byte: chosen.end, within: 0 } : point;
+  };
+  const pieceMap = segmentPositionMap(chosen.segment, schema);
+  const shown = { anchor: cut(anchorPoint), head: cut(headPoint) };
+  const from = pieceMap.position(shown.anchor.byte, shown.anchor.within),
+    to = pieceMap.position(shown.head.byte, shown.head.within);
+  const display = pieceSelection(pieceMap.doc(), from, to, selectionMode);
+  const preview: WindowPreview = {
+    html: inspected.content,
+    count: inspected.blocks,
+    raw: chosen.segment.source,
+    offset: blockOffset + chosen.block,
+    byteStart: chosen.segment.byte_offset,
+    internal: pieceInternal(chosen, region, totalSegments),
+  };
+  return { window: preview, selection: display };
+}
+
+/** The piece under the selection head (node mode: every piece the node spans). */
+function* pickRegionPiece(
+  region: DocumentSegment,
+  anchorPoint: SourcePoint,
+  headPoint: SourcePoint,
+  selectionMode: "text" | "node",
+): EditWork<{ chosen: RegionPiece | undefined; nodePieces: DocumentSegment[] }> {
   // A top-level close (empty end_context) ends the relative block: the next
   // piece opens block+1 at inner piece 0; otherwise the piece continues the
   // current block as its next inner piece.
@@ -90,14 +126,14 @@ export function* previewSourceRegionWork(
     const end = segment.byte_offset + encoder.encode(segment.source).length;
     const piece = { segment, block, innerIndex, end };
     last = piece;
-    if (selectionMode === "node") {
-      if (!chosen && targetByte < end) chosen = piece;
-      if (chosen) {
-        nodePieces.push(segment);
-        if (headPoint.byte <= end) break;
-      }
-    } else if (targetByte < end) {
-      chosen = piece; break;
+    if (selectionMode === "text" && targetByte < end) {
+      chosen = piece;
+      break;
+    }
+    if (selectionMode === "node" && !chosen && targetByte < end) chosen = piece;
+    if (chosen) {
+      nodePieces.push(segment);
+      if (headPoint.byte <= end) break;
     }
     if (segment.end_context.length) innerIndex++;
     else {
@@ -106,66 +142,53 @@ export function* previewSourceRegionWork(
     }
     yield;
   }
-  chosen ??= last;
-  if (!chosen) return null;
-  if (selectionMode === "node") {
-    const end = nodePieces.at(-1);
-    if (!end || anchorPoint.byte < chosen.segment.byte_offset || headPoint.byte > end.byte_offset + encoder.encode(end.source).length)
-      throw new Error(t("편집 결과의 표시 구간을 보존하지 못했습니다."));
-    const segment = {
-      ...chosen.segment,
-      source: nodePieces.map(part => part.source).join(""),
-      end_context: end.end_context,
-    };
-    // An atom can straddle a scanner seam. Keep it whole, trimming the
-    // surrounding source when joining the pieces exceeds a viewport span.
-    const shown = encoder.encode(segment.source).length <= 32768
-      ? segment : sourceSpan(segment, anchorPoint.byte, headPoint.byte);
-    if (encoder.encode(shown.source).length > 32768)
-      throw new Error(t("편집 결과의 표시 구간을 보존하지 못했습니다."));
-    chosen = { ...chosen, segment: shown, end: shown.byte_offset + encoder.encode(shown.source).length };
-  }
-  // A head exactly on a seam selects the next piece; at the region's last
-  // endpoint it stays on the last piece.
-  const inspected = inspectSegment(chosen.segment);
-  if (!inspected.editable) throw new Error(t("편집 결과의 표시 구간을 보존하지 못했습니다."));
-  // Cut both endpoints into the displayed piece and rebuild the selection in
-  // its own model, as a mounted window would restore it.
-  const cut = (point: { byte: number; within: number }) => {
-    if (point.byte < chosen.segment.byte_offset) return { byte: chosen.segment.byte_offset, within: 0 };
-    return point.byte > chosen.end ? { byte: chosen.end, within: 0 } : point;
+  return { chosen: chosen ?? last, nodePieces };
+}
+
+/** One display piece for a node selection whose atom straddles scanner seams. */
+function joinNodePieces(
+  chosen: RegionPiece,
+  nodePieces: DocumentSegment[],
+  anchorPoint: SourcePoint,
+  headPoint: SourcePoint,
+): RegionPiece {
+  const end = nodePieces.at(-1);
+  if (!end || anchorPoint.byte < chosen.segment.byte_offset || headPoint.byte > end.byte_offset + encoder.encode(end.source).length)
+    throw new Error(t("편집 결과의 표시 구간을 보존하지 못했습니다."));
+  const segment = {
+    ...chosen.segment,
+    source: nodePieces.map(part => part.source).join(""),
+    end_context: end.end_context,
   };
-  const pieceMap = segmentPositionMap(chosen.segment, schema),
-    pieceDoc = pieceMap.doc();
-  const shown = { anchor: cut(anchorPoint), head: cut(headPoint) };
-  const from = pieceMap.position(shown.anchor.byte, shown.anchor.within),
-    to = pieceMap.position(shown.head.byte, shown.head.within);
-  let display: Record<string, unknown>;
-  if (selectionMode === "node") {
-    const node = pieceDoc.nodeAt(from);
-    if (!node || !NodeSelection.isSelectable(node) || from + node.nodeSize !== to)
-      throw new Error(t("편집 결과의 표시 구간을 보존하지 못했습니다."));
-    display = NodeSelection.create(pieceDoc, from).toJSON();
-  } else display = TextSelection.between(pieceDoc.resolve(from), pieceDoc.resolve(to)).toJSON();
+  // An atom can straddle a scanner seam. Keep it whole, trimming the
+  // surrounding source when joining the pieces exceeds a viewport span.
+  const shown = encoder.encode(segment.source).length <= 32768
+    ? segment : sourceSpan(segment, anchorPoint.byte, headPoint.byte);
+  if (encoder.encode(shown.source).length > 32768)
+    throw new Error(t("편집 결과의 표시 구간을 보존하지 못했습니다."));
+  return { ...chosen, segment: shown, end: shown.byte_offset + encoder.encode(shown.source).length };
+}
+
+function pieceSelection(pieceDoc: PMNode, from: number, to: number, selectionMode: "text" | "node"): Record<string, unknown> {
+  if (selectionMode === "text") return TextSelection.between(pieceDoc.resolve(from), pieceDoc.resolve(to)).toJSON();
+  const node = pieceDoc.nodeAt(from);
+  if (!node || !NodeSelection.isSelectable(node) || from + node.nodeSize !== to)
+    throw new Error(t("편집 결과의 표시 구간을 보존하지 못했습니다."));
+  return NodeSelection.create(pieceDoc, from).toJSON();
+}
+
+function pieceInternal(chosen: RegionPiece, region: DocumentSegment, totalSegments?: number): WindowPreview["internal"] {
+  const { segment } = chosen;
+  if (!segment.start_context.length && !segment.end_context.length) return undefined;
   // Inner segment ordinal: region pieces continue the entry block, later
   // blocks count their own pieces from the region start.
   const ordinal = chosen.block === 0 ? region.ordinal + chosen.innerIndex : chosen.innerIndex;
-  const preview: WindowPreview = {
-    html: inspected.content,
-    count: inspected.blocks,
-    raw: chosen.segment.source,
-    offset: blockOffset + chosen.block,
-    byteStart: chosen.segment.byte_offset,
-    internal:
-      chosen.segment.start_context.length || chosen.segment.end_context.length
-        ? {
-            ordinal,
-            byte_offset: chosen.segment.byte_offset,
-            start_context: chosen.segment.start_context,
-            end_context: chosen.segment.end_context,
-            total: Math.max(ordinal + 1 + (chosen.segment.end_context.length ? 1 : 0), totalSegments ?? 0),
-          }
-        : undefined,
+  const following = segment.end_context.length ? 1 : 0;
+  return {
+    ordinal,
+    byte_offset: segment.byte_offset,
+    start_context: segment.start_context,
+    end_context: segment.end_context,
+    total: Math.max(ordinal + 1 + following, totalSegments ?? 0),
   };
-  return { window: preview, selection: display };
 }

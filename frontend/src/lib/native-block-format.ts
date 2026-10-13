@@ -55,9 +55,9 @@ function nativeStructure(state: EditorState, operation: StructureOperation): Tra
 export function nativeBlockFormat(state: EditorState, operation: BlockFormatOperation): Transaction {
   if (operation.type !== "paragraph" && operation.type !== "heading" && operation.type !== "codeBlock")
     return nativeStructure(state, operation);
-  const formatAttrs = operation.type === "heading" ? { level: operation.level }
-    : operation.type === "codeBlock" && operation.language !== undefined ? { language: operation.language }
-    : undefined;
+  let formatAttrs: { level: number } | { language: string | null } | undefined;
+  if (operation.type === "heading") formatAttrs = { level: operation.level };
+  else if (operation.type === "codeBlock" && operation.language !== undefined) formatAttrs = { language: operation.language };
   const paragraph = operation.type === "paragraph" ||
     ((operation.type === "codeBlock" || operation.toggle) && isNodeActive(state, operation.type, formatAttrs));
   const type = state.schema.nodes[paragraph ? "paragraph" : operation.type];

@@ -16,7 +16,7 @@ type Prefix = keyof typeof prefixes;
 const splitPrefix = (message: string): [Prefix, string] | null => {
   const at = message.indexOf(": ");
   const prefix = message.slice(0, at);
-  return at > 0 && Object.prototype.hasOwnProperty.call(prefixes, prefix) ? [prefix as Prefix, message.slice(at + 2)] : null;
+  return at > 0 && Object.hasOwn(prefixes, prefix) ? [prefix as Prefix, message.slice(at + 2)] : null;
 };
 
 export function backendErrorCode(message: string): string | undefined {

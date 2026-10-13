@@ -32,8 +32,8 @@ function initialLang(): Lang {
   } catch {
     // The system preference also works when storage is unavailable.
   }
-  const languages = typeof document === "undefined" || typeof navigator === "undefined" ? [] : navigator.languages.length ? navigator.languages : [navigator.language];
-  return preferredLanguage(saved, languages);
+  if (typeof document === "undefined" || typeof navigator === "undefined") return preferredLanguage(saved, []);
+  return preferredLanguage(saved, navigator.languages.length ? navigator.languages : [navigator.language]);
 }
 
 export const lang: Lang = initialLang();
@@ -42,7 +42,7 @@ const dict = DICTS[lang];
 
 /** 한국어 원문을 현재 언어로 바꾼다. `{name}` 자리는 vars 값으로 채운다. 번역이 없으면 원문을 쓴다. */
 export function t(ko: string, vars?: Record<string, string | number>): string {
-  const text = Object.prototype.hasOwnProperty.call(dict, ko) ? dict[ko] : ko;
+  const text = Object.hasOwn(dict, ko) ? dict[ko] : ko;
   return vars ? text.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)) : text;
 }
 
