@@ -6,6 +6,9 @@
 language: ko-KR
 reviews:
   profile: chill
+  auto_review:
+    # Stop re-reviewing after a few bot fix commits so CodeRabbit and Gitar cannot loop.
+    auto_pause_after_reviewed_commits: 5
   poem: false
   in_progress_fortune: false
   path_filters:
