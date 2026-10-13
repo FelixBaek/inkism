@@ -32,7 +32,7 @@ jobs:
     permissions:
       contents: read
     runs-on: windows-2022
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       # All crates share dependency artifacts, including the SQLCipher/OpenSSL build.
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
