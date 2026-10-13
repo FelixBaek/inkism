@@ -51,6 +51,9 @@ jobs:
           java-version: '17'
       - uses: android-actions/setup-android@v3
         if: (inputs.platform == 'all' || inputs.platform == 'android') && matrix.platform == 'android'
+        with:
+          # The old `tools` SDK package has been removed from the repository.
+          packages: platform-tools
       - name: Android SDK and Rust target
         if: (inputs.platform == 'all' || inputs.platform == 'android') && matrix.platform == 'android'
         shell: bash
@@ -75,13 +78,21 @@ jobs:
           npm --prefix frontend ci --no-audit --no-fund
           npm --prefix frontend run build
           npm --prefix desktop-tauri ci --no-audit --no-fund
+      - name: Verify Windows OpenSSL Perl
+        if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          (Get-Command perl).Source
+          perl -MIPC::Cmd -MLocale::Maketext::Simple -e 'print "$^X\n"'
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Shared native runtime tests
         if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && matrix.platform != 'android'
-        shell: bash
+        # Git Bash selects its incomplete MSYS Perl instead of the runner's native Perl.
+        shell: ${{ matrix.platform == 'windows' && 'pwsh' || 'bash' }}
         run: cargo test --locked --manifest-path core/native-host/Cargo.toml --features encrypted-storage
       - name: Build local test artifacts
         if: inputs.platform == 'all' || inputs.platform == matrix.platform
-        shell: bash
+        shell: ${{ matrix.platform == 'windows' && 'pwsh' || 'bash' }}
         run: node tools/platform-build.mjs '${{ matrix.platform }}'
       - uses: actions/upload-artifact@v4
         if: success() && (inputs.platform == 'all' || inputs.platform == matrix.platform)
