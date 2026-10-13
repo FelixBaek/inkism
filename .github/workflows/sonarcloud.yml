@@ -18,6 +18,12 @@ jobs:
           fetch-depth: 0
       # CI-based analysis so sonar-project.properties (exclusions and reviewed ignores) applies.
       # Coverage is Codecov's job, so it is excluded from the SonarCloud quality gate.
+      # New code is measured from the last version change, so tag analyses with the app version.
+      - name: Read app version
+        id: version
+        run: |
+          version=$(jq -er '.version | select(type == "string" and length > 0)' desktop-tauri/src-tauri/tauri.conf.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -26,4 +32,5 @@ jobs:
           args: >
             -Dsonar.organization=felixbaek
             -Dsonar.projectKey=FelixBaek_inkism
+            -Dsonar.projectVersion=${{ steps.version.outputs.version }}
             -Dsonar.coverage.exclusions=**/*
