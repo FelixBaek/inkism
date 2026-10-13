@@ -8,7 +8,7 @@ import { DOMParser as SchemaDOMParser } from "@tiptap/pm/model";
 import {canonicalRichHTML,inspectRichHTML} from "./rich-document";
 import { editableMarkdown } from "./markdown";
 import { sanitizeRichHtml } from "./sanitize";
-import {TermDefinition, validTermDefinition} from "../extensions/term-definition";
+import {TermDefinition, termAttrs, validTermDefinition} from "../extensions/term-definition";
 import { t } from "../i18n";
 
 // A single audited inline extension; arbitrary HTML remains outside the GFM editor.
@@ -22,12 +22,12 @@ const MarkdownTermDefinition = TermDefinition.extend({
       const template = document.createElement('template'); template.innerHTML = match[0];
       const span = template.content.firstElementChild;
       if (!span || template.content.childNodes.length !== 1 || span.tagName !== 'SPAN') return undefined;
-      const allowed = ['data-term-id','data-term-definition','data-term-glossary-id','data-term-note-id'];
-      if (Array.from(span.attributes).some(a => !allowed.includes(a.name))) return undefined;
+      const allowed = new Set(['data-term-id','data-term-definition','data-term-glossary-id','data-term-note-id']);
+      if (Array.from(span.attributes).some(a => !allowed.has(a.name))) return undefined;
       // Reject duplicate attributes before the DOM parser can normalize them away.
       const names = Array.from(match[1].matchAll(/([^\s=]+)\s*=\s*(?:"[^"]*"|'[^']*')/g), a => a[1].toLowerCase());
       if (new Set(names).size !== names.length || names.length !== span.attributes.length) return undefined;
-      const attrs = {id:span.getAttribute('data-term-id'),definition:span.getAttribute('data-term-definition'),glossaryId:span.getAttribute('data-term-glossary-id'),noteId:span.getAttribute('data-term-note-id')};
+      const attrs = termAttrs(span as HTMLElement);
       if (!validTermDefinition(attrs)) return undefined;
       return {type:'termDefinition',raw:match[0],attrs,tokens:lexer.inlineTokens(match[2])};
     },
@@ -38,9 +38,9 @@ const MarkdownTermDefinition = TermDefinition.extend({
   renderMarkdown(node, helpers) {
     if (!validTermDefinition(node.attrs)) throw compatibilityError();
     const span = document.createElement('span'),a=node.attrs;
-    span.setAttribute('data-term-id',a.id);span.setAttribute('data-term-definition',a.definition);
-    if(a.glossaryId)span.setAttribute('data-term-glossary-id',a.glossaryId);
-    if(a.noteId)span.setAttribute('data-term-note-id',a.noteId);
+    span.dataset.termId=a.id;span.dataset.termDefinition=a.definition;
+    if(a.glossaryId)span.dataset.termGlossaryId=a.glossaryId;
+    if(a.noteId)span.dataset.termNoteId=a.noteId;
     return span.outerHTML.replace('</span>',helpers.renderChildren(node)+'</span>');
   },
 });

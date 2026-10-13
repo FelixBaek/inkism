@@ -344,6 +344,15 @@ fn valid_term(el: &Element) -> bool {
     ["data-term-glossary-id", "data-term-note-id"].iter().all(|key| attribute(el, key).is_none_or(|s| uuid(&s)))
 }
 
+fn export_term_attributes(out: &mut String, el: &Element) {
+    for key in ["data-term-id", "data-term-definition", "data-term-glossary-id", "data-term-note-id"] {
+        if let Some(value) = attribute(el, key) {
+            out.push(' '); out.push_str(key); out.push_str("=\"");
+            escape_into(out, &value); out.push('"');
+        }
+    }
+}
+
 /// A fragment cannot name a resource, URL scheme, escape sequence, or markup.
 /// App footnotes and Markdown's generated definition IDs use this subset.
 fn static_fragment(value: &str) -> bool {
@@ -398,12 +407,7 @@ fn export_element(n: NodeRef<'_>, el: &Element) -> bool {
 fn export_attributes(out: &mut String, el: &Element) {
     let tag: &str = &el.name.local;
     if tag == "span" && valid_term(el) {
-        for key in ["data-term-id", "data-term-definition", "data-term-glossary-id", "data-term-note-id"] {
-            if let Some(value) = attribute(el, key) {
-                out.push(' '); out.push_str(key); out.push_str("=\"");
-                escape_into(out, &value); out.push('"');
-            }
-        }
+        export_term_attributes(out, el);
     }
     for (key, raw) in el.attrs() {
         let value = go_lower(raw.trim());

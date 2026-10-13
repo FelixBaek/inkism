@@ -25,7 +25,7 @@ try {
  assert.match(result.portable,/\[\^inkism-term-1-/);assert.match(result.portable,/정의/);assert.doesNotMatch(result.portable,/data-term-definition/);
  assert.equal(result.admitted,true);assert.deepEqual(result.json,result.reopened);
  assert.equal(result.restored,result.html);assert.equal(result.editable,result.html);assert.match(result.markdown,/data-term-definition/);
- assert.doesNotMatch(result.html,/<script>/);assert.doesNotMatch(result.malicious,/onclick/);assert.doesNotMatch(result.removed,/data-term-/);assert.equal(result.undone,result.html);
+ assert.doesNotMatch(result.html,/<script/i);assert.doesNotMatch(result.malicious,/onclick/);assert.doesNotMatch(result.removed,/data-term-/);assert.equal(result.undone,result.html);
  assert.deepEqual(result.invalid,[false,false]);assert.equal(result.invalidHTML,'<p>word</p>');
  console.log('term definition schema, sanitize, Markdown, reload and undo regressions passed');
 } finally {await browser.close();}

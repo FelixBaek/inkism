@@ -2,6 +2,12 @@ import { Mark } from '@tiptap/core';
 
 export type TermDefinitionAttrs = { id: string; definition: string; glossaryId?: string | null; noteId?: string | null };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Reads the annotation attributes; missing ones are null like getAttribute. */
+export function termAttrs(element: HTMLElement) {
+  const d = element.dataset;
+  return {id: d.termId ?? null, definition: d.termDefinition ?? null, glossaryId: d.termGlossaryId ?? null, noteId: d.termNoteId ?? null};
+}
+
 export function validTermDefinition(value: unknown): value is TermDefinitionAttrs {
   if (!value || typeof value !== 'object') return false;
   const a = value as TermDefinitionAttrs;
@@ -24,7 +30,7 @@ export const TermDefinition = Mark.create({
   },
   parseHTML() {
     return [{tag:'span[data-term-id][data-term-definition]', getAttrs: element => {
-      const a = {id:element.getAttribute('data-term-id'), definition:element.getAttribute('data-term-definition'), glossaryId:element.getAttribute('data-term-glossary-id'), noteId:element.getAttribute('data-term-note-id')};
+      const a = termAttrs(element);
       return validTermDefinition(a) ? a : false;
     }}];
   },

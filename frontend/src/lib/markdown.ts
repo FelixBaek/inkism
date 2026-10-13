@@ -3,7 +3,7 @@ import { MarkdownManager } from "@tiptap/markdown";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { contentExtensions } from "../extensions/content-schema";
 import { sanitizeRichHtml } from "./sanitize";
-import { validTermDefinition } from "../extensions/term-definition";
+import { termAttrs, validTermDefinition } from "../extensions/term-definition";
 import { t } from "../i18n";
 import { inspectRichHTML } from "./rich-document";
 
@@ -93,8 +93,8 @@ export function portableTermMarkdown(html: string): string {
   if (!inspectRichHTML(html).editable) return htmlToMarkdown(html); // same loss checks
   const root = document.createElement('div'); root.innerHTML = html;
   const notes: {token:string; label:string; definition:string}[] = [];
-  for (const span of root.querySelectorAll('span[data-term-id][data-term-definition]')) {
-    const attrs = {id:span.getAttribute('data-term-id'), definition:span.getAttribute('data-term-definition'), glossaryId:span.getAttribute('data-term-glossary-id'), noteId:span.getAttribute('data-term-note-id')};
+  for (const span of root.querySelectorAll<HTMLElement>('span[data-term-id][data-term-definition]')) {
+    const attrs = termAttrs(span);
     if (!validTermDefinition(attrs)) continue;
     // Unique per occurrence, even when a pasted term shares an annotation ID.
     let token = `INKISMTERM${notes.length}END`;
@@ -106,7 +106,7 @@ export function portableTermMarkdown(html: string): string {
   let body = htmlToMarkdown(root.innerHTML);
   for (const note of notes) body = body.replace(note.token, `[^${note.label}]`);
   if (!notes.length) return body;
-  const footnotes = notes.map(note => `[^${note.label}]: ${textToMarkdown(note.definition).replace(/\n/g, '\n    ')}`).join('\n\n');
+  const footnotes = notes.map(note => `[^${note.label}]: ${textToMarkdown(note.definition).replaceAll('\n', '\n    ')}`).join('\n\n');
   return body.trimEnd() + '\n\n' + footnotes + '\n';
 }
 
