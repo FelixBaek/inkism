@@ -63,6 +63,40 @@ public static class InkismInput {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] struct PROCESSENTRY32 {
+        public uint size,usage,process;
+        public UIntPtr heap;
+        public uint module,threads,parent;
+        public int priority;
+        public uint flags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst=260)] public string executable;
+    }
+    [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr CreateToolhelp32Snapshot(uint flags,uint process);
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] static extern bool Process32FirstW(IntPtr snapshot,ref PROCESSENTRY32 entry);
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] static extern bool Process32NextW(IntPtr snapshot,ref PROCESSENTRY32 entry);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    public static bool IsProcessInAppTree(int candidate,int owner) {
+        if(candidate<=0 || owner<=0)return false;
+        if(candidate==owner)return true;
+        // WebView2 permission bubbles can belong to its browser child rather
+        // than Inkism.exe. Inspect only process IDs/parents, without WMI modules.
+        IntPtr snapshot=CreateToolhelp32Snapshot(2,0); // TH32CS_SNAPPROCESS
+        if(snapshot==new IntPtr(-1))throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        try {
+            var parents=new System.Collections.Generic.Dictionary<uint,uint>();
+            var entry=new PROCESSENTRY32();entry.size=(uint)Marshal.SizeOf(typeof(PROCESSENTRY32));
+            if(!Process32FirstW(snapshot,ref entry))throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            do {parents[entry.process]=entry.parent;}while(Process32NextW(snapshot,ref entry));
+            uint current=(uint)candidate;
+            for(int depth=0;depth<16 && current!=0;depth++) {
+                if(current==(uint)owner)return true;
+                uint parent;
+                if(!parents.TryGetValue(current,out parent) || parent==current)return false;
+                current=parent;
+            }
+            return false;
+        } finally {CloseHandle(snapshot);}
+    }
     [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] static extern bool AttachThreadInput(uint from, uint to, bool attach);
     [StructLayout(LayoutKind.Sequential)] struct RECT { public int left,top,right,bottom; }
@@ -71,6 +105,8 @@ public static class InkismInput {
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);
     [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(POINT point);
     [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr window,uint flags);
+    public static IntPtr WindowAtPoint(int x,int y) {return WindowFromPoint(new POINT {x=x,y=y});}
+    public static int WindowProcessId(IntPtr window) {uint process;GetWindowThreadProcessId(window,out process);return (int)process;}
     public static void ActivateWindow(IntPtr window) {
         if(GetForegroundWindow()==window || SetForegroundWindow(window))return;
         uint process;uint foregroundThread=GetWindowThreadProcessId(GetForegroundWindow(),out process);
@@ -130,6 +166,7 @@ $body = '닫기 직전에도 이 문장을 보존합니다'
 $app = $null
 $launch = 0
 $windowed = $false
+$uiLanguageReady = $false
 
 # Do not depend on PowerShell module discovery in a child Windows PowerShell process.
 # GitHub's pwsh environment may expose only PowerShell 7 module paths.
@@ -171,16 +208,32 @@ function Open-Inkism([bool]$remembered = $false) {
         $app.Refresh()
         if ($app.HasExited) { throw "Inkism exited during launch ($($app.ExitCode))" }
         if ($app.MainWindowHandle -ne [IntPtr]::Zero) {
+            # Check the real loaded UIA APIs on this process's window before
+            # sending input. Parser validation cannot detect a wrong API type.
+            if ([InkismInput]::WindowProcessId($app.MainWindowHandle) -ne $app.Id) { throw 'Native UIA startup window is outside the test process' }
+            $nativeUiRoot = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+            if (-not [System.Windows.Automation.Automation]::Compare($nativeUiRoot, $nativeUiRoot)) { throw 'Native UIA element comparison preflight failed' }
+            $nativeWalker = [System.Windows.Automation.TreeWalker]::RawViewWalker
+            if ($null -eq $nativeWalker) { throw 'Native UIA raw walker is unavailable' }
+            $nativeWalker.GetParent($nativeUiRoot) | Out-Null
+            Write-Host 'PASS: native UIA Compare and RawViewWalker preflight on the owned test window'
             [InkismInput]::ShowWindow($app.MainWindowHandle, 9) | Out-Null
             [InkismInput]::SetForegroundWindow($app.MainWindowHandle) | Out-Null
+            if (-not $script:uiLanguageReady) { Set-KoreanTestLanguage }
             return
         }
         Start-Sleep -Milliseconds 100
     }
     throw 'Native Inkism window did not appear'
 }
-function Find-Element([string]$name, $controlType = $null) {
-    $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $name)
+function Find-AnyElement([string[]]$names, $controlType = $null) {
+    $conditions = @($names | ForEach-Object {
+        New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $_)
+    })
+    $condition = $conditions[0]
+    if ($conditions.Count -gt 1) {
+        $condition = [System.Windows.Automation.OrCondition]::new([System.Windows.Automation.Condition[]]$conditions)
+    }
     if ($null -ne $controlType) {
         $typeCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, $controlType)
         $condition = [System.Windows.Automation.AndCondition]::new($condition, $typeCondition)
@@ -188,7 +241,7 @@ function Find-Element([string]$name, $controlType = $null) {
     $deadline = [DateTime]::UtcNow.AddSeconds(20)
     while ([DateTime]::UtcNow -lt $deadline) {
         $app.Refresh()
-        if ($app.HasExited) { throw "Inkism exited while finding $name" }
+        if ($app.HasExited) { throw "Inkism exited while finding $($names -join ', ')" }
         try {
             $window = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
             $element = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
@@ -202,7 +255,39 @@ function Find-Element([string]$name, $controlType = $null) {
         if ($null -ne $element) { return $element }
         Start-Sleep -Milliseconds 100
     }
-    throw "Accessible element not found: $name"
+    throw "Accessible element not found: $($names -join ', ')"
+}
+function Find-Element([string]$name, $controlType = $null) {
+    return Find-AnyElement @($name) $controlType
+}
+function Set-KoreanTestLanguage {
+    # A fresh WebView2 profile follows the real Windows browser locale. Select
+    # the fixture's Korean UI through normal settings, persisting the user's
+    # language choice in this disposable profile. No test flags/storage hooks.
+    $settingsNames = @('설정 열기', '설정 열기 (새 버전 있음)')
+    $languageNames = @('언어')
+    foreach ($locale in @('en', 'zh', 'ja')) {
+        $dictionary = Get-Content -LiteralPath (Join-Path $root "frontend/src/locales/$locale.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+        $settingsNames += $dictionary.PSObject.Properties['설정 열기'].Value
+        $settingsNames += $dictionary.PSObject.Properties['설정 열기 (새 버전 있음)'].Value
+        $languageNames += $dictionary.PSObject.Properties['언어'].Value
+    }
+    Click-Element (Find-AnyElement $settingsNames ([System.Windows.Automation.ControlType]::Button))
+    $language = Find-AnyElement $languageNames ([System.Windows.Automation.ControlType]::ComboBox)
+    $initialLabel = $language.Current.Name
+    if ($initialLabel -eq '언어') {
+        [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+    } else {
+        # The shipped language menu starts with 한국어. Open its native popup,
+        # then use real keyboard selection; change triggers the app's reload.
+        Click-Element $language
+        [System.Windows.Forms.SendKeys]::SendWait('{HOME}{ENTER}')
+    }
+    # Reacquire UIA elements after the reload. Initialize only the first launch:
+    # later launches may deliberately open a locked vault without a sidebar.
+    Find-Element '새 노트 만들기' ([System.Windows.Automation.ControlType]::Button) | Out-Null
+    $script:uiLanguageReady = $true
+    Write-Output "PASS: native settings initialize Korean UI in disposable profile (initial language control: $initialLabel)"
 }
 function Wait-BlockNumber([string]$expected) {
     $deadline = [DateTime]::UtcNow.AddSeconds(15)
@@ -325,6 +410,31 @@ function Invoke-Element($element) {
             $scrollPattern.ScrollIntoView()
         }
         Click-Element $element
+    }
+}
+function Invoke-NoteCommand([string[]]$path) {
+    Invoke-Element (Find-Element '명령창 열기' ([System.Windows.Automation.ControlType]::Button))
+    foreach ($label in $path) {
+        # CommandPalette exposes role=listbox/option, mapped to UIA List and
+        # ListItem. Search inside the command list, never a hidden toolbar
+        # trigger or a similarly named text node elsewhere in the app.
+        $condition = [System.Windows.Automation.AndCondition]::new(
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $label),
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ListItem))
+        $deadline = [DateTime]::UtcNow.AddSeconds(20)
+        $option = $null
+        do {
+            $list = Find-Element '노트 명령' ([System.Windows.Automation.ControlType]::List)
+            try { $option = $list.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition) }
+            catch {
+                if ($_.Exception.GetBaseException() -isnot [System.Windows.Automation.ElementNotAvailableException]) { throw }
+            }
+            if ($null -ne $option) { break }
+            Start-Sleep -Milliseconds 50
+        } while ([DateTime]::UtcNow -lt $deadline)
+        if ($null -eq $option) { throw "Native command option not found in 노트 명령: $label" }
+        Write-Output "Native command option: $($option.Current.Name) [$($option.Current.ControlType.ProgrammaticName)]"
+        Invoke-Element $option
     }
 }
 function Click-Element($element) {
@@ -525,6 +635,101 @@ function Verify-SourceData {
     node (Join-Path $root 'tools/scripts/verify-source-ui.ts') (Join-Path (Split-Path $binary) 'inkism-engine.exe') $db $expectedPath
     if($LASTEXITCODE){throw 'Source bytes/format/restart verification failed'}
 }
+function Confirm-TestDownloadPermission([ref]$attempts) {
+    $app.Refresh()
+    if ($app.HasExited) { throw 'Test app exited while awaiting its download' }
+    try {
+        # Search only this app's UIA subtree. Accept exactly the native bubble
+        # observed for the app's fixed local origin, never an arbitrary Allow.
+        $window = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+        $condition = [System.Windows.Automation.AndCondition]::new(
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, 'http://wails.localhost wants to: Download multiple files'),
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window))
+        $prompts = @($window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition))
+        if ($prompts.Count -eq 0) { return }
+        if ($prompts.Count -ne 1) { throw 'Ambiguous local-app download permission prompt' }
+        $isolated = [System.IO.Path]::GetFullPath($scratch)
+        $tempRoot = [System.IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
+        if (-not $isolated.StartsWith($tempRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
+            [System.IO.Path]::GetFileName($isolated) -notlike 'inkism-ui-*' -or
+            -not [string]::Equals([System.IO.Path]::GetFullPath($env:APPDATA), (Join-Path $isolated 'Roaming'), [System.StringComparison]::OrdinalIgnoreCase) -or
+            -not [string]::Equals([System.IO.Path]::GetFullPath($env:LOCALAPPDATA), (Join-Path $isolated 'Local'), [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Download permission requires the disposable native test profile'
+        }
+        $prompt = $prompts[0]
+        $promptProcess = $prompt.Current.ProcessId
+        if (-not [InkismInput]::IsProcessInAppTree($promptProcess, $app.Id)) {
+            throw "Download permission process $promptProcess does not belong to test app $($app.Id) or its WebView child"
+        }
+        $purposeCondition = [System.Windows.Automation.AndCondition]::new(
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, 'Download multiple files'),
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text))
+        $allowCondition = [System.Windows.Automation.AndCondition]::new(
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, 'Allow'),
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))
+        $blockCondition = [System.Windows.Automation.AndCondition]::new(
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, 'Block'),
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))
+        $purpose = @($prompt.FindAll([System.Windows.Automation.TreeScope]::Descendants, $purposeCondition))
+        $allow = @($prompt.FindAll([System.Windows.Automation.TreeScope]::Descendants, $allowCondition))
+        $block = @($prompt.FindAll([System.Windows.Automation.TreeScope]::Descendants, $blockCondition))
+        if ($purpose.Count -ne 1 -or $allow.Count -ne 1 -or $block.Count -ne 1 -or
+            -not $allow[0].Current.IsEnabled -or
+            -not [InkismInput]::IsProcessInAppTree($allow[0].Current.ProcessId, $app.Id)) {
+            throw 'Local download permission controls are absent, ambiguous or outside the test app'
+        }
+        if ($attempts.Value -ge 3) { throw 'Local download permission stayed open after three scoped native clicks' }
+        $foreground = [InkismInput]::GetForegroundWindow()
+        if (-not [InkismInput]::IsProcessInAppTree([InkismInput]::WindowProcessId($foreground), $app.Id)) {
+            $permissionWindow = [IntPtr]$prompt.Current.NativeWindowHandle
+            if ($permissionWindow -eq [IntPtr]::Zero) { $permissionWindow = $app.MainWindowHandle }
+            [InkismInput]::ActivateWindow($permissionWindow)
+        }
+        $foreground = [InkismInput]::GetForegroundWindow()
+        if (-not [InkismInput]::IsProcessInAppTree([InkismInput]::WindowProcessId($foreground), $app.Id)) {
+            throw 'Owned download permission could not reach the foreground'
+        }
+        # This WebView2 bubble exposes InvokePattern but ignores Invoke. Send a
+        # real pointer click only after verifying the exact UIA button at its
+        # current coordinates and the native window/process below that point.
+        $rect = $allow[0].Current.BoundingRectangle
+        if ($rect.Width -le 4 -or $rect.Height -le 4 -or $allow[0].Current.IsOffscreen) {
+            throw 'Local download Allow button has no visible bounds'
+        }
+        $x = [int](($rect.Left + $rect.Right) / 2)
+        $y = [int](($rect.Top + $rect.Bottom) / 2)
+        $pointWindow = [InkismInput]::WindowAtPoint($x, $y)
+        if (-not [InkismInput]::IsProcessInAppTree([InkismInput]::WindowProcessId($pointWindow), $app.Id)) {
+            throw 'Download Allow coordinates are covered by a window outside the test app'
+        }
+        $hit = [System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($x, $y))
+        $sameButton = $false
+        for ($depth = 0; $depth -lt 8 -and $null -ne $hit; $depth++) {
+            if ([System.Windows.Automation.Automation]::Compare($hit, $allow[0])) { $sameButton = $true; break }
+            $hit = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($hit)
+        }
+        if (-not $sameButton) { throw 'Download Allow coordinates do not hit the validated permission button' }
+        $attempts.Value++
+        [InkismInput]::SetCursorPos($x, $y) | Out-Null
+        [InkismInput]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
+        [InkismInput]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+        $dismissedDeadline = [DateTime]::UtcNow.AddSeconds(2)
+        do {
+            $window = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+            if ($window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition).Count -eq 0) {
+                # Host output must not join the downloaded filename pipeline.
+                Write-Host "PASS: scoped native Allow click dismissed http://wails.localhost multiple-download permission in disposable profile (owned process $promptProcess)"
+                return
+            }
+            Start-Sleep -Milliseconds 50
+        } while ([DateTime]::UtcNow -lt $dismissedDeadline)
+        Write-Host "Native download permission stayed open after scoped click $($attempts.Value)/3"
+    } catch {
+        # The bubble may disappear between discovery and observation. Recheck
+        # the actual file on the next bounded download-wait iteration.
+        if ($_.Exception.GetBaseException() -isnot [System.Windows.Automation.ElementNotAvailableException]) { throw }
+    }
+}
 # The preview opens from the command palette; the editor toolbar no longer has a preview button.
 function Open-Preview {
     Invoke-Element (Find-Element '명령창 열기' ([System.Windows.Automation.ControlType]::Button))
@@ -534,6 +739,7 @@ function Open-Preview {
 function Remove-BlockIds([string]$text) { $text -creplace ' id="ink-block-[0-9a-f-]{36}"','' }
 function Wait-TestDownload([string]$title,[string]$extension,[DateTime]$since,[scriptblock]$ready = $null) {
     $deadline=[DateTime]::UtcNow.AddSeconds(30)
+    $permissionAttempts = 0
     do {
         $matches=Get-ChildItem -LiteralPath ([InkismInput]::Downloads()) -Filter ($title+'*.'+$extension) -ErrorAction SilentlyContinue | Where-Object {$_.LastWriteTimeUtc -ge $since} | Sort-Object LastWriteTimeUtc -Descending
         foreach($file in $matches){try{
@@ -543,6 +749,7 @@ function Wait-TestDownload([string]$title,[string]$extension,[DateTime]$since,[s
             # Require this request's actual content before returning a path.
             if($bytes.Length -gt 0 -and ($null -eq $ready -or (& $ready $bytes))){return $file.FullName}
         }catch{}}
+        Confirm-TestDownloadPermission ([ref]$permissionAttempts)
         Start-Sleep -Milliseconds 100
     }while([DateTime]::UtcNow -lt $deadline)
     $seen=(Get-ChildItem -LiteralPath ([InkismInput]::Downloads()) -ErrorAction SilentlyContinue | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 8 | ForEach-Object { "$($_.Name) $($_.Length)B $($_.LastWriteTimeUtc.ToString('o'))" }) -join '; '
@@ -594,10 +801,35 @@ try {
     Wait-WindowText 'native_typed' $false
     [InkismInput]::Shortcut(0x59)
     Wait-WindowText 'native_typed' $true
-    $cases.Add([pscustomobject]@{title=$richTitle;format='html';content='<p>'+$richBody+'native_typed</p>'})
+    $cases.Add([pscustomobject]@{title=$richTitle;format='html';content='<p>'+$richBody+'native_typed</p>';block_ids=1})
     Close-Inkism
     Verify-SourceData
+    $noteLinkFixture = Join-Path $scratch 'note-link-fixture.json'
+    $noteLinkScript = Join-Path $PSScriptRoot 'test-windows-note-links.ts'
+    node $noteLinkScript seed (Join-Path (Split-Path $binary) 'inkism-engine.exe') $db $noteLinkFixture $richTitle
+    if ($LASTEXITCODE) { throw 'Note-link fixture preparation failed' }
+    $noteLinkData = Get-Content -Raw -Encoding UTF8 -LiteralPath $noteLinkFixture | ConvertFrom-Json
     Open-Inkism
+    if (-not (Wait-TabActivated ('노트 탭: ' + $noteLinkData.source.title))) { throw 'Source note did not finish restoring before warm note-link test' }
+    foreach ($destination in @($noteLinkData.target, $noteLinkData.source)) {
+        $linkInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $linkInfo.FileName = $binary
+        $linkInfo.Arguments = '--db "' + $db + '" --open "note://' + $destination.id + '"'
+        $linkInfo.UseShellExecute = $false
+        $linkInfo.RedirectStandardOutput = $true
+        $linkInfo.RedirectStandardError = $true
+        $linkProcess = [System.Diagnostics.Process]::Start($linkInfo)
+        $linkOutput = $linkProcess.StandardOutput.ReadToEndAsync()
+        $linkError = $linkProcess.StandardError.ReadToEndAsync()
+        try {
+            if (-not $linkProcess.WaitForExit(7000)) { $linkProcess.Kill(); throw 'Warm note-link process did not return' }
+            if ($linkProcess.ExitCode -ne 0) { throw ('Warm note-link process failed: ' + $linkError.Result) }
+            if ($app.HasExited) { throw 'Warm note-link forwarding closed the original app' }
+            if (-not (Wait-TabActivated ('노트 탭: ' + $destination.title))) { throw 'Warm note-link did not select the target note in the existing window' }
+            if ([InkismInput]::GetForegroundWindow() -ne $app.MainWindowHandle) { throw 'Warm note-link did not activate the existing window' }
+        } finally { $linkProcess.Dispose() }
+    }
+    Write-Output 'PASS: two warm note:// launches exit without a second window, select each target in the original app and preserve its foreground'
     Wait-WindowText ($richBody+'native_typed') $true
     Invoke-Element (Find-Element 'HTML' ([System.Windows.Automation.ControlType]::Button))
     Wait-SourceMarker 'html' $richBody
@@ -606,6 +838,8 @@ try {
     Save-Screenshot 'windows-ui-rich-text'
     Close-Inkism
     Verify-SourceData
+    node $noteLinkScript verify (Join-Path (Split-Path $binary) 'inkism-engine.exe') $db $noteLinkFixture $richTitle
+    if ($LASTEXITCODE) { throw 'Note-link navigation changed the source notes' }
     Write-Output 'PASS: default rich paste/type/undo/redo, immediate close-save/restart and HTML/TEXT views preserve canonical HTML'
     if ($env:INKISM_TEST_RICH_ONLY -eq 'APPROVED_SYNTHETIC_PROFILE_ONLY') { return }
     foreach($format in @('html','markdown')) {
@@ -658,15 +892,12 @@ try {
         if((Read-Field (Find-Element '노트 제목')) -ne $title){throw 'Active source tab did not restore'}
         Wait-SourceMarker $format 'native_typed'
         $before=[DateTime]::UtcNow
-        # Raw source export is a note command (command palette, shown as "Export as" › 원문), no longer a toolbar button.
-        Invoke-Element (Find-Element '명령창 열기' ([System.Windows.Automation.ControlType]::Button))
-        Invoke-Element (Find-Element 'Export as' ([System.Windows.Automation.ControlType]::ListItem))
-        Invoke-Element (Find-Element '원문' ([System.Windows.Automation.ControlType]::ListItem))
+        Invoke-NoteCommand @('Export as', '원문')
         $extension=switch($format){'html'{'html'}'markdown'{'md'}default{'txt'}}
         $download=Wait-TestDownload $title $extension $before {param([byte[]]$data) (Remove-BlockIds ([System.Text.Encoding]::UTF8.GetString($data))) -ceq $content}
         if((Remove-BlockIds ([System.IO.File]::ReadAllText($download,[System.Text.Encoding]::UTF8))) -cne $content){throw 'Downloaded source differs from canonical content'}
         # Observe preview open/close without silently reinterpreting the source.
-        Open-Preview
+        Invoke-NoteCommand @('미리보기')
         Find-Element '미리보기 · 내보내기' | Out-Null
         Find-Element '저장된 원문의 미리보기' | Out-Null
         $before=[DateTime]::UtcNow
@@ -688,7 +919,7 @@ try {
         Wait-SourceMarker $format 'native_typed'
         # Cancel a fresh preview request; regardless of request timing the
         # current canonical source must remain unchanged after dismissal.
-        Open-Preview
+        Invoke-NoteCommand @('미리보기')
         Invoke-Element (Find-Element '미리보기 닫기' ([System.Windows.Automation.ControlType]::Button))
         Wait-SourceMarker $format 'native_typed'
         Save-Screenshot ('windows-ui-source-'+$format)

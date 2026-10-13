@@ -1,8 +1,9 @@
 // Shipped application + Go bridge + current Rust runtime. Synthetic profile only.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {historyKey} from './history-keys.ts';
 import {waitSaved,waitSaveState} from './save-state.ts';
+import {assertBlockBytes} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47890';
 const rpc=async(op,args={})=>{
  const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});
@@ -43,22 +44,31 @@ try{
  const initial=(await rpc('document_segments',{id:note.id,revision:1,ordinal:0,offset:2})).segments[0];
  let since=saves.length;await cursor(1);await page.keyboard.insertText('보존검사😀 ');await page.keyboard.press('Control+s');await saved(since);
  let expected=Buffer.concat([Buffer.from(source).subarray(0,initial.byte_offset),Buffer.from('보존검사😀 '),Buffer.from(source).subarray(initial.byte_offset)]).toString();
- assert.equal(await body(),expected,'one internal insertion leaves every outside byte unchanged');
- assert.ok(edits.length>=1);const edit=edits.at(-1).edits?.[0]??edits.at(-1).content;
- assert.equal(edit.start,initial.byte_offset);assert.equal(edit.expected,'');assert.equal(edit.replacement,'보존검사😀 ');
- assert.ok(Buffer.byteLength(edit.expected)<32769);
- const selection=await editor.evaluate((el: any)=>el.editor.state.selection.toJSON());
+ // The giant paragraph enclosing this window is the edited block: it gains an
+ // identity although its opening tag lies far before the window. Only that
+ // tag is spliced (the id inserted), every other outside byte is unchanged.
+ const [paragraphId]=assertBlockBytes(await body(),expected,{added:1,message:'one internal insertion leaves every outside byte unchanged'});
+ const tag=` id="${paragraphId}"`,shift=Buffer.byteLength(tag);
+ expected='<p'+tag+expected.slice(2);assert.equal(await body(),expected,'the enclosing paragraph tag carries the identity');
+ assert.ok(edits.length>=1);const sent=edits.at(-1).edits??[edits.at(-1).content];
+ assert.deepEqual(sent.map(edit=>[edit.start,edit.expected,edit.replacement]),[[2,'',tag],[initial.byte_offset+shift,'','보존검사😀 ']],'a bounded tag splice and the window splice');
+ // The caret is saved as a source byte. The id grew the block, so the reindexed
+ // segment 2 may start at a different byte: compare the text at the caret.
+ const caret=()=>editor.evaluate((el: any)=>{const {state}=el.editor,{from,empty}=state.selection;return {empty,before:state.doc.textBetween(Math.max(0,from-12),from,'\n','\ufffc')};});
+ const selection=await caret();assert.ok(selection.empty&&selection.before.endsWith('보존검사😀 '));
  await page.reload();await ready();await segment(2);
- assert.deepEqual(await editor.evaluate((el: any)=>el.editor.state.selection.toJSON()),selection,'byte cursor survives reindex and reload');
+ const restored=await caret();assert.ok(restored.empty&&restored.before.endsWith('보존검사😀 '),'byte cursor survives reindex and reload');
  since=saves.length;await historyKey(page,'undo');await saved(since);assert.equal(await body(),source,'restart undo restores exact raw source');
  since=saves.length;await historyKey(page,'redo');await saved(since);assert.equal(await body(),expected);
  await cursor('end');await page.keyboard.press('ArrowRight');await segment(3);await ready();
  await cursor(1);await page.keyboard.press('ArrowLeft');await segment(2);await ready();
  // Saving fails before navigation: the live input and original range remain.
  // Routes run newest first, so the rejecting route records its own save attempts.
- const offline=route=>{if(route.request().postDataJSON().op!=='document_splice_html'){return route.fallback();}saves.push('rejected');return route.fulfill({status:503,json:{ok:false,error:'synthetic offline'}});};
+ const offline=route=>{if(route.request().postDataJSON().op!=='document_splice_html')return route.fallback();saves.push('rejected');return route.fulfill({status:503,json:{ok:false,error:'synthetic offline'}});};
  await page.route('**/api/rpc',offline);
- await cursor(1);await page.keyboard.insertText('실패보존 ');await page.getByRole('button',{name:'다음 구간',exact:true}).click();
+ // Type right before the earlier insertion (its segment start moved with the reindex).
+ await editor.evaluate((el: any)=>{let at=-1;el.editor.state.doc.descendants((node,pos)=>{if(at<0&&node.isText&&node.text.includes('보존검사'))at=pos+node.text.indexOf('보존검사');});el.editor.commands.setTextSelection(at);el.editor.view.focus();});
+ await page.keyboard.insertText('실패보존 ');await page.getByRole('button',{name:'다음 구간',exact:true}).click();
  await page.locator('.window-error').filter({hasText:'현재 구간을 유지'}).waitFor();await segment(2);assert.ok((await editor.textContent()).includes('실패보존 '));assert.equal(await body(),expected);
  assert.notEqual(await saveState(),'saved','a failed save is never shown as saved');
  // An explicit save that the backend rejects shows the error state, keeps the input and leaves storage untouched.
@@ -67,7 +77,7 @@ try{
  assert.equal(saves.at(-1),'rejected');const failed=await waitSaveState(page,'error');
  assert.match(failed.text,/synthetic offline/);assert.ok((await editor.textContent()).includes('실패보존 보존검사😀 '));assert.equal(await body(),expected);
  await page.unroute('**/api/rpc',offline);since=saves.length;await page.keyboard.press('Control+s');await saved(since);
- const retried=Buffer.concat([Buffer.from(expected).subarray(0,initial.byte_offset),Buffer.from('실패보존 '),Buffer.from(expected).subarray(initial.byte_offset)]).toString();
+ const retried=Buffer.concat([Buffer.from(expected).subarray(0,initial.byte_offset+shift),Buffer.from('실패보존 '),Buffer.from(expected).subarray(initial.byte_offset+shift)]).toString();
  assert.equal(await body(),retried,'retried save stores the kept input with every other byte unchanged');
  await page.reload();await ready();await segment(2);assert.ok((await editor.textContent()).includes('실패보존 보존검사😀 '),'reload shows the stored input');
  await cursor('end');await page.keyboard.press('Control+End');await page.waitForFunction(()=>document.querySelector('[data-window-start]')?.getAttribute('data-window-start')==='1');await ready();

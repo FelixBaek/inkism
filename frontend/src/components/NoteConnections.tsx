@@ -2,7 +2,7 @@ import {referencePreview} from "../lib/reference-preview";
 import {referenceRead} from '../lib/reference-read';
 import {prepareHTMLBlockIdentity} from "../lib/block-identity";
 import React,{useEffect,useRef,useState} from 'react';
-import {api,rpc} from '../api';
+import {api,rpc,hasRpcDiagnostic} from '../api';
 import {useStore} from '../store';
 import {t} from '../i18n';
 import {knowledge,parseReference,wikiReferences,type NoteReference} from '../lib/knowledge';
@@ -27,7 +27,7 @@ export function NoteConnections({onClose}:{onClose:()=>void}) {
   const nextMentions=async()=>{if(busy)return;const nextPage=mentionPage+1,required=(nextPage+1)*20;if(unlinked.length>=required||!mentionCursor){if(unlinked.length>nextPage*20)setMentionPage(nextPage);return;}const controller=reads.current;setBusy(true);try{let cursor:string|null=mentionCursor;const added:{id:string;title:string}[]=[];do{const result=await readMentions(cursor??undefined);if(controller!==reads.current||controller?.signal.aborted)return;added.push(...result.items);cursor=result.cursor;}while(cursor&&unlinked.length+added.length<required);setUnlinked(v=>[...v,...added]);setMentionCursor(cursor);if(unlinked.length+added.length>nextPage*20)setMentionPage(nextPage);}catch(e){if(controller===reads.current&&!controller?.signal.aborted)setError(errorText(e));}finally{if(controller===reads.current&&!controller?.signal.aborted)setBusy(false);}};
   const [suggestions,setSuggestions]=useState<{id:string;title:string}[]>([]),[anchors,setAnchors]=useState<string[]>([]);
   useEffect(()=>{let live=true;const controller=new AbortController();reads.current=controller;indexedRevision.current=undefined;const load=async()=>{setBusy(false);setRefs([]);setUnlinked([]);setRefPage(0);setMentionPage(0);setIndexCursor(null);setMentionCursor(null);setError('');if(!await latest.current.flushNow()||!live)return;
-    let note:Note;try{note=await rpc<Note>('get',{id,max_body_bytes:2*1024*1024},{signal:controller.signal});}catch(e){if(!(e instanceof Error)||!e.message.includes('note body exceeds read budget'))throw e;const result=await readIndexed();if(live){setRefs(result.items.map(indexedReference));setIndexCursor(result.next_cursor);}const mentions=await readMentions();if(live){setUnlinked(mentions.items);setMentionCursor(mentions.cursor);}return;}if(!live)return;
+    let note:Note;try{note=await rpc<Note>('get',{id,max_body_bytes:2*1024*1024},{signal:controller.signal});}catch(e){if(!hasRpcDiagnostic(e,'body_read_budget'))throw e;const result=await readIndexed();if(live){setRefs(result.items.map(indexedReference));setIndexCursor(result.next_cursor);}const mentions=await readMentions();if(live){setUnlinked(mentions.items);setMentionCursor(mentions.cursor);}return;}if(!live)return;
     let result:NoteReference[]=[], plainContent='';
     if((note.content_format??'html')==='html'){
       const root=document.createElement('template');root.innerHTML=sanitizeRichHtml(note.content);root.content.querySelectorAll('pre,code,script,style').forEach(n=>n.remove());

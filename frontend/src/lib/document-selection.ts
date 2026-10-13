@@ -1,13 +1,16 @@
 import { elementFromString, getSchema } from "@tiptap/core";
 import { replayPendingSelection, type PendingSelectionOperation } from "./pending-selection";
 import { DOMParser, Fragment, Slice, type Node as PMNode } from "@tiptap/pm/model";
-import { AllSelection, EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
+import { AllSelection, EditorState, NodeSelection, Selection, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { toggleMark } from "@tiptap/pm/commands";
 import { contentExtensions } from "../extensions/content-schema";
+import { identifyTouchedBlocksWork } from "../extensions/block-identity";
+import { cloneSliceIdentity } from "./block-identity";
 import { sanitizeRichHtml } from "./sanitize";
 import type { DocumentSegment, DocumentSegmentPage } from "../types";
 import type { WindowPreview } from "./window-history";
-import { projectSegment, inspectSegment } from "./rich-segment";
+import type { BodySplice } from "./body-splice";
+import { projectSegment, inspectSegment, contextIdentity, rebaseSegmentIdentity } from "./rich-segment";
 import { segmentPositionMap } from "./segment-selection";
 import {
   SegmentModelBuilder,
@@ -663,7 +666,9 @@ function* applyOperation(
     const slice =
       (operationBytes > 64 * 1024 ? yield* parseBoundedRichSliceWork(operation.html, state.schema) : null) ??
       parser.parseSlice(elementFromString(sanitizeRichHtml(operation.html)), { preserveWhitespace: "full" });
-    tr.replaceSelection(slice.size ? slice : Slice.empty);
+    // Pasted blocks are copies: like the editor's paste, they never keep a
+    // source identity (duplicates), and receive new ones as touched blocks.
+    tr.replaceSelection(slice.size ? cloneSliceIdentity(slice) : Slice.empty);
   } else if (operation.kind === "block") return yield* applyBlockOperation(prepared, operation, block);
   else return applyMark(state, operation.mark);
   return tr;
@@ -704,12 +709,14 @@ function* projectRegion(
   region: DocumentSegment,
   slice: Slice,
   positions: number[],
-  textSelection: boolean,
-): Generator<EditWorkStep, { projected: string; points: SourcePoint[] }, unknown> {
+  sourceSelection: boolean,
+): Generator<EditWorkStep, { projected: string; points: SourcePoint[]; tags: BodySplice[] }, unknown> {
   if (transformed.doc.eq(prepared.state.doc))
-    return { projected: region.source, points: textSelection ? unchangedPoints(prepared, transformed) : [] };
+    return { projected: region.source, points: sourceSelection ? unchangedPoints(prepared, transformed) : [], tags: [] };
   const serialized = yield* serializeModelMappedWork(slice.content, positions),
     edited = serialized.html;
+  const identity = contextIdentity(region, edited);
+  region = identity.segment;
   if (encoder.encode(edited).length > 64 * 1024 || encoder.encode(region.source).length > 64 * 1024) {
     const result = yield* projectModelSegmentWork(
       region,
@@ -717,12 +724,12 @@ function* projectRegion(
       schema.topNodeType.create(null, slice.content),
       serialized.points,
     );
-    return { projected: result.replacement, points: result.points };
+    return { projected: result.replacement, points: result.points, tags: identity.tags };
   }
   const projected = projectSegment(region, edited);
-  if (!textSelection) return { projected, points: [] };
+  if (!sourceSelection) return { projected, points: [], tags: identity.tags };
   const map = segmentPositionMap({ ...region, source: projected }, schema);
-  return { projected, points: positions.map((pos) => map.point(pos)) };
+  return { projected, points: positions.map((pos) => map.point(pos)), tags: identity.tags };
 }
 function documentSelectionOf(
   prepared: PreparedSelection,
@@ -739,6 +746,14 @@ function documentSelectionOf(
     head: { ...documentPoint(transformed.doc, prepared.blockOffset, selection.head), ...points[1] },
   };
 }
+/** Identities for touched blocks, including the ancestors of a bounded source
+ * span. Their opening tokens are saved separately by contextIdentity. */
+function* identifyInput(transformed: BlockTransform, first: number, to: number): Generator<EditWorkStep, BlockTransform, unknown> {
+  if (first >= transformed.mapping.maps.length) return transformed;
+  const doc = yield* identifyTouchedBlocksWork(transformed.doc, transformed.mapping, { first, from: 0, to });
+  if (doc === transformed.doc) return transformed;
+  return { doc, selection: Selection.fromJSON(doc, transformed.selection.toJSON()), mapping: transformed.mapping };
+}
 function* changeSelectionWork(
   prepared: PreparedSelection,
   operation: SelectionOperation,
@@ -752,6 +767,10 @@ function* changeSelectionWork(
   let transformed: BlockTransform = yield* applyOperation(prepared, operation, block, operationBytes);
   const from = state.selection.from,
     to = state.selection.to;
+  // Typed, pasted or deleted content (also input replayed after a block format)
+  // gives the blocks it touched an identity, like an edit in the editor. A block
+  // format also identifies the blocks it changes; a mark alone still does not.
+  const input = operation.kind === "mark" ? transformed.mapping.maps.length : 0;
   if (block?.following) transformed = applyFollowing(state, transformed, block.following);
   const { first, last } = fragmentRange(prepared, operation, from, to);
   const left = prepared.fragments[first],
@@ -768,12 +787,16 @@ function* changeSelectionWork(
   };
   const mappedFrom = transformed.mapping.map(left.from, -1),
     mappedTo = transformed.mapping.map(right.to, 1);
+  transformed = yield* identifyInput(transformed, input, mappedTo);
   const slice = transformed.doc.slice(mappedFrom, mappedTo, true);
   const textSelection = transformed.selection instanceof TextSelection;
-  const positions = textSelection
-    ? [transformed.selection.anchor, transformed.selection.head].map((pos) => pos - mappedFrom + slice.openStart)
-    : [];
-  const { projected, points } = yield* projectRegion(prepared, transformed, region, slice, positions, textSelection);
+  const nodeSelection = transformed.selection instanceof NodeSelection;
+  const sourceSelection = textSelection || nodeSelection;
+  let ends: number[] = [];
+  if (textSelection) ends = [transformed.selection.anchor, transformed.selection.head];
+  else if (nodeSelection) ends = [transformed.selection.from, transformed.selection.to];
+  const positions = ends.map((pos) => pos - mappedFrom + slice.openStart);
+  const { projected, points, tags } = yield* projectRegion(prepared, transformed, region, slice, positions, sourceSelection);
   const old = encoder.encode(prepared.before),
     replacement =
       new TextDecoder().decode(old.subarray(0, start - prepared.byteStart)) +
@@ -781,7 +804,9 @@ function* changeSelectionWork(
       new TextDecoder().decode(old.subarray(end - prepared.byteStart));
   if (encoder.encode(replacement).length > 20 * 1024 * 1024) throw new Error("Replacement exceeds 20 MiB");
   prepared.check();
-  const afterRegion = { ...prepared.region, source: replacement };
+  const rebased = rebaseSegmentIdentity(prepared.region, tags);
+  const afterRegion = { ...rebased, source: replacement };
+  const selectionMode = nodeSelection ? "node" : "text";
   const nearby =
     points.length === 2
       ? yield* previewSourceRegionWork(
@@ -791,6 +816,7 @@ function* changeSelectionWork(
           schema,
           prepared.blockOffset,
           prepared.segmentTotal,
+          selectionMode,
         )
       : previewSelectionRegion(
           afterRegion,
@@ -799,13 +825,15 @@ function* changeSelectionWork(
           prepared.blockOffset,
           prepared.segmentTotal,
         );
-  const preview = nearby?.window ?? previewWindow(replacement, prepared.byteStart, afterRegion, prepared.segmentTotal);
-  const previewStart = preview.byteStart ?? prepared.byteStart,
+  if (nodeSelection && !nearby) throw new Error(t("편집 결과의 표시 구간을 보존하지 못했습니다."));
+  const preview = nearby?.window ?? previewWindow(replacement, rebased.byte_offset, afterRegion, prepared.segmentTotal);
+  const previewStart = preview.byteStart ?? rebased.byte_offset,
     previewEnd = previewStart + encoder.encode(preview.raw ?? preview.html).length;
   const offscreen = points.some((point) => point.byte < previewStart || point.byte > previewEnd);
   const documentSelection = documentSelectionOf(prepared, transformed, points, offscreen);
   return {
-    start: prepared.byteStart,
+    start: rebased.byte_offset,
+    tags,
     expected: prepared.before,
     replacement,
     count: transformed.doc.childCount,

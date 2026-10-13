@@ -13,14 +13,14 @@ type Edits = Extract<Recovery["body"], { kind: "partial" }>["edits"];
 
 function partialRecoveryHtml(edits: Edits) {
   return (
-    "<p>기준 본문이 없어 편집한 구간만 복구했습니다. 아래 구간은 변경 순서이며 서로 겹칠 수 있습니다.</p>" +
+    "<p>" + t("기준 본문이 없어 편집한 구간만 복구했습니다. 아래 구간은 변경 순서이며 서로 겹칠 수 있습니다.") + "</p>" +
     edits
       .map(
         (edit, i) =>
-          "<h2>편집 구간 " +
-          (i + 1) +
+          "<h2>" +
+          t("편집 구간 {n}", {n: i + 1}) +
           "</h2>" +
-          (edit.replacement ? sanitizeRichHtml(edit.replacement) : "<p>이 구간을 삭제했습니다.</p>"),
+          (edit.replacement ? sanitizeRichHtml(edit.replacement) : "<p>" + t("이 구간을 삭제했습니다.") + "</p>"),
       )
       .join("")
   );
@@ -38,7 +38,8 @@ async function recoverContent(
     return { content: applyHtmlEdits(base.content, body.edits), partial: false };
   } catch (error) {
     // Network, permission and database failures must not masquerade as a missing baseline.
-    if (!(error instanceof RpcError && error.message.startsWith("not_found:"))) throw error;
+    if (!(error instanceof RpcError && error.code === "not_found" &&
+      (error.status === undefined || error.status === 400 || error.status === 404))) throw error;
     const accepted = await confirm({
       title: t("편집 구간 복구"),
       message: t(
@@ -69,8 +70,8 @@ export function RecoveryImport() {
       const recovered = await recoverContent(recovery, s.confirm);
       if (!recovered) return;
       const { content, partial } = recovered;
-      const title =
-        Array.from(recovery.note.title).slice(0, 1980).join("") + (partial ? " (편집 구간 복구)" : " (편집 복구)");
+      const suffix = partial ? t(" (편집 구간 복구)") : t(" (편집 복구)");
+      const title = Array.from(recovery.note.title).slice(0, 2000 - Array.from(suffix).length).join("") + suffix;
       // No original id/revision is passed: import always creates a separate note.
       const note = await rpc<Note>("save", {
         note: {

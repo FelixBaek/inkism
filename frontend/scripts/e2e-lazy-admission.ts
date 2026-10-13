@@ -3,7 +3,7 @@ import {waitForAsync} from './async-browser-condition.ts';
 // 제품 코드는 일절 수정하지 않는다. 합성 노트만 만들고 기존 데이터는 건드리지 않는다:
 // 시작 시 작업 공간을 스냅샷하고, 종료 시 이 검사가 만든 노트만 삭제한 뒤 복원한다.
 // INKISM_URL / CHROMIUM_PATH 로 대상을 바꿀 수 있다.
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import assert from 'node:assert/strict';
 import {historyKey} from './history-keys.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48291';

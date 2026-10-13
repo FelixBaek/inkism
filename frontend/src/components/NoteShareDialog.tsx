@@ -187,7 +187,7 @@ export function NoteShareDialog({ noteID, onClose }: Readonly<{ noteID: string; 
         </ul>
         {error && <p role="alert">{error}</p>}
         <div className="dialog-actions">
-          <button className="btn" type="button" disabled={busy} onClick={() => setManageShares(v => !v)}>{manageShares ? t("공개 링크") : t("초대와 권한 관리")}</button>
+          <button className="btn" type="button" disabled={busy} onClick={() => setManageShares(v => !v)}>{manageShares ? t("공개 링크") : t("초대 링크 관리")}</button>
           <button className="btn" disabled={busy} onClick={close}>
             {t("닫기")}
           </button>

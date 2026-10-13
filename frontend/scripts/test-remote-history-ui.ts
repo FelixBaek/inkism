@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
-import { chromium } from 'playwright-core';
+import { chromium } from './browser-env.ts';
 import { fileURLToPath } from 'node:url';
 const bundle = await build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import {RemoteHistoryPanel} from './components/RemoteHistoryPanel';createRoot(document.getElementById('root')).render(<RemoteHistoryPanel noteId="source"/>);`,resolveDir:fileURLToPath(new URL('../src/',import.meta.url)),loader:'tsx'},bundle:true,write:false,format:'iife',platform:'browser',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'test-store',setup(b){b.onResolve({filter:/^\.\.\/store$/},()=>({path:'store',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},()=>({contents:`export function useStore(){return {closeDialog(){window.closedHistory=true},refreshList(){window.refreshed=true},async selectNote(id){window.selected=id}}}`,loader:'js'}));}}]});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});

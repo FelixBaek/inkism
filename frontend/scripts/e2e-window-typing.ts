@@ -1,7 +1,9 @@
 // Actual successive key events while the selected offscreen range is prepared.
 // insertText/paste as one transaction cannot detect dropped subsequent keys.
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
+import {trackSaves} from './save-state.ts';
 import assert from 'node:assert/strict';
+import {assertBlockBytes} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48421';
 const rpc=async(op,args={})=>{
  const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});
@@ -13,7 +15,7 @@ page.on('pageerror',error=>errors.push(error.message));
 const title='연속 키 입력 '+Date.now();
 const content=Array.from({length:10000},(_,i)=>`<p>nativeblock${String(i).padStart(5,'0')} original paragraph 한글😀</p>`).join('');
 const focus=()=>page.locator('.tiptap-prose').evaluate((el:any)=>el.editor.view.focus());
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saves=trackSaves(page),saved=()=>saves.saved();
 try{
  const note=await rpc('save',{note:{title,content,content_format:'html'}});await rpc('wait_index');
  await page.goto(base+'/?virtual=1'+(process.env.INKISM_LAZY==='0'?'':'&lazy=1'));
@@ -37,7 +39,8 @@ try{
  assert.equal(await page.locator('.tiptap-prose').textContent(),'native_typed','a refused paste retains all accepted keys');
  assert.ok((await page.locator('.window-error').textContent()).includes('큰 붙여넣기'));
  release();await page.waitForFunction(()=>!document.querySelector('.document-selection-status'));await saved();
- assert.equal((await rpc('get',{id:note.id})).content,'<p>native_typed</p>','all successive keys must survive selected-range preparation');
+ // Committed provisional input identifies the block it created, like typing.
+ assertBlockBytes((await rpc('get',{id:note.id})).content,'<p>native_typed</p>',{added:1,message:'all successive keys must survive selected-range preparation'});
  await page.unroute('**/api/rpc');
  await focus();await page.keyboard.press('Control+z');await saved();
  assert.equal((await rpc('get',{id:note.id})).content===content,true,'one undo restores all original blocks');
@@ -62,7 +65,8 @@ try{
  releasePaste();
  assert.ok(provisionalCount<=32,'initial small-byte paste must stay inside the 32-block DOM window');
  await page.waitForFunction(()=>!document.querySelector('.document-selection-status'));await saved();
- assert.equal((await rpc('get',{id:note.id})).content,paste,'initial multi-paragraph paste commits all paragraphs exactly');
+ // Each inserted paragraph is a new block and gains its own identity.
+ assertBlockBytes((await rpc('get',{id:note.id})).content,paste,{added:40,message:'initial multi-paragraph paste commits all paragraphs exactly'});
  assert.ok(await page.locator('.tiptap-prose p').count()<=32,'bounded cursor viewport after paste');
  assert.ok((await page.locator('.tiptap-prose').textContent()).includes('short39'),'viewport follows the insertion end');
  await page.unroute('**/api/rpc');
