@@ -18,6 +18,10 @@ const OPEN = "inkism-term-definition";
 export function openTermDefinition(editor: Editor) { editor.view.dom.dispatchEvent(new Event(OPEN)); }
 export function canDefineTerm(editor: Editor) {
   const { selection, doc } = editor.state;
+  // Browser caret movement can precede ProseMirror's selectionchange handler.
+  // Never consume Ctrl+G for that transient, stale model selection.
+  const native=editor.view.dom.ownerDocument.getSelection();
+  if(editor.isFocused && native?.isCollapsed)return false;
   return editor.isEditable && !!editor.schema.marks.termDefinition && selection instanceof TextSelection && !selection.empty &&
     selection.$from.sameParent(selection.$to) && doc.textBetween(selection.from, selection.to).trim().length > 0 &&
     doc.textBetween(selection.from, selection.to).length <= 120;
@@ -121,7 +125,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
   useEffect(() => {
     if (!target) return;
     const outside = (event: PointerEvent) => { if (!panel.current?.contains(event.target as Node)) close(); };
-    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); if(!mutating.current){close(); editor.commands.focus();} } };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); if(!mutating.current){close(); if(!editor.isDestroyed)editor.view.focus();} } };
     document.addEventListener("pointerdown",outside); document.addEventListener("keydown",escape);
     return () => { document.removeEventListener("pointerdown",outside); document.removeEventListener("keydown",escape); };
   }, [target]);
@@ -178,7 +182,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
   if (!target) return null;
   const preview = target.preview;
   return createPortal(<div ref={panel} className="term-definition-popover" style={{left:target.left,top:target.top}} role="dialog" aria-label={t("용어 설명")} aria-modal="false">
-    <header><strong>{t("용어 설명")}</strong><button type="button" aria-label={t("닫기")} disabled={saving} onClick={()=>{close();editor.commands.focus();}}>×</button></header>
+    <header><strong>{t("용어 설명")}</strong><button type="button" aria-label={t("닫기")} disabled={saving} onClick={()=>{close();if(!editor.isDestroyed)editor.view.focus();}}>×</button></header>
     <div className="term-definition-word">{target.term}</div>
     {preview ? <>
       <p className="term-definition-preview">{definition}</p>
@@ -199,7 +203,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
       </details>
       {target.definition && <button type="button" disabled={busy} onClick={remove}>{t("본문 설명 제거")}</button>}
       <p className="term-definition-hint">{t("기본 저장은 본문의 설명만 추가합니다.")}</p>
-      <footer><button type="button" disabled={saving} onClick={()=>{close();editor.commands.focus();}}>{t("취소")}</button><button type="button" className="term-definition-save" disabled={busy||!definition.trim()||!valid(target)} onClick={()=>void save()}>{t("설명 저장")}</button></footer>
+      <footer><button type="button" disabled={saving} onClick={()=>{close();if(!editor.isDestroyed)editor.view.focus();}}>{t("취소")}</button><button type="button" className="term-definition-save" disabled={busy||!definition.trim()||!valid(target)} onClick={()=>void save()}>{t("설명 저장")}</button></footer>
     </>}
     {error && <p role="alert">{error}</p>}
   </div>, document.body);

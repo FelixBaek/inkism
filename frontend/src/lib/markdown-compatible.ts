@@ -5,12 +5,49 @@ import Image from "@tiptap/extension-image";
 import { TaskList, TaskItem } from "@tiptap/extension-list";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import { DOMParser as SchemaDOMParser } from "@tiptap/pm/model";
+import {canonicalRichHTML,inspectRichHTML} from "./rich-document";
 import { editableMarkdown } from "./markdown";
 import { sanitizeRichHtml } from "./sanitize";
+import {TermDefinition, validTermDefinition} from "../extensions/term-definition";
 import { t } from "../i18n";
 
-// Markdown with tables/checklists (GFM). No HTML-only marks or custom nodes.
+// A single audited inline extension; arbitrary HTML remains outside the GFM editor.
+const MarkdownTermDefinition = TermDefinition.extend({
+  markdownTokenName: 'termDefinition',
+  markdownTokenizer: {
+    name: 'termDefinition', level: 'inline', start: '<span',
+    tokenize(source, _tokens, lexer) {
+      const match = /^<span\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/span\s*>/i.exec(source);
+      if (!match || /(^|[^\\])<\/?[a-z!]/i.test(match[2]) || /\n\s*\n/.test(match[2])) return undefined;
+      const template = document.createElement('template'); template.innerHTML = match[0];
+      const span = template.content.firstElementChild;
+      if (!span || template.content.childNodes.length !== 1 || span.tagName !== 'SPAN') return undefined;
+      const allowed = ['data-term-id','data-term-definition','data-term-glossary-id','data-term-note-id'];
+      if (Array.from(span.attributes).some(a => !allowed.includes(a.name))) return undefined;
+      // Reject duplicate attributes before the DOM parser can normalize them away.
+      const names = Array.from(match[1].matchAll(/([^\s=]+)\s*=\s*(?:"[^"]*"|'[^']*')/g), a => a[1].toLowerCase());
+      if (new Set(names).size !== names.length || names.length !== span.attributes.length) return undefined;
+      const attrs = {id:span.getAttribute('data-term-id'),definition:span.getAttribute('data-term-definition'),glossaryId:span.getAttribute('data-term-glossary-id'),noteId:span.getAttribute('data-term-note-id')};
+      if (!validTermDefinition(attrs)) return undefined;
+      return {type:'termDefinition',raw:match[0],attrs,tokens:lexer.inlineTokens(match[2])};
+    },
+  },
+  parseMarkdown(token, helpers) {
+    return helpers.applyMark('termDefinition', helpers.parseInline(token.tokens || []), token.attrs);
+  },
+  renderMarkdown(node, helpers) {
+    if (!validTermDefinition(node.attrs)) throw compatibilityError();
+    const span = document.createElement('span'),a=node.attrs;
+    span.setAttribute('data-term-id',a.id);span.setAttribute('data-term-definition',a.definition);
+    if(a.glossaryId)span.setAttribute('data-term-glossary-id',a.glossaryId);
+    if(a.noteId)span.setAttribute('data-term-note-id',a.noteId);
+    return span.outerHTML.replace('</span>',helpers.renderChildren(node)+'</span>');
+  },
+});
+
+// Markdown with tables/checklists and validated inline term definitions.
 export const markdownContentExtensions = () => [
+  MarkdownTermDefinition,
   StarterKit.configure({
     trailingNode: false,
     underline: false,
@@ -81,6 +118,13 @@ export function compatibleMarkdownHTML(source: string): string {
   return html;
 }
 export function compatibleHTMLMarkdown(html: string): string {
+  if (html.includes('data-term-id')) {
+    if (!inspectRichHTML(html).editable) throw compatibilityError();
+    const template = document.createElement('template'); template.innerHTML = sanitizeRichHtml(html);
+    const doc = SchemaDOMParser.fromSchema(schema).parse(template.content, {preserveWhitespace:'full'}).toJSON();
+    if (canonicalRichHTML(html) !== canonicalRichHTML(generateHTML(doc,extensions))) throw compatibilityError();
+    return serializeCompatibleMarkdown(doc);
+  }
   const source = editableMarkdown(html);
   compatibleMarkdownHTML(source); // refuses HTML fallbacks rather than dropping them
   return source;

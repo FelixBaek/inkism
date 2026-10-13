@@ -40,16 +40,16 @@ try{
  assert.equal((await rpc('get',{id:linked})).title,'에이전트');assert.equal((await rpc('knowledge_settings_get')).glossary.length,1);
  // Mobile popup stays on screen, including the expanded glossary area.
  await page.setViewportSize({width:390,height:844});await open('에이전트');await dialog.locator('summary').click();
- const box=await dialog.boundingBox();assert.ok(box && box.x>=0 && box.x+box.width<=390 && box.y>=0 && box.y+box.height<=844,'popup must fit viewport');
+ await until(async()=>{const box=await dialog.boundingBox();return !!box && box.x>=0 && box.x+box.width<=390 && box.y>=0 && box.y+box.height<=844;});
  await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
  // Without a selection, Ctrl+G must leave the editor alone.
- await page.locator('.tiptap[contenteditable=true]').first().click();await page.keyboard.press('ArrowRight');await page.keyboard.press('Control+g');assert.equal(await dialog.count(),0);
+ await page.mouse.move(0,0);await select('에이전트');await page.keyboard.press('ArrowRight');await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});await page.keyboard.press('Control+g');assert.equal(await dialog.count(),0);
  // A read-only document still exposes saved definitions, but never edit controls.
  const saved=await rpc('get',{id:note.id});await rpc('patch',{id:note.id,revision:saved.revision,changes:{readonly:true},summary_only:true});
  await page.reload();await page.locator('.tiptap [data-term-id]').first().click();await dialog.waitFor();assert.equal(await dialog.getByRole('button',{name:'설명 수정',exact:true}).count(),0);await page.keyboard.press('Escape');
  const md=await rpc('save',{note:{title:'Term markdown integration',content:'에이전트는 도구를 사용한다.\n',content_format:'markdown'}});
- await rpc('workspace_set',{ids:[md.id],active:md.id,locations:{}});await page.setViewportSize({width:1440,height:1000});await page.reload();await page.locator('.tiptap[contenteditable=true]').waitFor();
+ await rpc('workspace_set',{ids:[md.id],active:md.id,locations:{}});await page.setViewportSize({width:1440,height:1000});await page.reload();await page.getByRole('button',{name:'노트 열기: '+md.title,exact:true}).click();await page.getByRole('button',{name:'텍스트',exact:true}).click();await page.locator('.tiptap[contenteditable=true]').waitFor();
  await open('에이전트');await dialog.getByLabel('짧은 설명',{exact:true}).fill('문맥을 읽고 행동하는 시스템.');await save();
- await until(async()=>/data-term-definition/.test((await rpc('get',{id:md.id})).content));await page.reload();await page.locator('.tiptap [data-term-id]').waitFor();assert.equal((await rpc('get',{id:md.id})).content_format,'markdown');
+ await until(async()=>/data-term-definition/.test((await rpc('get',{id:md.id})).content));await page.reload();await page.getByRole('button',{name:'텍스트',exact:true}).click();await page.locator('.tiptap [data-term-id]').waitFor();assert.equal((await rpc('get',{id:md.id})).content_format,'markdown');
  assert.deepEqual(errors,[]);console.log('PASS term UI: inline persistence/reopen, no implicit notes, glossary, note expansion, AI preview/cancel/save, annotation-only removal, mobile bounds');
 }finally{await browser.close();}

@@ -578,3 +578,13 @@ fn glossary_backup_keeps_annotation_and_expanded_note_connected() {
     assert!(imported["content"].as_str().unwrap().contains("data-term-glossary-id=\"term-1\""));
     assert_eq!(ok(dest.execute(json!({"op":"knowledge_settings_get"})))["glossary"][0]["noteId"],expanded["id"]);
 }
+
+#[test]
+fn annotation_note_links_appear_in_graph_and_backlinks() {
+    let db=Db::new();let e=db.open();let target=note(&e,"Meaning","Expanded definition");
+    let body=format!("<p><span data-term-id='occurrence-1' data-term-definition='Short meaning' data-term-note-id='{}'>Term</span></p>",target["id"].as_str().unwrap());
+    let source=ok(e.execute(json!({"op":"save","note":{"title":"Annotated","content_format":"html","content":body}})));
+    e.wait_index(5000).unwrap();
+    assert_eq!(ok(e.execute(json!({"op":"graph_get"})))["edges"],json!([{"source":source["id"],"target":target["id"]}]));
+    assert_eq!(ok(e.execute(json!({"op":"backlinks","id":target["id"]})))["items"][0]["id"],source["id"]);
+}
