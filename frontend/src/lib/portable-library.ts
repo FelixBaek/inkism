@@ -35,6 +35,9 @@ export function restorePortableLinks(source: string, manifest: PortableManifest)
   return result;
 }
 /** All files and current revisions are checked before the UI enables Apply. */
+/** Exported .md files start with an informational YAML block; it is never part of the note body. */
+export const stripFrontmatter=(text:string)=>text.replace(/^---\r?\nid: "[^\n]*\n(?:[^\n]*\n)*?---\r?\n/,'');
+
 export async function planPortableImport(files: File[], get: (id: string) => Promise<Note> = api.get): Promise<PortablePlan> {
   if (files.length > 4096 || files.reduce((n,f) => n+f.size,0) > LIMIT) throw new Error(t("외부 편집 폴더는 64 MiB 이하만 지원합니다."));
   const byPath = new Map<string, File>();
@@ -56,7 +59,7 @@ export async function planPortableImport(files: File[], get: (id: string) => Pro
       // Existing relative paths can look exactly like generated links. Refuse
       // this ambiguous reverse mapping rather than silently rewrite old text.
       if (restorePortableLinks(current.content,manifest) !== current.content) throw new Error(t("원문에 내보낸 파일과 같은 상대 경로가 있어 자동으로 반영할 수 없습니다. 파일 내용을 직접 비교해 주세요."));
-      plan.changes.push({entry,current,content:restorePortableLinks(portable,manifest)});
+      plan.changes.push({entry,current,content:restorePortableLinks(stripFrontmatter(portable),manifest)});
     } catch (error) { plan.conflicts.push(`${entry.metadata?.title || entry.id}: ${error instanceof Error ? error.message : t("확인 실패")}`); }
   }
   return plan;

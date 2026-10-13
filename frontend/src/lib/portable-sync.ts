@@ -1,7 +1,7 @@
 import { t } from '../i18n';
 import { api, rpc } from '../api';
 import type { Note, ContentFormat } from '../types';
-import { sha256, restorePortableLinks, validatePortableManifest, type PortableManifest, type PortableEntry } from './portable-library';
+import { sha256, stripFrontmatter, restorePortableLinks, validatePortableManifest, type PortableManifest, type PortableEntry } from './portable-library';
 export type FolderChange = { key:string; kind:'create'|'update'|'rename'|'delete'; path:string; previousPath?:string; title:string; tags?:string[]; notebook_id?:string|null; entry?:PortableEntry; current?:Note; content:string; assets:string[]; details:string[] };
 export type FolderPlan = { manifest:PortableManifest; changes:FolderChange[]; conflicts:string[]; unchanged:number; ignored:number; assets:Map<string,File>; files:Map<string,File> };
 const LIMIT=64*1024*1024;
@@ -10,8 +10,7 @@ const decode=async(file:File)=>new TextDecoder('utf-8',{fatal:true,ignoreBOM:tru
 const extension=(path:string):ContentFormat|undefined=>({md:'markdown',html:'html',txt:'text'} as const)[path.split('.').pop() as 'md'];
 const safePath=(path:string)=>!path.startsWith('/')&&!path.includes('\\')&&!path.split('/').some(x=>!x||x==='.'||x==='..')&&!/[\u0000-\u001f]/.test(path);
 const rx=(text:string)=>text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-/** Exported .md files start with an informational YAML block; it is never part of the note body. */
-export const stripFrontmatter=(text:string)=>text.replace(/^---\r?\nid: "[^\n]*\n(?:[^\n]*\n)*?---\r?\n/,'');
+export { stripFrontmatter };
 const fileFormat=(entry:PortableEntry)=>entry.file_format??entry.format;
 const fromMarkdown=async(markdown:string,format:ContentFormat)=>{if(format==='markdown')return markdown;const html=(await import('./markdown')).markdownToHTML(markdown);return format==='text'?html.text:html.content;};
 const refs=(source:string,path:string)=>new RegExp(`(^|[="'\\s(<])\\.\\./${rx(path)}(?=[?"'\\s<>\\)\\]#]|$)`,'gm');
