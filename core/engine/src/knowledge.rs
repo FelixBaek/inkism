@@ -784,7 +784,95 @@ pub fn template_create(conn: &Connection, args: &Value) -> Result<Value> {
     let title = args.get("title").and_then(Value::as_str).unwrap_or("");
     let input = template_input(conn, Some(template), title, date, time, "html", None)?;
     conn.execute_batch("BEGIN IMMEDIATE")?;
-    ops_notes::finish_tx(conn, ops_notes::save_tx(conn, input))
+    let result = (|| {
+        let note = ops_notes::save_tx(conn, input)?;
+        // Typed templates carry their properties (schema + default values) into each new note.
+        let properties = read(conn, &format!("{NOTE_PREFIX}{template}"))?["properties"].clone();
+        if properties.as_array().is_some_and(|p| !p.is_empty()) {
+            let data = json!({"aliases":[],"properties":properties});
+            validate_bindings(conn, &data)?;
+            for target in properties.as_array().unwrap().iter().filter(|p| p["type"] == "relation").flat_map(|p| p["value"].as_array().cloned().unwrap_or_default()) {
+                let (_, _, locked, trashed) = note_state(conn, target.as_str().unwrap_or(""))?;
+                if locked || trashed { return Err(invalid("relation note unavailable")); }
+            }
+            settings::write_local(conn, &format!("{NOTE_PREFIX}{}", string(&note, "id")?), Some(&data.to_string()))?;
+        }
+        Ok(note)
+    })();
+    ops_notes::finish_tx(conn, result)
+}
+/// One atomic step: shared property definitions + a template note holding default values (+ optional saved view).
+/// Re-running reuses same-named definitions/template/view; a same-named definition of another type is refused.
+pub fn type_preset_apply(conn: &Connection, args: &Value) -> Result<Value> {
+    let name = string(args, "name")?;
+    if !bounded(name, 80) { return Err(invalid("invalid preset name")); }
+    let content = string(args, "content")?;
+    let wanted = args["properties"].as_array().filter(|p| !p.is_empty() && p.len() <= 32).ok_or_else(|| invalid("invalid preset properties"))?;
+    let layout = args.get("view").and_then(Value::as_str);
+    if layout.is_some_and(|l| !["table", "cards", "kanban"].contains(&l)) { return Err(invalid("invalid preset view")); }
+    let mut input = template_input(conn, None, name, "", "", "html", None)?;
+    input.text = Some(crate::source_format::search_text("html", content)?);
+    input.content = Some(content.to_owned());
+    ops_notes::validate_save(&input)?;
+    conn.execute_batch("BEGIN IMMEDIATE")?;
+    let result = (|| {
+        compare_version(conn, CONFIG_KEY, args)?;
+        let mut config = config_get(conn)?;
+        config.as_object_mut().unwrap().remove("version");
+        let mut definitions = config["property_definitions"].as_array().cloned().unwrap_or_default();
+        let mut properties = Vec::new();
+        for p in wanted {
+            let pname = string(p, "name")?;
+            let kind = string(p, "type")?;
+            let options = p.get("options").cloned();
+            let id = match definitions.iter().find(|d| d["name"].as_str().is_some_and(|n| n.to_lowercase() == pname.to_lowercase())) {
+                Some(d) if d["type"] != kind || d.get("options") != options.as_ref() => return Err(EngineError::Conflict(format!("property \"{pname}\" already exists with a different type or options"))),
+                Some(d) => d["id"].clone(),
+                None => {
+                    let mut d = json!({"id":ids::new_id(),"name":pname,"type":kind});
+                    if let Some(o) = &options { d["options"] = o.clone(); }
+                    definitions.push(d.clone());
+                    d["id"].clone()
+                }
+            };
+            let d = definitions.iter().find(|d| d["id"] == id).unwrap();
+            let mut property = d.clone();
+            property.as_object_mut().unwrap().remove("id");
+            property["definition_id"] = id;
+            property["value"] = p.get("value").cloned().unwrap_or_else(|| default_property_value(kind));
+            properties.push(property);
+        }
+        let data = json!({"aliases":[],"properties":properties});
+        validate_note(&data)?;
+        config["property_definitions"] = json!(definitions);
+        let mut template_id = None;
+        for id in config["template_ids"].as_array().unwrap().iter().filter_map(Value::as_str) {
+            let n = ops_notes::get(conn, &json!({"id":id}))?;
+            if n["title"] == name && n["trashed"] != true && n["locked"] != true { template_id = Some(id.to_owned()); break; }
+        }
+        let template_id = match template_id {
+            Some(id) => id,
+            None => {
+                let note = ops_notes::save_tx(conn, input)?;
+                let id = string(&note, "id")?.to_owned();
+                settings::write_local(conn, &format!("{NOTE_PREFIX}{id}"), Some(&data.to_string()))?;
+                config["template_ids"].as_array_mut().unwrap().push(json!(id));
+                id
+            }
+        };
+        if let Some(layout) = layout {
+            if !config["views"].as_array().unwrap().iter().any(|v| v["name"] == name) {
+                let first = properties[0]["name"].clone();
+                let mut view = json!({"id":ids::new_id(),"name":name,"layout":layout,"filter":{"property":first,"operator":"exists","value":""},"sort":{"property":"$updated","direction":"desc"}});
+                if layout == "kanban" { view["group_by"] = first; }
+                config["views"].as_array_mut().unwrap().push(view);
+            }
+        }
+        validate_config(&config)?;
+        settings::write_local(conn, CONFIG_KEY, Some(&config.to_string()))?;
+        Ok(json!({"template_id":template_id,"settings":config_get(conn)?}))
+    })();
+    ops_notes::finish_tx(conn, result)
 }
 fn valid_time(s: &str) -> bool {
     let b = s.as_bytes();

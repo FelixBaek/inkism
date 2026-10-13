@@ -615,3 +615,33 @@ fn note_cover_is_validated_canonical_and_survives_other_updates() {
     let cleared = ok(e.execute(json!({"op":"knowledge_set","id":n["id"],"revision":n["revision"],"version":saved["version"],"document":{"cover":null}})));
     assert!(cleared["document"]["cover"].is_null());
 }
+#[test]
+fn type_preset_creates_schema_defaults_layout_atomically_and_idempotently() {
+    let db = Db::new();
+    let e = db.open();
+    let preset = |version: &Value| json!({"op":"type_preset_apply","version":version,"name":"독서 노트","content":"<h1>{{title}}</h1><h2>요약</h2><p></p>","view":"table","properties":[{"name":"저자","type":"text","value":""},{"name":"상태","type":"select","options":["읽을 예정","읽는 중","완료"],"value":"읽을 예정"},{"name":"평점","type":"number","value":0}]});
+    let first = ok(e.execute(preset(&json!(0))));
+    let settings = &first["settings"];
+    assert_eq!(settings["property_definitions"].as_array().unwrap().len(), 3);
+    assert_eq!(settings["template_ids"], json!([first["template_id"]]));
+    assert_eq!(settings["views"][0]["name"], "독서 노트");
+    let again = ok(e.execute(preset(&settings["version"])));
+    assert_eq!(again["template_id"], first["template_id"]);
+    assert_eq!(again["settings"]["property_definitions"], settings["property_definitions"]);
+    assert_eq!(again["settings"]["views"].as_array().unwrap().len(), 1);
+    let created = ok(e.execute(json!({"op":"template_create","template_id":first["template_id"],"title":"데미안","date":"2026-10-14","time":"09:00"})));
+    assert_eq!(created["content"], "<h1>데미안</h1><h2>요약</h2><p></p>");
+    let meta = ok(e.execute(json!({"op":"knowledge_get","id":created["id"]})));
+    assert_eq!(meta["properties"][1]["value"], "읽을 예정");
+    assert_eq!(meta["properties"][1]["definition_id"], settings["property_definitions"][1]["id"]);
+    // Same name, different type: refused and nothing partially written.
+    let version = again["settings"]["version"].clone();
+    let clash = e.execute(json!({"op":"type_preset_apply","version":version,"name":"회의록","content":"<p></p>","properties":[{"name":"참석자","type":"person","value":[]},{"name":"평점","type":"text","value":""}]}));
+    assert_eq!(clash["ok"], false, "{clash}");
+    assert!(clash.to_string().contains("평점"));
+    let after = ok(e.execute(json!({"op":"knowledge_settings_get"})));
+    assert_eq!(after["version"], version);
+    assert_eq!(after["property_definitions"].as_array().unwrap().len(), 3);
+    assert_eq!(e.execute(json!({"op":"type_preset_apply","version":version,"name":"x","content":"<p></p>","properties":[{"name":"상태2","type":"select","options":["a"],"value":"b"}]}))["ok"], false);
+    assert_eq!(e.execute(json!({"op":"type_preset_apply","version":version,"name":"x","content":"<p></p>","properties":[]}))["ok"], false);
+}
