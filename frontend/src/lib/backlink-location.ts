@@ -11,7 +11,7 @@ const text=(html:string)=>{const el=document.createElement('template');el.innerH
 export function backlinkLocation(note:Note,target:string,names:string[]):BacklinkLocation|undefined{
  const source=note.content,html=(note.content_format??'html')==='html';
  const masked=html?source.replace(/<!--[\s\S]*?-->|<(pre|code|script|style|textarea|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,m=>' '.repeat(m.length)):
- source.replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}\1[^\n]*(?:\n|$)|`+[^`\n]*`+/gm,m=>' '.repeat(m.length));
+ source.replace(/(?:^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}\1[^\n]*(?:\n|$))|(?:`+[^`\n]*`+)/gm,m=>' '.repeat(m.length));
  const matches=(value:string)=>{const ref=parseReference(value);return ref.target===target||names.some(n=>n.toLocaleLowerCase()===ref.target.toLocaleLowerCase());};
  const pattern=html?/<a\b(?:"[^"]*"|'[^']*'|[^'">])*?>[\s\S]*?<\/a\s*>|!?\[\[[^\]\n]+\]\]/gi:/!?\[\[[^\]\n]+\]\]|\[([^\]\n]+)\]\((note:\/\/[^\s)]+)\)/g;
  let found:RegExpExecArray|null;

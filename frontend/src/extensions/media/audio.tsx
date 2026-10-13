@@ -173,7 +173,7 @@ function Recorder({
       context: AudioContext | null = null,
       timer = 0;
     const started = performance.now();
-    (async () => {
+    void (async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         if (cancelled) {

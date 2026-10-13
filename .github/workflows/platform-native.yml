@@ -32,9 +32,9 @@ jobs:
       CI: 'true'
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         if: inputs.platform == 'all' || inputs.platform == matrix.platform
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         if: inputs.platform == 'all' || inputs.platform == matrix.platform
         with:
           node-version: '22'
@@ -42,14 +42,16 @@ jobs:
           cache-dependency-path: |
             frontend/package-lock.json
             desktop-tauri/package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         if: inputs.platform == 'all' || inputs.platform == matrix.platform
-      - uses: actions/setup-java@v4
+        with:
+          toolchain: stable
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         if: (inputs.platform == 'all' || inputs.platform == 'android') && matrix.platform == 'android'
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
         if: (inputs.platform == 'all' || inputs.platform == 'android') && matrix.platform == 'android'
         with:
           # The old `tools` SDK package has been removed from the repository.
@@ -75,9 +77,9 @@ jobs:
         if: inputs.platform == 'all' || inputs.platform == matrix.platform
         shell: bash
         run: |
-          npm --prefix frontend ci --no-audit --no-fund
+          npm --prefix frontend ci --ignore-scripts --no-audit --no-fund
           npm --prefix frontend run build
-          npm --prefix desktop-tauri ci --no-audit --no-fund
+          npm --prefix desktop-tauri ci --ignore-scripts --no-audit --no-fund
       - name: Verify Windows OpenSSL Perl
         if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && matrix.platform == 'windows'
         shell: pwsh
@@ -102,7 +104,7 @@ jobs:
         if: (inputs.platform == 'all' || inputs.platform == matrix.platform) && matrix.platform != 'windows'
         shell: bash
         run: node tools/platform-build.mjs '${{ matrix.platform }}'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: success() && (inputs.platform == 'all' || inputs.platform == matrix.platform)
         with:
           name: inkism-${{ matrix.platform }}-test-${{ github.sha }}

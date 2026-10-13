@@ -469,17 +469,25 @@ async fn sharing_wiki_password_roles_versions_domain_boundaries(){
         let res=r.handle(req).await;let(parts,body)=res.into_parts();Out{code:parts.status.as_u16(),headers:parts.headers,body:body.bytes().await.to_vec()}
     }
     let dir=TempDir::new();let token="a".repeat(32);let r=Relay::open(dir.db(),&token).unwrap();
-    let made=call(&r,"POST","/v1/publications",&token,None,json!({"title":"Home","html":"<p>Private copy</p>","password":"public-password","days":7,"pages":[{"id":"page1","title":"Child","html":"<p onclick='bad()'>child</p>"}]}).to_string()).await;
+    // Exercise real password hashing with disposable credentials, without
+    // embedding cryptographic values in the test source.
+    let public_password=URL_SAFE_NO_PAD.encode(random(24));
+    let viewer_password=URL_SAFE_NO_PAD.encode(random(24));
+    let editor_password=URL_SAFE_NO_PAD.encode(random(24));
+    assert_ne!(public_password,viewer_password);
+    let made=call(&r,"POST","/v1/publications",&token,None,json!({"title":"Home","html":"<p>Private copy</p>","password":public_password,"days":7,"pages":[{"id":"page1","title":"Child","html":"<p onclick='bad()'>child</p>"}]}).to_string()).await;
     assert_eq!(made.code,201,"{}",made.text());assert!(made.json().get("password_hash").is_none());let id=made.json()["id"].as_str().unwrap().to_owned();let path=format!("/p/{id}");
     let locked=access(&r,"GET",&path,"",Value::Null,"localhost").await;assert_eq!(locked.code,401);assert!(locked.text().contains("id=\"password\""));assert!(!locked.text().contains("Private copy"));
-    let opened=access(&r,"GET",&path,"public-password",Value::Null,"localhost").await;assert_eq!(opened.code,200);assert_eq!(opened.json()["pages"][0]["html"],"<p>child</p>");assert!(opened.json().get("password_hash").is_none());
-    let viewer=call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":id,"role":"viewer","password":"v"}).to_string()).await;let vid=viewer.json()["id"].as_str().unwrap().to_owned();
-    assert_eq!(access(&r,"GET",&path,"public-password",Value::Null,"localhost").await.code,401,"old public link bypasses revocation");
+    assert_eq!(access(&r,"GET",&path,&viewer_password,Value::Null,"localhost").await.code,401,"wrong public password accepted");
+    let opened=access(&r,"GET",&path,&public_password,Value::Null,"localhost").await;assert_eq!(opened.code,200);assert_eq!(opened.json()["pages"][0]["html"],"<p>child</p>");assert!(opened.json().get("password_hash").is_none());
+    let viewer=call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":id,"role":"viewer","password":viewer_password}).to_string()).await;let vid=viewer.json()["id"].as_str().unwrap().to_owned();
+    assert_eq!(access(&r,"GET",&path,&public_password,Value::Null,"localhost").await.code,401,"old public link bypasses revocation");
+    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),&public_password,Value::Null,"localhost").await.code,401,"wrong viewer password accepted");
     // Invitations are read-only: no edits, no editor role, no owner snapshot read-back.
-    assert_eq!(access(&r,"PUT",&format!("/s/{vid}"),"v",json!({"title":"bad","html":"bad","version":1}),"localhost").await.code,404);
-    assert_eq!(access(&r,"POST",&format!("/s/{vid}/session"),"v",json!({"client_id":"client-aaaaaaaaaaaa","page_id":""}),"localhost").await.code,404);
-    assert_eq!(call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":id,"role":"editor","password":"e"}).to_string()).await.code,400);
-    let seen=access(&r,"GET",&format!("/s/{vid}"),"v",Value::Null,"localhost").await;assert_eq!(seen.json()["role"],"viewer");assert_eq!(seen.json()["pages"][0]["html"],"<p>child</p>");
+    assert_eq!(access(&r,"PUT",&format!("/s/{vid}"),&viewer_password,json!({"title":"bad","html":"bad","version":1}),"localhost").await.code,404);
+    assert_eq!(access(&r,"POST",&format!("/s/{vid}/session"),&viewer_password,json!({"client_id":"client-aaaaaaaaaaaa","page_id":""}),"localhost").await.code,404);
+    assert_eq!(call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":id,"role":"editor","password":editor_password}).to_string()).await.code,400);
+    let seen=access(&r,"GET",&format!("/s/{vid}"),&viewer_password,Value::Null,"localhost").await;assert_eq!(seen.json()["role"],"viewer");assert_eq!(seen.json()["pages"][0]["html"],"<p>child</p>");
     let owner_path=format!("/v1/publications/{id}");
     assert_eq!(call(&r,"GET",&owner_path,&token,None,"").await.code,404);
     // An "editor" invitation stored by an older version only reads.
@@ -488,13 +496,13 @@ async fn sharing_wiki_password_roles_versions_domain_boundaries(){
     assert_eq!(access(&r,"PUT",&format!("/s/{legacy}"),"",json!({"title":"bad","html":"bad","version":1}),"localhost").await.code,404);
     assert_eq!(access(&r,"GET",&format!("/s/{legacy}"),"",Value::Null,"localhost").await.json()["role"],"viewer");
     assert_eq!(call(&r,"PUT","/v1/settings/domain",&token,None,r#"{"hosts":["wiki.example.com"]}"#).await.code,200);
-    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),"v",Value::Null,"evil.test").await.code,403);
-    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),"v",Value::Null,"wiki.example.com").await.code,200);
+    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),&viewer_password,Value::Null,"evil.test").await.code,403);
+    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),&viewer_password,Value::Null,"wiki.example.com").await.code,200);
     assert_eq!(call(&r,"GET","/v1/settings/domain",&token,None,"").await.code,200,"owner locked out");
     assert_eq!(call(&r,"PUT","/v1/settings/domain",&token,None,r#"{"hosts":[]}"#).await.code,200);
     r.db_sync(|s|s.update(|tx|{let raw=store::get(tx,store::PUBLICATIONS,id.as_bytes())?.unwrap();let mut p:Value=serde_json::from_slice(&raw)?;p["expires"]=json!(0);store::put(tx,store::PUBLICATIONS,id.as_bytes(),&serde_json::to_vec(&p)?) })).unwrap();
-    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),"v",Value::Null,"localhost").await.code,404,"expired publication remains visible through invite");
+    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),&viewer_password,Value::Null,"localhost").await.code,404,"expired publication remains visible through invite");
     assert_eq!(call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":id,"role":"viewer"}).to_string()).await.code,404,"expired publication accepts invites");
     assert_eq!(call(&r,"DELETE",&format!("/v1/publications/{id}"),&token,None,"").await.code,204);
-    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),"v",Value::Null,"localhost").await.code,404);
+    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),&viewer_password,Value::Null,"localhost").await.code,404);
 }
