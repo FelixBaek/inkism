@@ -63,6 +63,40 @@ public static class InkismInput {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] struct PROCESSENTRY32 {
+        public uint size,usage,process;
+        public UIntPtr heap;
+        public uint module,threads,parent;
+        public int priority;
+        public uint flags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst=260)] public string executable;
+    }
+    [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr CreateToolhelp32Snapshot(uint flags,uint process);
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] static extern bool Process32FirstW(IntPtr snapshot,ref PROCESSENTRY32 entry);
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)] static extern bool Process32NextW(IntPtr snapshot,ref PROCESSENTRY32 entry);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    public static bool IsProcessInAppTree(int candidate,int owner) {
+        if(candidate<=0 || owner<=0)return false;
+        if(candidate==owner)return true;
+        // WebView2 permission bubbles can belong to its browser child rather
+        // than Inkism.exe. Inspect only process IDs/parents, without WMI modules.
+        IntPtr snapshot=CreateToolhelp32Snapshot(2,0); // TH32CS_SNAPPROCESS
+        if(snapshot==new IntPtr(-1))throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        try {
+            var parents=new System.Collections.Generic.Dictionary<uint,uint>();
+            var entry=new PROCESSENTRY32();entry.size=(uint)Marshal.SizeOf(typeof(PROCESSENTRY32));
+            if(!Process32FirstW(snapshot,ref entry))throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            do {parents[entry.process]=entry.parent;}while(Process32NextW(snapshot,ref entry));
+            uint current=(uint)candidate;
+            for(int depth=0;depth<16 && current!=0;depth++) {
+                if(current==(uint)owner)return true;
+                uint parent;
+                if(!parents.TryGetValue(current,out parent) || parent==current)return false;
+                current=parent;
+            }
+            return false;
+        } finally {CloseHandle(snapshot);}
+    }
     [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] static extern bool AttachThreadInput(uint from, uint to, bool attach);
     [StructLayout(LayoutKind.Sequential)] struct RECT { public int left,top,right,bottom; }
@@ -590,6 +624,59 @@ function Verify-SourceData {
     node (Join-Path $root 'tools/scripts/verify-source-ui.ts') (Join-Path (Split-Path $binary) 'inkism-engine.exe') $db $expectedPath
     if($LASTEXITCODE){throw 'Source bytes/format/restart verification failed'}
 }
+function Confirm-TestDownloadPermission {
+    $app.Refresh()
+    if ($app.HasExited) { throw 'Test app exited while awaiting its download' }
+    try {
+        # Search only this app's UIA subtree. Accept exactly the native bubble
+        # observed for the app's fixed local origin, never an arbitrary Allow.
+        $window = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+        $condition = [System.Windows.Automation.AndCondition]::new(
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, 'http://wails.localhost wants to: Download multiple files'),
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window))
+        $prompts = @($window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition))
+        if ($prompts.Count -eq 0) { return }
+        if ($prompts.Count -ne 1) { throw 'Ambiguous local-app download permission prompt' }
+        $isolated = [System.IO.Path]::GetFullPath($scratch)
+        $tempRoot = [System.IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
+        if (-not $isolated.StartsWith($tempRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
+            [System.IO.Path]::GetFileName($isolated) -notlike 'inkism-ui-*' -or
+            -not [string]::Equals([System.IO.Path]::GetFullPath($env:APPDATA), (Join-Path $isolated 'Roaming'), [System.StringComparison]::OrdinalIgnoreCase) -or
+            -not [string]::Equals([System.IO.Path]::GetFullPath($env:LOCALAPPDATA), (Join-Path $isolated 'Local'), [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Download permission requires the disposable native test profile'
+        }
+        $prompt = $prompts[0]
+        $promptProcess = $prompt.Current.ProcessId
+        if (-not [InkismInput]::IsProcessInAppTree($promptProcess, $app.Id)) {
+            throw "Download permission process $promptProcess does not belong to test app $($app.Id) or its WebView child"
+        }
+        $purposeCondition = [System.Windows.Automation.AndCondition]::new(
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, 'Download multiple files'),
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text))
+        $allowCondition = [System.Windows.Automation.AndCondition]::new(
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, 'Allow'),
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))
+        $blockCondition = [System.Windows.Automation.AndCondition]::new(
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, 'Block'),
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))
+        $purpose = @($prompt.FindAll([System.Windows.Automation.TreeScope]::Descendants, $purposeCondition))
+        $allow = @($prompt.FindAll([System.Windows.Automation.TreeScope]::Descendants, $allowCondition))
+        $block = @($prompt.FindAll([System.Windows.Automation.TreeScope]::Descendants, $blockCondition))
+        if ($purpose.Count -ne 1 -or $allow.Count -ne 1 -or $block.Count -ne 1 -or
+            -not $allow[0].Current.IsEnabled -or
+            -not [InkismInput]::IsProcessInAppTree($allow[0].Current.ProcessId, $app.Id)) {
+            throw 'Local download permission controls are absent, ambiguous or outside the test app'
+        }
+        $allow[0].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+        # Host output must not become an extra pipeline value alongside the
+        # downloaded filename returned by Wait-TestDownload.
+        Write-Host "PASS: native multiple-download permission accepted only for http://wails.localhost in disposable profile (owned process $promptProcess)"
+    } catch {
+        # The bubble may disappear between discovery and observation. Recheck
+        # the actual file on the next bounded download-wait iteration.
+        if ($_.Exception.GetBaseException() -isnot [System.Windows.Automation.ElementNotAvailableException]) { throw }
+    }
+}
 function Wait-TestDownload([string]$title,[string]$extension,[DateTime]$since,[scriptblock]$ready = $null) {
     $deadline=[DateTime]::UtcNow.AddSeconds(30)
     do {
@@ -601,6 +688,7 @@ function Wait-TestDownload([string]$title,[string]$extension,[DateTime]$since,[s
             # Require this request's actual content before returning a path.
             if($bytes.Length -gt 0 -and ($null -eq $ready -or (& $ready $bytes))){return $file.FullName}
         }catch{}}
+        Confirm-TestDownloadPermission
         Start-Sleep -Milliseconds 100
     }while([DateTime]::UtcNow -lt $deadline)
     throw "Native download absent: $title.$extension"
