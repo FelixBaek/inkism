@@ -27,6 +27,25 @@ import { ArchiveTabs, TrashRetention, TrashSelectionDialog, trashLabel, useTrash
 import "./NoteList.css";
 import { t } from "../i18n";
 
+function pageCount(total: number | undefined, hasNext: boolean, page: number) {
+  if (total !== undefined) return Math.max(1, Math.ceil(total / PAGE_SIZE));
+  return hasNext ? null : page;
+}
+function listInfo(search: string, hasNext: boolean, page: number, length: number, order: string, count: number | null) {
+  if (search) return t(hasNext ? "{count}개 이상 검색 결과" : "{count}개 검색 결과", { count: (page - 1) * PAGE_SIZE + length });
+  if (count === null) return order;
+  const amount = count < 0 ? t("{count}개 이상", { count: -count }) : t("{count}개", { count });
+  return order + " · " + amount;
+}
+function ListStatus({ error, loading, empty, view, search, retry }: Readonly<{
+  error: string | null; loading: boolean; empty: boolean; view: View; search: string; retry: () => void;
+}>) {
+  if (error) return <div className="list-state" role="alert"><p>{error}</p><button type="button" className="btn" onClick={retry}>{t("다시 시도")}</button></div>;
+  if (!empty) return null;
+  if (loading) return <div className="list-state" aria-live="polite"><Loader2 size={18} className="spin" aria-hidden /><p>{t("불러오는 중…")}</p></div>;
+  return <EmptyList view={view} search={search} />;
+}
+
 export function NoteList() {
   const s = useStore();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -55,7 +74,7 @@ export function NoteList() {
   // 전체 노트는 총 개수를 알고, 다른 보기는 마지막 쪽에 닿아야 정확한 수를 안다(음수 = "이상").
   const total = s.view.type === "all" && !s.search ? s.stats?.notes : undefined;
   const count = !s.pageData ? null : total ?? knownNoteCount(s.pageData.nextCursor, s.page, items.length);
-  const pages = total !== undefined ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : hasNext ? null : s.page;
+  const pages = pageCount(total, hasNext, s.page);
   const trash = s.view.type === "trash";
   const shelf = trash || s.view.type === "archive";
   useTrashPurge();
@@ -126,10 +145,7 @@ export function NoteList() {
         </div>
       )}
       <p className="list-info">
-        {s.search
-          ? t(hasNext ? "{count}개 이상 검색 결과" : "{count}개 검색 결과", { count: (s.page - 1) * PAGE_SIZE + items.length })
-          : order + (count === null ? "" : " · ") +
-            (count === null ? "" : count < 0 ? t("{count}개 이상", { count: -count }) : t("{count}개", { count }))}
+        {listInfo(s.search, hasNext, s.page, items.length, order, count)}
         {trash && picked.size > 0 && (
           <>
             {" · "}
@@ -144,23 +160,7 @@ export function NoteList() {
       {notebook && <NotebookHeader notebook={notebook} />}
 
       <div className="list-body" role="feed" aria-busy={s.listLoading}>
-        {s.listError && (
-          <div className="list-state" role="alert">
-            <p>{s.listError}</p>
-            <button type="button" className="btn" onClick={s.refreshList}>
-              {t("다시 시도")}
-            </button>
-          </div>
-        )}
-
-        {!s.listError && s.listLoading && items.length === 0 && (
-          <div className="list-state" aria-live="polite">
-            <Loader2 size={18} className="spin" aria-hidden />
-            <p>{t("불러오는 중…")}</p>
-          </div>
-        )}
-
-        {!s.listError && !s.listLoading && items.length === 0 && <EmptyList view={s.view} search={s.search} />}
+        <ListStatus error={s.listError} loading={s.listLoading} empty={items.length === 0} view={s.view} search={s.search} retry={s.refreshList} />
 
         {items.length > 0 &&
           groups.map((g, i) => (

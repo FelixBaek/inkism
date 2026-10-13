@@ -141,6 +141,11 @@ export function WritingTools() {
     if(!await latest.current.flushNow())throw new Error(t("목차 순서를 저장하지 못했습니다."));
     setPanel(null);setTimeout(()=>setPanel("outline"),0);
   });
+  const unregisterTemplate=(id:string)=>void run(async()=>{
+    if(!settings)return;
+    await saveConfig({template_ids:settings.template_ids.filter(key=>key!==id),...(settings.daily_template_id===id?{daily_template_id:null}:{})});
+    setTemplates(rows=>rows.filter(row=>row.id!==id));
+  });
   return <>
     <div className="writing-tools" role="group" aria-label={t("작성 도구")}>
       <button type="button" className="btn btn-secondary" onClick={daily} disabled={busy} aria-label={t("일일 노트")} title={t("오늘의 노트")}><CalendarDays size={16}/><span>{t("일일 노트")}</span></button>
@@ -163,7 +168,7 @@ export function WritingTools() {
       {panel==="templates"&&settings&&<>
         <label className="writing-tools-field">{t("일일 노트 템플릿")}<select disabled={busy} value={settings.daily_template_id??""} onChange={e=>void run(()=>saveConfig({daily_template_id:e.target.value||null}))}><option value="">{t("빈 노트")}</option>{templates.map(note=><option key={note.id} value={note.id}>{note.title||t("제목 없는 노트")}</option>)}</select></label>
         <div className="writing-tools-actions"><button className="btn btn-primary" disabled={busy} onClick={daily}>{t("오늘의 노트 열기")}</button><button className="btn btn-secondary" disabled={busy||!s.draft} onClick={registerTemplate}>{t("현재 노트를 템플릿으로 등록")}</button></div>
-        <div className="writing-tools-list">{templates.map(note=><div key={note.id} className="writing-template-row"><span title={note.title}>{note.title||t("제목 없는 노트")}</span><span><button type="button" className="writing-link" disabled={busy} aria-label={t("템플릿으로 새 노트")+": "+(note.title||t("제목 없는 노트"))} onClick={()=>createTemplate(note)}>{t("새 노트 만들기")}</button> · <button type="button" className="writing-link" disabled={busy} onClick={()=>void run(async()=>{await saveConfig({template_ids:settings.template_ids.filter(id=>id!==note.id),...(settings.daily_template_id===note.id?{daily_template_id:null}:{})});setTemplates(rows=>rows.filter(row=>row.id!==note.id));})}>{t("등록 해제")}</button></span></div>)}</div>
+        <div className="writing-tools-list">{templates.map(note=><div key={note.id} className="writing-template-row"><span title={note.title}>{note.title||t("제목 없는 노트")}</span><span><button type="button" className="writing-link" disabled={busy} aria-label={t("템플릿으로 새 노트")+": "+(note.title||t("제목 없는 노트"))} onClick={()=>createTemplate(note)}>{t("새 노트 만들기")}</button> · <button type="button" className="writing-link" disabled={busy} onClick={()=>unregisterTemplate(note.id)}>{t("등록 해제")}</button></span></div>)}</div>
         {!templates.length&&!busy&&<p className="writing-tools-hint">{t("등록한 템플릿이 없습니다.")}</p>}
         <p className="writing-tools-hint">{t("템플릿의 {{title}}, {{date}}, {{time}}는 새 노트의 제목, 날짜, 시각으로 바뀝니다.")}</p>
         <label className="writing-tools-field writing-tools-divided">{t("노트 제목으로 빠른 전환")}<span className="writing-tools-inline"><input placeholder={t("제목 또는 별칭 검색")} value={switchText} onChange={e=>setSwitchText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.nativeEvent.isComposing&&switchText.trim()){e.preventDefault();pendingQuery.current=switchText;setSwitchText("");setPanel("quick");}}}/><button type="button" className="btn btn-secondary" disabled={busy||!switchText.trim()} onClick={()=>newTitled(switchText)}>{t("이 제목으로 새 노트")}</button></span></label>

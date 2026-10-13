@@ -36,6 +36,39 @@ import { KnowledgeTools } from "./components/KnowledgeTools";
 import { WritingTools } from "./components/WritingTools";
 import "./mobile.css";
 
+type ShellStore = ReturnType<typeof useStore>;
+function notebookPath(note: ShellStore["note"], notebooks: ShellStore["notebooks"]) {
+  const path: string[] = [];
+  const seen = new Set<string>();
+  for (let id = note?.notebook_id ?? null; id && !seen.has(id); ) {
+    seen.add(id);
+    const notebook = notebooks.find((n) => n.id === id);
+    if (!notebook) break;
+    path.unshift(notebook.name);
+    id = notebook.parent_id ?? null;
+  }
+  return path;
+}
+function shellViewName(panel: ShellPanel | null, view: ShellStore["view"], notebooks: ShellStore["notebooks"]) {
+  if (panel === "reminders") return t("알림");
+  if (panel === "daily") return t("오늘의 노트");
+  if (view.type === "notebook") return notebooks.find((n) => n.id === view.id)?.name ?? t("폴더");
+  return viewTitle(view);
+}
+function mobileTitle(selected: boolean, path: string[], navigation: boolean, viewName: string) {
+  if (selected) return path.at(-1) ?? "inkism";
+  return navigation ? "inkism" : viewName;
+}
+function ShellNoteList({ panel }: Readonly<{ panel: ShellPanel | null }>) {
+  if (panel === "reminders") return <ReminderList />;
+  if (panel === "daily") return <DailyList />;
+  return <NoteList />;
+}
+
+function shellClassName(selected: boolean, navigation: boolean) {
+  return "app" + (selected ? " has-selection" : "") + (navigation ? " navigation-open" : "");
+}
+
 function Shell() {
   const s = useStore();
   useEffect(() => {
@@ -131,19 +164,8 @@ function Shell() {
     };
   }, [toolsOpen]);
   // 상단 경로: 열린 노트의 폴더를 상위부터 잇는다. 노트가 없으면 지금 보는 목록 이름.
-  const path: string[] = [];
-  for (let id = s.note?.notebook_id ?? null, seen = new Set<string>(); id && !seen.has(id); ) {
-    seen.add(id);
-    const nb = s.notebooks.find((n) => n.id === id);
-    if (!nb) break;
-    path.unshift(nb.name);
-    id = nb.parent_id ?? null;
-  }
-  const viewName = panel
-    ? panel === "reminders"
-      ? t("알림")
-      : t("오늘의 노트")
-    : s.view.type === "notebook" ? s.notebooks.find((n) => n.id === (s.view as { id: string }).id)?.name ?? t("폴더") : viewTitle(s.view);
+  const path = notebookPath(s.note, s.notebooks);
+  const viewName = shellViewName(panel, s.view, s.notebooks);
   const inspectorLabel = inspectorOpen ? t("노트 속성 닫기") : t("노트 속성 열기");
   const moreItems = (compact: boolean): MenuItemSpec[] => [
     ...(compact ? [{ label: t("공유"), disabled: !s.note, onSelect: () => setSharing(true) }] : []),
@@ -154,7 +176,7 @@ function Shell() {
   ];
   return (
     <div
-      className={"app" + (s.selectedId ? " has-selection" : "") + (navigation ? " navigation-open" : "")}
+      className={shellClassName(Boolean(s.selectedId), navigation)}
       data-theme-wrapper="true"
     >
       <header className="mobile-header">
@@ -167,7 +189,7 @@ function Shell() {
             {navigation ? <X size={21} /> : <Menu size={21} />}
           </button>
         )}
-        <strong>{s.selectedId ? path.at(-1) ?? "inkism" : navigation ? "inkism" : viewName}</strong>
+        <strong>{mobileTitle(Boolean(s.selectedId), path, navigation, viewName)}</strong>
         {s.selectedId ? (
           <IconButton label={inspectorLabel} active={inspectorOpen} disabled={!s.draft} onClick={inspectorOpen ? closeInspector : openInspector}>
             <PanelRight size={18} aria-hidden />
@@ -222,7 +244,7 @@ function Shell() {
             <Whiteboard />
           </div>
           <div className="app-content">
-            {panel === "reminders" ? <ReminderList /> : panel === "daily" ? <DailyList /> : <NoteList />}
+            <ShellNoteList panel={panel} />
             <div className="workspace-column">
               <div className="workspace-topbar" data-tauri-drag-region="deep">
                 <NoteTabs />

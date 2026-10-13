@@ -16,6 +16,47 @@ const indexedReference=(item:IndexedReference):NoteReference=>({...parseReferenc
 const escape=(s:string)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 
+function exceedsReadBudget(error: unknown) {
+  return error instanceof Error && error.message.includes("note body exceeds read budget");
+}
+
+function connectionText(note: Note) {
+  let result: NoteReference[] = [],
+    plainContent = "";
+  if ((note.content_format ?? "html") === "html") {
+    const root = document.createElement("template");
+    root.innerHTML = sanitizeRichHtml(note.content);
+    root.content.querySelectorAll("pre,code,script,style").forEach((n) => n.remove());
+    plainContent = root.content.textContent ?? "";
+    result = wikiReferences(plainContent);
+    for (const a of root.content.querySelectorAll('a[href^="note://"]')) {
+      const ref = parseReference(a.getAttribute("href")!);
+      ref.label = a.textContent || ref.label;
+      result.push(ref);
+    }
+  } else {
+    plainContent = note.content;
+    result = wikiReferences(note.content);
+    if (note.content_format === "markdown") {
+      const root = document.createElement("template");
+      root.innerHTML = markdownToHTML(note.content).content;
+      root.content.querySelectorAll("pre,code").forEach((n) => n.remove());
+      plainContent = root.content.textContent ?? "";
+      result = wikiReferences(plainContent);
+      for (const a of root.content.querySelectorAll('a[href^="note://"]')) {
+        const ref = parseReference(a.getAttribute("href")!);
+        ref.label = a.textContent || ref.label;
+        result.push(ref);
+      }
+    }
+  }
+  const plain =
+    (note.content_format ?? "html") === "html"
+      ? plainContent
+      : plainContent.replace(/```[\s\S]*?```/g, " ").replace(/[#*_`>[\]()]/g, " ");
+  return { result, plain };
+}
+
 /** compact: the note-info panel form only; it skips the reference and mention scans that the full view runs on every save. */
 export function NoteConnections({onClose,compact=false}:{onClose:()=>void;compact?:boolean}) {
   const s=useStore(),id=s.note!.id,latest=useRef(s);latest.current=s;
@@ -28,29 +69,14 @@ export function NoteConnections({onClose,compact=false}:{onClose:()=>void;compac
   const nextMentions=async()=>{if(busy)return;const nextPage=mentionPage+1,required=(nextPage+1)*20;if(unlinked.length>=required||!mentionCursor){if(unlinked.length>nextPage*20)setMentionPage(nextPage);return;}const controller=reads.current;setBusy(true);try{let cursor:string|null=mentionCursor;const added:{id:string;title:string}[]=[];do{const result=await readMentions(cursor??undefined);if(controller!==reads.current||controller?.signal.aborted)return;added.push(...result.items);cursor=result.cursor;}while(cursor&&unlinked.length+added.length<required);setUnlinked(v=>[...v,...added]);setMentionCursor(cursor);if(unlinked.length+added.length>nextPage*20)setMentionPage(nextPage);}catch(e){if(controller===reads.current&&!controller?.signal.aborted)setError(errorText(e));}finally{if(controller===reads.current&&!controller?.signal.aborted)setBusy(false);}};
   const [suggestions,setSuggestions]=useState<{id:string;title:string}[]>([]),[anchors,setAnchors]=useState<string[]>([]);
   useEffect(()=>{if(compact)return;let live=true;const controller=new AbortController();reads.current=controller;indexedRevision.current=undefined;const load=async()=>{setBusy(false);setRefs([]);setUnlinked([]);setRefPage(0);setMentionPage(0);setIndexCursor(null);setMentionCursor(null);setError('');if(!await latest.current.flushNow()||!live)return;
-    let note:Note;try{note=await rpc<Note>('get',{id,max_body_bytes:2*1024*1024},{signal:controller.signal});}catch(e){if(!(e instanceof Error)||!e.message.includes('note body exceeds read budget'))throw e;const result=await readIndexed();if(live){setRefs(result.items.map(indexedReference));setIndexCursor(result.next_cursor);}const mentions=await readMentions();if(live){setUnlinked(mentions.items);setMentionCursor(mentions.cursor);}return;}if(!live)return;
-    let result:NoteReference[]=[], plainContent='';
-    if((note.content_format??'html')==='html'){
-      const root=document.createElement('template');root.innerHTML=sanitizeRichHtml(note.content);root.content.querySelectorAll('pre,code,script,style').forEach(n=>n.remove());
-      plainContent=root.content.textContent??''; result=wikiReferences(plainContent);
-      for(const a of root.content.querySelectorAll('a[href^="note://"]')){const ref=parseReference(a.getAttribute('href')!);ref.label=a.textContent||ref.label;result.push(ref);}
-    }else {
-      plainContent=note.content; result=wikiReferences(note.content);
-      if(note.content_format==='markdown'){
-        const root=document.createElement('template');root.innerHTML=markdownToHTML(note.content).content;
-        root.content.querySelectorAll('pre,code').forEach(n=>n.remove());plainContent=root.content.textContent??'';result=wikiReferences(plainContent);
-        for(const a of root.content.querySelectorAll('a[href^="note://"]')){const ref=parseReference(a.getAttribute('href')!);ref.label=a.textContent||ref.label;result.push(ref);}
-      }
-    }
+    let note:Note;try{note=await rpc<Note>('get',{id,max_body_bytes:2*1024*1024},{signal:controller.signal});}catch(e){if(!exceedsReadBudget(e))throw e;const result=await readIndexed();if(live){setRefs(result.items.map(indexedReference));setIndexCursor(result.next_cursor);}const mentions=await readMentions();if(live){setUnlinked(mentions.items);setMentionCursor(mentions.cursor);}return;}if(!live)return;
+    const {result,plain}=connectionText(note);
     setRefs(result);
     const linked=new Set(result.map(ref=>ref.label.trim().toLocaleLowerCase()).filter(Boolean));
-    const plain=(note.content_format??'html')==='html'
-      ? plainContent
-      : plainContent.replace(/```[\s\S]*?```/g,' ').replace(/[#*_`>[\]()]/g,' ');
     const mentions:{id:string;title:string}[]=[];let cursor:string|undefined;const lowered=plain.toLocaleLowerCase();
     do{const metadata=await rpc<Awaited<ReturnType<typeof api.list>>>('list',{view:'all',limit:100,...(cursor?{cursor}:{})},{signal:controller.signal});if(!live)return;
       mentions.push(...metadata.items.filter(item=>item.id!==id&&item.title.trim().length>=2&&lowered.includes(item.title.trim().toLocaleLowerCase())&&!linked.has(item.title.trim().toLocaleLowerCase())).map(item=>({id:item.id,title:item.title})));cursor=metadata.next_cursor??undefined;
-    }while(cursor&&live);if(live)setUnlinked(mentions);
+    }while(cursor&&live);setUnlinked(mentions);
   };load().catch(e=>{if(live)setError(errorText(e));});return()=>{live=false;controller.abort();};},[id,attempt,s.note?.revision,compact]);
   useEffect(()=>{let live=true;knowledge.list().then(x=>{if(live)setSuggestions(x.items.map(n=>({id:n.id,title:n.title})));}).catch(()=>{});return()=>{live=false;};},[]);
   useEffect(()=>{let live=true;setAnchors([]);if(target)api.get(target,{max_body_bytes:2*1024*1024}).then(n=>{if(live&&new TextEncoder().encode(n.content).length<=2*1024*1024)setAnchors(noteAnchors(n.content,n.content_format).map(a=>a.kind==='heading'?a.text:`^${a.id}`));}).catch(()=>{});return()=>{live=false;};},[target]);
