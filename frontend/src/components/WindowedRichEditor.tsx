@@ -460,6 +460,31 @@ const BOUNDARY_DIRECTION = {
 /** UTF-16 length of the first `bytes` UTF-8 bytes of `text`. */
 const utf8PrefixLength = (text: string, bytes: number) =>
   new TextDecoder().decode(new TextEncoder().encode(text).subarray(0, bytes)).length;
+/** The body after outside opening tags and one region splice at `range` (the
+ * located UTF-16 span before the tags; unused for paged drafts). Multi-splice
+ * history replays every splice; non-paged previews need their own UTF-16 starts
+ * relative to the first splice (they differ by the tags). */
+function regionSplice(
+  draft: Draft,
+  tags: { edits: BodySplice[]; source: string; shift: number },
+  result: { start: number; expected: string; replacement: string },
+  range: { from: number; to: number },
+) {
+  const regionFrom = draft.paged ? result.start : range.from + tags.shift;
+  const source = draft.paged
+    ? ""
+    : tags.source.slice(0, regionFrom) + result.replacement + tags.source.slice(range.to + tags.shift);
+  const edits = tags.edits.length
+    ? [...tags.edits, { start: regionFrom, expected: result.expected, replacement: result.replacement }]
+    : undefined;
+  let historyFrom = draft.paged ? result.start : range.from;
+  if (edits) historyFrom = edits[0].start;
+  const relative = <P extends WindowPreview>(preview: P, at: number, text: string, byte: number) =>
+    edits && !draft.paged
+      ? { ...preview, relativeFrom: at + utf8PrefixLength(text, (preview.byteStart ?? byte) - byte) - edits[0].start }
+      : preview;
+  return { regionFrom, source, edits, historyFrom, relative };
+}
 /** Staged behind ?virtual=1 until cross-window selection/history is complete. */
 export function WindowedRichEditor({
   id,
@@ -866,6 +891,16 @@ export function WindowedRichEditor({
     }
     return { edits, source, shift: source.length - draft.content.length };
   };
+  /** Paged drafts replay every splice; others replace the body once. */
+  const applyRegionSplice = (
+    draft: Draft,
+    edits: BodySplice[] | undefined,
+    edit: { start: number; expected: string; replacement: string },
+    source: string,
+  ) => {
+    if (draft.paged && edits) for (const splice of edits) callbacks.current.changeRange(splice);
+    else applySourceChange(draft, edit, source);
+  };
   const applySourceChange = (
     draft: Draft,
     edit: { start: number; expected: string; replacement: string },
@@ -957,21 +992,10 @@ export function WindowedRichEditor({
   ) => {
     const tags = await boundaryTagEdits(draft, result.tags, prepared.check);
     prepared.check();
-    const regionFrom = draft.paged ? result.start : range.from + tags.shift;
-    const source = draft.paged
-      ? ""
-      : tags.source.slice(0, regionFrom) + result.replacement + tags.source.slice(range.to + tags.shift);
-    const edits = tags.edits.length
-      ? [...tags.edits, { start: regionFrom, expected: result.expected, replacement: result.replacement }]
-      : undefined;
-    if (draft.paged && edits) for (const edit of edits) callbacks.current.changeRange(edit);
-    else applySourceChange(draft, result, source);
-    const relative = (preview: WindowPreview, at: number, text: string, byte: number) =>
-      edits && !draft.paged
-        ? { ...preview, relativeFrom: at + utf8PrefixLength(text, (preview.byteStart ?? byte) - byte) - edits[0].start }
-        : preview;
+    const { regionFrom, source, edits, historyFrom, relative } = regionSplice(draft, tags, result, range);
+    applyRegionSplice(draft, edits, result, source);
     history.current.record({
-      from: edits ? edits[0].start : draft.paged ? result.start : range.from,
+      from: historyFrom,
       offset: prepared.blockOffset,
       before: edits ? "" : result.expected,
       after: edits ? "" : result.replacement,
@@ -1648,25 +1672,13 @@ export function WindowedRichEditor({
     // Opening tags outside the region that received a block identity precede
     // it: splice them first (bounded: the tags alone), then the region.
     const tags = await boundaryTagEdits(draft, result.tags, check);
-    const regionFrom = draft.paged ? result.start : range.from + tags.shift;
-    const source = draft.paged
-      ? ""
-      : tags.source.slice(0, regionFrom) +
-        result.replacement +
-        tags.source.slice(regionFrom + result.expected.length);
-    const edits = tags.edits.length
-      ? [...tags.edits, { start: regionFrom, expected: result.expected, replacement: result.replacement }]
-      : undefined;
-    if (draft.paged && edits) for (const edit of edits) callbacks.current.changeRange(edit);
-    else if (edits || result.expected !== result.replacement) applySourceChange(draft, result, source);
-    // Multi-splice history replays every splice; non-paged previews need their
-    // own UTF-16 starts relative to the first splice (they differ by the tags).
-    const relative = (preview: typeof result.beforePreview, at: number, text: string, byte: number) =>
-      edits && !draft.paged
-        ? { ...preview, relativeFrom: at + utf8PrefixLength(text, (preview.byteStart ?? byte) - byte) - edits[0].start }
-        : preview;
+    const { regionFrom, source, edits, historyFrom, relative } = regionSplice(draft, tags, result, {
+      from: range.from,
+      to: range.from + result.expected.length,
+    });
+    if (edits || result.expected !== result.replacement) applyRegionSplice(draft, edits, result, source);
     history.current.record({
-      from: edits ? edits[0].start : draft.paged ? result.start : range.from,
+      from: historyFrom,
       offset: result.offset,
       before: edits ? "" : result.expected,
       after: edits ? "" : result.replacement,
