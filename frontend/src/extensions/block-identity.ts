@@ -1,10 +1,11 @@
 import {Extension} from '@tiptap/core';
 import {NodeSelection,Plugin,PluginKey,type EditorState,type Transaction} from '@tiptap/pm/state';
-import type {Node as PMNode} from '@tiptap/pm/model';
+import {Fragment,type Node as PMNode} from '@tiptap/pm/model';
 import type {EditorView} from '@tiptap/pm/view';
 import {Transform,type Mapping} from '@tiptap/pm/transform';
 import {isHistoryTransaction} from '@tiptap/pm/history';
 import {cloneSliceIdentity,newBlockId} from '../lib/block-identity';
+import type {EditWork} from '../lib/edit-work';
 type Range=[number,number];
 /** Blocks touched by IME composition, waiting for the composition to end. */
 type PendingIdentity={ranges:Range[];composition?:number}|null;
@@ -69,6 +70,75 @@ export function identifyTouchedBlocks(doc:PMNode,mapping:Mapping,options:{first?
  const tr=new Transform(doc),from=options.from??0,to=options.to??doc.content.size;
  assignIds(doc,tr,mappingRanges(mapping,options.first??0),pos=>pos>=from&&pos<to);
  return tr.doc;
+}
+/** Detached large edits use short batches and one immutable model rebuild.
+ * The mounted IME/history plugin below keeps its synchronous transaction rule. */
+export function* identifyTouchedBlocksWork(doc:PMNode,mapping:Mapping,options:{first?:number;from?:number;to?:number}={}):EditWork<PMNode>{
+ const first=options.first??0,from=options.from??0,to=options.to??doc.content.size;
+ if(first>=mapping.maps.length)return doc;
+ // Native textblock formats replace only their one-position opening/closing
+ // tokens. Such maps leave every integer position unchanged. Without mirrors
+ // they need no quadratic pass through all later maps. Other edits keep the
+ // original mapping rule (including insertion/deletion biases).
+ let integerIdentity=true;
+ for(let i=0;i<mapping.maps.length;i++){
+  if(mapping.getMirror(i)!==undefined)integerIdentity=false;
+  mapping.maps[i].forEach((a,b,c,d)=>{
+   if(![a,b,c,d].every(Number.isSafeInteger)||b-a!==d-c||(b-a!==0&&b-a!==1))integerIdentity=false;
+  });
+  yield;
+ }
+ const ranges:Range[]=[];
+ for(let i=0;i<mapping.maps.length;i++){
+  if(i<first)continue;
+  const rest=integerIdentity?undefined:mapping.slice(i+1);
+  mapping.maps[i].forEach((_a,_b,a,b)=>{ranges.push(rest?[rest.map(a,-1),rest.map(b,1)]:[a,b]);});
+  yield;
+ }
+ const size=doc.content.size,intervals:Range[]=[],zero=new Set<number>();
+ const allowed=(node:PMNode,pos:number)=>!node.isText&&Object.prototype.hasOwnProperty.call(node.attrs,'id')&&!node.attrs.id&&pos>=from&&pos<to;
+ for(const [rawFrom,rawTo] of ranges){
+  const a=Math.max(0,Math.min(size,rawFrom)),b=Math.max(a,Math.min(size,rawTo));
+  if(b>a)intervals.push([a,b]);
+  else{
+   const point=doc.resolve(a);
+   for(let depth=1;depth<=point.depth;depth++)if(allowed(point.node(depth),point.before(depth)))zero.add(point.before(depth));
+  }
+  yield;
+ }
+ intervals.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+ const merged:Range[]=[];
+ for(const interval of intervals){
+  const last=merged.at(-1);
+  if(last&&interval[0]<=last[1])last[1]=Math.max(last[1],interval[1]);else merged.push(interval);
+  yield;
+ }
+ const zeroPositions=[...zero].sort((a,b)=>a-b);
+ const overlaps=(pos:number,end:number)=>{
+  let low=0,high=merged.length;
+  while(low<high){const mid=(low+high)>>>1;if(merged[mid][1]<=pos)low=mid+1;else high=mid;}
+  return low<merged.length&&merged[low][0]<end;
+ };
+ const containsZero=(pos:number,end:number)=>{
+  let low=0,high=zeroPositions.length;
+  while(low<high){const mid=(low+high)>>>1;if(zeroPositions[mid]<pos)low=mid+1;else high=mid;}
+  return low<zeroPositions.length&&zeroPositions[low]<end;
+ };
+ function* rebuild(node:PMNode,pos:number):EditWork<PMNode>{
+  const touched=overlaps(pos,pos+node.nodeSize),assign=pos>=0&&allowed(node,pos)&&(touched||zero.has(pos));
+  let children:PMNode[]|undefined,offset=pos+1;
+  for(let i=0;i<node.childCount;i++){
+   const child=node.child(i),end=offset+child.nodeSize;
+   const next=overlaps(offset,end)||containsZero(offset,end)?yield* rebuild(child,offset):child;
+   if(next!==child&&!children){children=[];for(let j=0;j<i;j++)children.push(node.child(j));}
+   children?.push(next);offset=end;
+   yield;
+  }
+  const content=children?Fragment.fromArray(children):node.content;
+  yield;
+  return assign?node.type.create({...node.attrs,id:newBlockId()},content,node.marks):children?node.copy(content):node;
+ }
+ return yield* rebuild(doc,-1);
 }
 /** Attribute-only changes keep positions, but ProseMirror maps a NodeSelection
  * through a markup change as deleted. Keep the user's selected block selected

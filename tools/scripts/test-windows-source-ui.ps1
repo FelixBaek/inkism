@@ -595,6 +595,7 @@ try {
     if ($LASTEXITCODE) { throw 'Note-link fixture preparation failed' }
     $noteLinkData = Get-Content -Raw -Encoding UTF8 -LiteralPath $noteLinkFixture | ConvertFrom-Json
     Open-Inkism
+    if (-not (Wait-TabActivated ('노트 탭: ' + $noteLinkData.source.title))) { throw 'Source note did not finish restoring before warm note-link test' }
     foreach ($destination in @($noteLinkData.target, $noteLinkData.source)) {
         $linkInfo = New-Object System.Diagnostics.ProcessStartInfo
         $linkInfo.FileName = $binary

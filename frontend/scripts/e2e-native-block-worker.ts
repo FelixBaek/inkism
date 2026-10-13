@@ -166,6 +166,7 @@ try{
    ok(stats.created>started.created,'async changeSelection must create the native block worker');
    ok(stats.live===0,'native block worker must be terminated after the async run');
    ok(ticks>=20,'main-thread timers must progress during the async run, ticks='+ticks);
+   ok(maxGap<250,'async block formatting must not stall the main thread for 250ms, gap='+round(maxGap)+'ms');
    ok(enc.encode(asyncResult.previewWindow.raw).length<=32768,'bounded preview window');
    ok(blocks.every((block,index)=>asyncResult.replacement.includes(`id="source-block-${index}"`)),'existing identities preserved through worker formatting');
    const mismatched=fields.filter(field=>!deepEqual(baseline[field],asyncResult[field]));

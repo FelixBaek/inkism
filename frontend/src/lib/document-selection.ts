@@ -4,7 +4,7 @@ import { DOMParser, Fragment, Slice, type Node as PMNode } from "@tiptap/pm/mode
 import { AllSelection, EditorState, NodeSelection, Selection, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { toggleMark } from "@tiptap/pm/commands";
 import { contentExtensions } from "../extensions/content-schema";
-import { identifyTouchedBlocks } from "../extensions/block-identity";
+import { identifyTouchedBlocksWork } from "../extensions/block-identity";
 import { cloneSliceIdentity } from "./block-identity";
 import { sanitizeRichHtml } from "./sanitize";
 import type { DocumentSegment, DocumentSegmentPage } from "../types";
@@ -748,9 +748,9 @@ function documentSelectionOf(
 }
 /** Identities for touched blocks, including the ancestors of a bounded source
  * span. Their opening tokens are saved separately by contextIdentity. */
-function identifyInput(transformed: BlockTransform, first: number, to: number): BlockTransform {
+function* identifyInput(transformed: BlockTransform, first: number, to: number): Generator<EditWorkStep, BlockTransform, unknown> {
   if (first >= transformed.mapping.maps.length) return transformed;
-  const doc = identifyTouchedBlocks(transformed.doc, transformed.mapping, { first, from: 0, to });
+  const doc = yield* identifyTouchedBlocksWork(transformed.doc, transformed.mapping, { first, from: 0, to });
   if (doc === transformed.doc) return transformed;
   return { doc, selection: Selection.fromJSON(doc, transformed.selection.toJSON()), mapping: transformed.mapping };
 }
@@ -787,7 +787,7 @@ function* changeSelectionWork(
   };
   const mappedFrom = transformed.mapping.map(left.from, -1),
     mappedTo = transformed.mapping.map(right.to, 1);
-  transformed = identifyInput(transformed, input, mappedTo);
+  transformed = yield* identifyInput(transformed, input, mappedTo);
   const slice = transformed.doc.slice(mappedFrom, mappedTo, true);
   const textSelection = transformed.selection instanceof TextSelection;
   const nodeSelection = transformed.selection instanceof NodeSelection;
