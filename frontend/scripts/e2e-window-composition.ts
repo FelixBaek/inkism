@@ -18,7 +18,7 @@ const title='범위 조합 검사 '+Date.now();
 // above that threshold as well as the lazy path's UTF-8/block threshold.
 const suffix=process.env.INKISM_LAZY==='0'?' 길이 확보 본문':'';
 const content=Array.from({length:10000},(_,i)=>`<p>문단 ${i} 한글😀${suffix}</p>`).join('');
-let note;
+let note,closeRequests=0;
 const saves=trackSaves(page),saved=()=>saves.saved({timeout:30000});
 const focus=()=>page.locator('.tiptap-prose').evaluate((el: any)=>el.editor.view.focus());
 try{
@@ -154,7 +154,6 @@ try{
  await page.locator('.window-error').waitFor();
  assert.equal(await page.locator('.tiptap-prose').textContent(),'미전송');
  assert.equal(await page.locator('.split-primary .cm-content').count(),0);
- let closeRequests=0;
  await page.route('**/api/close',route=>{closeRequests++;return route.fulfill({status:200,body:'{}'});});
  await page.evaluate(()=>window.dispatchEvent(new Event('native-close-request')));
  await page.waitForFunction(()=>document.querySelector<any>('.window-error') && !document.querySelector<any>('.window-controls button:last-child')?.disabled);
@@ -196,5 +195,5 @@ try{
  assert.equal(await page.locator('.tiptap-prose').evaluate((el: any)=>el.editor.view.composing),false,'composition ended');
  assert.deepEqual(errors,[]);
  console.log('PASS: Chromium IME over 10k blocks; all/range selection, cancellation, continued composition, delayed note switch/close, failed-read input retention/retry, exact save/undo and bounded DOM; lazy='+ (process.env.INKISM_LAZY!=='0'));
-}catch(error){console.error(await page.evaluate(()=>({error:document.querySelector('.window-error')?.textContent,selection:document.querySelector('.document-selection-status')?.textContent,save:document.querySelector('.status-save')?.textContent,body:document.querySelector('.tiptap-prose')?.textContent?.slice(0,100)})));throw error;}
+}catch(error){console.error({closeRequests,errors,...await page.evaluate(()=>({error:document.querySelector('.window-error')?.textContent,selection:document.querySelector('.document-selection-status')?.textContent,saveState:document.querySelector('.status-save')?.getAttribute('data-save-state'),save:document.querySelector('.status-save')?.textContent,composing:document.querySelector<any>('.tiptap-prose')?.editor?.view.composing,body:document.querySelector('.tiptap-prose')?.textContent?.slice(0,100)}))});throw error;}
 finally{await browser.close();}
