@@ -359,7 +359,7 @@ export function StatusBar() {
       <span className="status-spacer" />
       <EditorZoom />
       <WordCount draft={d} sourceChars={chars} />
-      <span className={`status-save ${statusClass}`} aria-live="polite">
+      <span className={`status-save ${statusClass}`} data-save-state={s.saveState} aria-live="polite">
         {status}
       </span>
       {s.saveState === "error" && (

@@ -1,6 +1,6 @@
 import { lang, t } from "../i18n";
 import { useEffect, useReducer, useRef, useState } from "react";
-import { RefreshCw, X, CloudCheck, AlertTriangle } from "../icons";
+import { RefreshCw, X, CloudCheck, AlertTriangle, LockKeyhole } from "../icons";
 import { formatRelative } from "../lib/date";
 import { rpc } from "../api";
 import { useStore } from "../store";
@@ -11,10 +11,107 @@ type Status = {
   pending: number;
   last_sync: number | null;
   error: string | null;
+  /** 이 기기의 금고 열기를 기다리는 노트 id. 오류가 아니며 금고를 열면 적용된다. */
+  vault_key_required?: string[];
+  /** 더 새 버전 앱이 만든 변경 수. 보관 중이며 앱을 업데이트하면 적용된다. */
+  unsupported_records?: number;
   server_url?: string;
   scope?: { notebook_ids?: string[]; tags?: string[] };
 };
 type Storage = { encrypted: boolean };
+
+/** 설정 창의 다른 화면(금고·정보)으로 이동한다. */
+function openSettingsSection(section: "lock" | "about") {
+  window.dispatchEvent(new CustomEvent("inkism-open-settings", { detail: section }));
+}
+
+/** 금고 키 대기·새 버전 변경 보관 안내. 다른 노트의 동기화는 그대로 계속된다. */
+function SyncHeldNotices({ status, onNavigate }: Readonly<{ status: Status; onNavigate: () => void }>) {
+  const waiting = status.vault_key_required ?? [];
+  const newer = status.unsupported_records ?? 0;
+  const [titles, setTitles] = useState<Record<string, string>>({});
+  const key = waiting.join("\n");
+  useEffect(() => {
+    let alive = true;
+    const controller = new AbortController();
+    const names: Record<string, string> = {};
+    let next = 0;
+    // Titles only: bounded previews, at most four requests, and no new work
+    // after the dialog closes or the waiting list changes.
+    const readTitles = async () => {
+      while (alive && next < waiting.length) {
+        const id = waiting[next++];
+        try {
+          const note = await rpc<{ title: string }>("note_preview", { id }, { signal: controller.signal });
+          names[id] = note.title || t("제목 없음");
+        } catch {
+          if (!alive) return;
+          names[id] = id;
+        }
+        if (alive) setTitles({ ...names });
+      }
+    };
+    setTitles({});
+    void Promise.all(Array.from({ length: Math.min(4, waiting.length) }, readTitles));
+    return () => {
+      alive = false;
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  if (!waiting.length && !newer) return null;
+  return (
+    <>
+      {waiting.length > 0 && (
+        <section className="sync-held" role="status" aria-label={t("금고 열기를 기다리는 변경")}>
+          <strong>
+            <LockKeyhole size={14} aria-hidden /> {t("금고 열기를 기다리는 노트 {n}개", { n: waiting.length })}
+          </strong>
+          <p className="sync-hint">
+            {t(
+              "다른 기기에서 금고에 보관한 노트와 이 기기에서 만든 버전이 겹쳤습니다. 이 기기에서 금고를 열면 버전을 암호화해 적용합니다. 변경은 지워지지 않고 보관되며, 다른 노트는 계속 동기화됩니다.",
+            )}
+          </p>
+          <ul className="sync-held-list">
+            {waiting.map((id) => (
+              <li key={id}>{titles[id] ?? id}</li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              onNavigate();
+              openSettingsSection("lock");
+            }}
+          >
+            {t("금고 열기")}
+          </button>
+        </section>
+      )}
+      {newer > 0 && (
+        <section className="sync-held" role="status" aria-label={t("새 버전 앱의 변경")}>
+          <strong>{t("새 버전 앱에서 만든 변경 {n}개 보관 중", { n: newer })}</strong>
+          <p className="sync-hint">
+            {t(
+              "다른 기기의 더 새로운 앱이 만든 변경이라 이 버전에서는 아직 적용할 수 없습니다. 지우지 않고 보관하며, 앱을 업데이트하면 적용됩니다. 다른 노트는 계속 동기화됩니다.",
+            )}
+          </p>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              onNavigate();
+              openSettingsSection("about");
+            }}
+          >
+            {t("업데이트 확인")}
+          </button>
+        </section>
+      )}
+    </>
+  );
+}
 
 /** POSTs to a native storage endpoint and returns its data, throwing the server error. */
 async function storageAction(path: string, failure: string) {
@@ -300,6 +397,7 @@ export function SyncSettings() {
                 </label>
                 <button type="button" className="btn" disabled={busy || status.running} onClick={() => void saveScope()}>{t("동기화 범위 저장")}</button>
               </section>
+              {open && <SyncHeldNotices status={status} onNavigate={() => setOpen(false)} />}
               {status.paused && (
                 <p className="sync-hint">{t("이 기기의 변경은 보관됩니다. 다시 시작하면 그때 보냅니다.")}</p>
               )}
@@ -466,12 +564,14 @@ function connectionLabel(failed: boolean, connected: boolean) {
   return connected ? t("연결됨") : t("연결 중…");
 }
 
-type SyncState = "error" | "paused" | "running" | "pending" | "ok";
+type SyncState = "error" | "paused" | "running" | "vault" | "newer" | "pending" | "ok";
 
 function syncState(status: Status): SyncState {
   if (status.error) return "error";
   if (status.paused) return "paused";
   if (status.running) return "running";
+  if (status.vault_key_required?.length) return "vault";
+  if (status.unsupported_records) return "newer";
   return status.pending > 0 ? "pending" : "ok";
 }
 
@@ -479,6 +579,8 @@ const STATE_ICONS = {
   error: AlertTriangle,
   paused: RefreshCw,
   running: RefreshCw,
+  vault: LockKeyhole,
+  newer: AlertTriangle,
   pending: RefreshCw,
   ok: CloudCheck,
 };
@@ -520,6 +622,8 @@ export function SyncIndicator() {
     error: t("동기화 오류"),
     paused: t("동기화 일시중지됨"),
     running: t("동기화 중…"),
+    vault: t("금고 열기 대기 {n}개", { n: status.vault_key_required?.length ?? 0 }),
+    newer: t("업데이트 필요한 변경 {n}개", { n: status.unsupported_records ?? 0 }),
     pending: t("전송 대기 {n}개", { n: status.pending ?? 0 }),
     ok: status.last_sync ? t("연결됨") : t("동기화 대기"),
   }[state];
@@ -531,11 +635,23 @@ export function SyncIndicator() {
       disabled={status.running || status.paused}
       title={
         status.error ??
+        (state === "vault"
+          ? t("이 기기에서 금고를 열면 기다리는 변경을 적용합니다. 다른 노트는 계속 동기화됩니다.")
+          : undefined) ??
+        (state === "newer" ? t("앱을 업데이트하면 보관 중인 변경을 적용합니다.") : undefined) ??
         (status.last_sync ? t("최근 동기화: {time}", { time: formatRelative(status.last_sync) }) : undefined)
       }
-      aria-label={t("{status} — 지금 동기화", { status: text })}
+      aria-label={
+        state === "vault"
+          ? t("{status} — 금고 열기", { status: text })
+          : state === "newer"
+            ? t("{status} — 업데이트 확인", { status: text })
+            : t("{status} — 지금 동기화", { status: text })
+      }
       onClick={() =>
-        void rpc("sync_now")
+        state === "vault" || state === "newer"
+          ? openSettingsSection(state === "vault" ? "lock" : "about")
+          : void rpc("sync_now")
           .then(() => rpc<Status>("sync_status"))
           .then(setStatus)
           .catch(() => {})
