@@ -1,4 +1,5 @@
 import {chromium} from 'playwright-core';
+import {waitSaved} from './save-state.ts';
 import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47940';
 const rpc=async(op,args={})=>{const r=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const v=await r.json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
@@ -18,7 +19,7 @@ try {
  assert.equal(await tabs().count(),2);assert.equal(await tab(b).getAttribute('aria-selected'),'true');assert.equal(await page.locator('.tiptap-prose').textContent(),'B 미저장 보존');assert.equal((await rpc('get',{id:b.id})).content,'<p>B 원문</p>');
  const rejected=page.waitForResponse(r=>r.url().endsWith('/api/rpc')&&r.status()===503);
  await tab(a).click();await rejected;await page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('저장 실패'));assert.equal(await tab(b).getAttribute('aria-selected'),'true');
- await page.unroute('**/api/rpc');await page.keyboard.press('Control+s');await page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+ await page.unroute('**/api/rpc');await page.keyboard.press('Control+s');await waitSaved(page);
  await tab(b).focus();await page.keyboard.press('ArrowLeft');assert.equal(await tab(a).evaluate((el: any)=>el===document.activeElement),true);await page.keyboard.press('Enter');await page.waitForFunction(title=>document.querySelector<any>('.title-input')?.value===title,a.title);
  assert.equal(await page.locator('.tiptap-prose').count(),1);assert.equal(await page.locator('.tiptap-prose').textContent(),'A 원문');
  await page.screenshot({path:'/tmp/inkism-tabs-desktop.png'});
@@ -27,8 +28,10 @@ try {
  await open(b);assert.equal(await page.locator('.tiptap-prose').textContent(),'B 미저장 보존');await close(b);await tab(b).waitFor({state:'detached'});assert.equal(await tab(a).getAttribute('aria-selected'),'true');
  await page.setViewportSize({width:1000,height:720});await page.screenshot({path:'/tmp/inkism-tabs-compact.png'});
  await close(a);await page.getByText('노트를 선택하세요',{exact:true}).waitFor();assert.equal(await tabs().count(),0);
- await open(a);await page.getByRole('button',{name:'노트 동작 메뉴',exact:true}).click();await page.getByRole('menuitem',{name:'휴지통으로 이동',exact:true}).click();
- await page.getByRole('button',{name:'노트 동작 메뉴',exact:true}).click();await page.getByRole('menuitem',{name:'영구 삭제',exact:true}).click();await page.getByRole('button',{name:'영구 삭제',exact:true}).click();
+ // Note actions live in the note row menu: move to trash, then delete permanently from the trash view.
+ const rowMenu=async(note,item)=>{await page.getByRole('button',{name:'노트 열기: '+note.title,exact:true}).click({button:'right'});await page.getByRole('menuitem',{name:item,exact:true}).click();};
+ await open(a);await rowMenu(a,'휴지통으로 옮기기');
+ await page.locator('.side-item',{hasText:'휴지통'}).click();await rowMenu(a,'영구 삭제');await page.getByRole('dialog').getByRole('button',{name:'영구 삭제',exact:true}).click();
  await tab(a).waitFor({state:'detached'});assert.equal(await tabs().count(),0);
  assert.deepEqual(errors,[]);console.log('PASS: session tabs, save-failure switch/close retention, inactive keyboard close/focus, persisted body and final-tab empty state');
 } catch(e){console.error(await page.evaluate(()=>({title:document.querySelector<any>('.title-input')?.value,status:document.querySelector<any>('.status-save')?.textContent,tabs:[...document.querySelectorAll('.note-tabs [role=tab]')].map(el=>({name:el.textContent,selected:el.getAttribute('aria-selected')}))})));throw e;} finally {await browser.close();}

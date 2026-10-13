@@ -1,9 +1,11 @@
 import { elementFromString, getSchema } from "@tiptap/core";
 import { replayPendingSelection, type PendingSelectionOperation } from "./pending-selection";
 import { DOMParser, Fragment, Slice, type Node as PMNode } from "@tiptap/pm/model";
-import { AllSelection, EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
+import { AllSelection, EditorState, Selection, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { toggleMark } from "@tiptap/pm/commands";
 import { contentExtensions } from "../extensions/content-schema";
+import { identifyTouchedBlocks } from "../extensions/block-identity";
+import { cloneSliceIdentity } from "./block-identity";
 import { sanitizeRichHtml } from "./sanitize";
 import type { DocumentSegment, DocumentSegmentPage } from "../types";
 import type { WindowPreview } from "./window-history";
@@ -663,7 +665,9 @@ function* applyOperation(
     const slice =
       (operationBytes > 64 * 1024 ? yield* parseBoundedRichSliceWork(operation.html, state.schema) : null) ??
       parser.parseSlice(elementFromString(sanitizeRichHtml(operation.html)), { preserveWhitespace: "full" });
-    tr.replaceSelection(slice.size ? slice : Slice.empty);
+    // Pasted blocks are copies: like the editor's paste, they never keep a
+    // source identity (duplicates), and receive new ones as touched blocks.
+    tr.replaceSelection(slice.size ? cloneSliceIdentity(slice) : Slice.empty);
   } else if (operation.kind === "block") return yield* applyBlockOperation(prepared, operation, block);
   else return applyMark(state, operation.mark);
   return tr;
@@ -739,6 +743,15 @@ function documentSelectionOf(
     head: { ...documentPoint(transformed.doc, prepared.blockOffset, selection.head), ...points[1] },
   };
 }
+/** Identities for the blocks the input touched. Only blocks whose opening tag is
+ * rewritten (inside the projected slice) qualify: an ancestor left open at the
+ * start of a bounded selection keeps its source tag, exactly as before. */
+function identifyInput(transformed: BlockTransform, first: number, from: number, to: number): BlockTransform {
+  if (first >= transformed.mapping.maps.length) return transformed;
+  const doc = identifyTouchedBlocks(transformed.doc, transformed.mapping, { first, from, to });
+  if (doc === transformed.doc) return transformed;
+  return { doc, selection: Selection.fromJSON(doc, transformed.selection.toJSON()), mapping: transformed.mapping };
+}
 function* changeSelectionWork(
   prepared: PreparedSelection,
   operation: SelectionOperation,
@@ -752,6 +765,10 @@ function* changeSelectionWork(
   let transformed: BlockTransform = yield* applyOperation(prepared, operation, block, operationBytes);
   const from = state.selection.from,
     to = state.selection.to;
+  // Typed, pasted or deleted content (also input replayed after a block format)
+  // gives the blocks it touched an identity, like an edit in the editor. A block
+  // format or mark alone does not (marks never did; formats keep their bytes).
+  const input = operation.kind === "block" || operation.kind === "mark" ? transformed.mapping.maps.length : 0;
   if (block?.following) transformed = applyFollowing(state, transformed, block.following);
   const { first, last } = fragmentRange(prepared, operation, from, to);
   const left = prepared.fragments[first],
@@ -768,6 +785,7 @@ function* changeSelectionWork(
   };
   const mappedFrom = transformed.mapping.map(left.from, -1),
     mappedTo = transformed.mapping.map(right.to, 1);
+  transformed = identifyInput(transformed, input, mappedFrom, mappedTo);
   const slice = transformed.doc.slice(mappedFrom, mappedTo, true);
   const textSelection = transformed.selection instanceof TextSelection;
   const positions = textSelection

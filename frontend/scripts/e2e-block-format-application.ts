@@ -1,6 +1,7 @@
 // Shipped React/Go/Rust. No personal profile or Google authentication.
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright-core';
+import {waitSaved} from './save-state.ts';
 import {waitForPredicate} from './wait-for-predicate.ts';
 import {historyKey} from './history-keys.ts';
 const base=process.env.INKISM_URL;
@@ -12,7 +13,7 @@ page.on('pageerror',e=>errors.push(e.message));
 const editor=page.locator('.tiptap-prose');
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized&&Array.from(document.querySelectorAll<HTMLButtonElement>('.window-controls button')).some(b=>b.textContent==='이동'&&!b.disabled));
 const idle=()=>page.waitForFunction(()=>!document.querySelector('.window-error')&&Array.from(document.querySelectorAll<HTMLButtonElement>('.window-controls button')).some(b=>b.textContent==='이동'&&!b.disabled));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>waitSaved(page);
 const focus=()=>editor.evaluate((el:any)=>el.editor.view.focus());
 const open=async note=>{await page.goto(base+'/?virtual=1'+(process.env.INKISM_LAZY==='0'?'':'&lazy=1'));await page.getByRole('button',{name:'노트 열기: '+note.title,exact:true}).click();await ready();};
 const toggle=()=>editor.evaluate((el:any)=>el.editor.chain().focus().toggleHeading({level:2}).run());

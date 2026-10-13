@@ -301,6 +301,9 @@ export const api = {
   renameVersion: (id:string,revision:number,history_id:string,expected_label:string,label:string)=>rpc<{id:string}>("history_rename",{id,revision,history_id,expected_label,label}),
   deleteNamedVersion: (id:string,revision:number,history_id:string,expected_label:string)=>rpc<{id:string}>("history_delete_named",{id,revision,history_id,expected_label}),
   history: (id: string) => rpc<HistoryEntry[]>("history", { id }),
+  /** 일반 노트 아래 암호화된 채로 남은 금고형 버전의 이름·시각. 본문·암호문은 오지 않는다. */
+  sealedHistory: (id: string) =>
+    rpc<{ id: string; label: string; title: string; created_at: number }[]>("history_sealed", { id }),
 
   restore: (id: string, historyId: string, revision?:number) => rpc<Note>("restore", { id, history_id: historyId, revision }),
 

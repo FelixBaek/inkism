@@ -68,6 +68,9 @@ interface Props {
   embedded?: boolean;
   /** Internal source spans must not acquire an artificial trailing paragraph. */
   internalWindow?: boolean;
+  /** An internal window whose enclosing opening tags have known source
+   * offsets: edits may give those blocks identities (written as tag splices). */
+  internalIdentity?: boolean;
   onChange: (content: string, text: string, change: RichChange) => void;
 }
 
@@ -207,6 +210,7 @@ export function RichEditor({
   onChange,
   embedded = false,
   internalWindow = false,
+  internalIdentity = false,
   editable = true,
   readOnly = false,
   history,
@@ -358,7 +362,7 @@ export function RichEditor({
           ];
         },
       }),
-      ...(markdownCompatible ? markdownContentExtensions() : contentExtensions({ trailingNode: !(internalWindow || embedded), automaticIds: !internalWindow })),
+      ...(markdownCompatible ? markdownContentExtensions() : contentExtensions({ trailingNode: !(internalWindow || embedded), automaticIds: !internalWindow || internalIdentity })),
       SlashMenu.configure({ markdownCompatible }),
       FindAndReplace.configure({ injectCSS: false }),
       Placeholder.configure({ placeholder: t("내용을 입력하세요…") }),

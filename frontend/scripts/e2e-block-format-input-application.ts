@@ -1,8 +1,10 @@
 // Actual React/Go/Rust: input arriving while a full-document block worker is busy.
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright-core';
+import {waitSaved} from './save-state.ts';
 import {waitForPredicate} from './wait-for-predicate.ts';
 import {historyKey} from './history-keys.ts';
+import {assertBlockBytes} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL;
 assert.ok(base,'isolated application URL required');
 const commandName=process.env.INKISM_BLOCK_FORMAT_COMMAND??'setHeading';
@@ -36,7 +38,7 @@ await page.addInitScript(()=>{
 });
 const editor=page.locator('.tiptap-prose');
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized&&Array.from(document.querySelectorAll<any>('.window-controls button')).some(b=>b.textContent==='이동'&&!b.disabled));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>waitSaved(page);
 const body=async id=>(await rpc('get',{id})).content;
 try{
  const supported=['keys','keys-caret','keys-selection','paste-keys','composition','after-format','after-range-format','after-format-right','after-range-left'];
@@ -116,7 +118,13 @@ try{
   kind==='after-range-left'?formatted.replace(/^<h2>/,'<h2>z'):
   kind==='paste-keys'?'<p>붙임</p><p>끝abc</p>':kind==='after-range-format'?'<h2>abc</h2>':`<p>${text}</p>`;
  await saved();const actual=await body(note.id);
- assert.ok(actual===expected,'worker command then all-selection input; actual characters='+actual.length+', expected='+expected.length);
+ // Input over the document selection is provisional and committed from its
+ // captured slice/replayed steps. Like an ordinary edit, the blocks that input
+ // created or changed receive an identity (the pasted pair: two), committed
+ // with it; the formatted blocks it replaced keep no trace. After the
+ // selection collapsed (z typed at an edge) it is an ordinary edit of one block.
+ const touched=kind==='paste-keys'?2:1;
+ const inputIds=assertBlockBytes(actual,expected,{added:touched,message:'worker command then all-selection input; actual characters='+actual.length+', expected='+expected.length});
  const previewOracle=await editor.evaluate((el: any,oracle)=>{
   const e=el.editor,full=e.schema.nodeFromJSON(oracle.doc);
   const offset=Number(document.querySelector('[data-window-start]').getAttribute('data-window-start'));
@@ -125,7 +133,11 @@ try{
   const selection={...oracle.selection,anchor:oracle.selection.anchor-shift,head:oracle.selection.head-shift};
   return {doc,selection};
  },oracle);
- assert.deepEqual(await editor.evaluate((el: any)=>el.editor.state.doc.toJSON()),previewOracle.doc,'bounded native model parity');
+ // The oracle has no identity plugin: compare the model without generated block ids.
+ assert.deepEqual(await editor.evaluate((el: any)=>{
+  const strip=node=>({...node,...(node.attrs&&/^ink-block-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(node.attrs.id??'')?{attrs:{...node.attrs,id:null}}:{}),...(node.content?{content:node.content.map(strip)}:{})});
+  return strip(el.editor.state.doc.toJSON());
+ }),previewOracle.doc,'bounded native model parity');
  assert.deepEqual(await editor.evaluate((el: any)=>el.editor.state.selection.toJSON()),previewOracle.selection,'bounded native selection parity');
  await page.reload();await ready();
  await historyKey(page,'undo');await saved();
@@ -148,7 +160,7 @@ try{
   await historyKey(page,'redo');await saved();
   assert.equal(((await body(note.id)).match(/<h2>/g)||[]).length,10000,'first restart redo restores format');
  }
- await historyKey(page,'redo');await saved();assert.equal(await body(note.id),expected,'restart redo retains busy-worker input');
+ await historyKey(page,'redo');await saved();assertBlockBytes(await body(note.id),expected,{added:touched,ids:inputIds,message:'restart redo retains busy-worker input'});
  assert.deepEqual(errors,[]);
  console.log('PASS 10000-block worker + '+kind+': guarded source, full-model selection, restart undo/redo; lazy='+(process.env.INKISM_LAZY!=='0'));
  }

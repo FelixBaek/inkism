@@ -1,4 +1,5 @@
 import { chromium } from 'playwright-core';
+import {waitSaved} from './save-state.ts';
 import assert from 'node:assert/strict';
 import {historyKey} from './history-keys.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47882';
@@ -24,7 +25,7 @@ const blockAction=async(name)=>{
  await page.getByRole('button',{name:'블록 동작',exact:true}).click();await page.getByRole('menuitem',{name:{'블록 복제':'복제','블록 삭제':'삭제'}[name]??name,exact:true}).click();
 };
 const undo=async()=>{await historyKey(page,'undo');await frame();};
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>waitSaved(page);
 try{
  await page.goto(base);await openRich(title);await root.waitFor();
  await root.locator('p').first().click();await action('아래로 이동');assert.equal((await texts())[0],'둘째 문단');assert.equal((await texts())[1],'첫 문단');assert.equal(await root.locator('strong').textContent(),'첫 문단');

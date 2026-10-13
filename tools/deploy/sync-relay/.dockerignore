@@ -4,5 +4,4 @@
 *.pem
 *.key
 relay-data/
-relay-export
 *.jsonl

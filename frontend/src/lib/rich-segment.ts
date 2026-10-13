@@ -1,5 +1,6 @@
 import { canonicalRichHTML, inspectRichHTML } from "./rich-document";
 import type { DocumentSegment, SegmentAncestor } from "../types";
+import type { BodySplice } from "./body-splice";
 import { t } from "../i18n";
 
 /** Wrappers exist only in the active rich model. The source stays a contiguous
@@ -151,4 +152,66 @@ export function projectSegmentEdges(
     .join("");
   const replacement = closeOutside + edited.slice(left, right) + openOutside;
   return { replacement, left, right, closeOutside };
+}
+
+const identityTag = /^(p|h[1-6]|blockquote|ul|ol|li|pre|table|tr|td|th|details|summary|div)$/;
+const utf8 = (value: string) => new TextEncoder().encode(value).length;
+/** Whether every block ancestor opened before `segment` has a known source
+ * offset (or already an id), so an edit inside it can identify that block. */
+export function contextIdentifiable(segment: Pick<DocumentSegment, "start_context">): boolean {
+  return segment.start_context.every(
+    (a) => !identityTag.test(a.tag) || a.at !== undefined || ancestorElement(a).hasAttribute("id"),
+  );
+}
+/** Opening tags outside a bounded segment that `edited` gave a new block
+ * identity (the block that encloses the whole window, e.g. a giant paragraph
+ * or table cell). Returns the exact splices of those tags alone (sequential, in
+ * UTF-8 bytes) and the segment as it reads after them: contexts with the new
+ * tags and every later offset shifted. Nothing else outside the window changes. */
+export function contextIdentity(
+  segment: DocumentSegment,
+  edited: string,
+): { segment: DocumentSegment; tags: BodySplice[] } {
+  if (!segment.start_context.length || !/\sid=/.test(edited)) return { segment, tags: [] };
+  const template = document.createElement("template");
+  template.innerHTML = edited;
+  let node: Node | null = template.content.firstChild;
+  const rewrites: { at: number; open: string; next: string }[] = [];
+  for (const ancestor of segment.start_context) {
+    if (!sameAncestor(node, ancestor)) break;
+    const id = node.getAttribute("id");
+    if (id && /^ink-block-[0-9a-f-]{36}$/.test(id) && !ancestorElement(ancestor).hasAttribute("id")) {
+      if (ancestor.at === undefined || !ancestor.open.endsWith(">") || ancestor.open.endsWith("/>"))
+        throw new Error(t("블록 식별자를 붙일 위치를 찾지 못했습니다. 원문을 유지했습니다."));
+      rewrites.push({ at: ancestor.at, open: ancestor.open, next: `${ancestor.open.slice(0, -1)} id="${id}">` });
+    }
+    node = node.firstChild;
+    while (ancestor.prelude && node instanceof Element && node.localName === "colgroup") node = node.nextSibling;
+  }
+  if (!rewrites.length) return { segment, tags: [] };
+  rewrites.sort((a, b) => a.at - b.at);
+  const tags: BodySplice[] = [];
+  let shift = 0;
+  for (const rewrite of rewrites) {
+    if (rewrite.at + shift < (tags.at(-1)?.start ?? -1) + utf8(tags.at(-1)?.replacement ?? ""))
+      throw new Error(t("블록 식별자 위치가 겹칩니다. 원문을 유지했습니다."));
+    tags.push({ start: rewrite.at + shift, expected: rewrite.open, replacement: rewrite.next });
+    shift += utf8(rewrite.next) - utf8(rewrite.open);
+  }
+  const moved = (at: number) =>
+    at + rewrites.filter((r) => r.at < at).reduce((n, r) => n + utf8(r.next) - utf8(r.open), 0);
+  const context = (list: SegmentAncestor[]) =>
+    list.map((a) => {
+      const rewrite = rewrites.find((r) => r.at === a.at && r.open === a.open);
+      return { ...a, ...(rewrite ? { open: rewrite.next } : {}), ...(a.at === undefined ? {} : { at: moved(a.at) }) };
+    });
+  return {
+    segment: {
+      ...segment,
+      byte_offset: moved(segment.byte_offset),
+      start_context: context(segment.start_context),
+      end_context: context(segment.end_context),
+    },
+    tags,
+  };
 }

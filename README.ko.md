@@ -25,12 +25,11 @@ Windows용 암호화 노트 앱입니다. 노트는 내 PC에 먼저 저장됩�
 | `frontend/` | 화면(React/Tiptap) |
 | `core/` | Rust 엔진: `storage-core`(DB·암호화), `engine`(노트·검색), `sync-core`(동기화), `runtime-core`(앱이 실행하는 묶음) |
 | `desktop-tauri/` | Windows 앱 껍데기(Rust/Tauri). 빌드는 `tools/scripts/build-windows-tauri.sh` |
-| `desktop/` | 이전 Go/Wails 구현과 구형 데이터 변환·호환성 검사 도구 |
 | `tools/` | 빌드·테스트 스크립트, Windows 설치 파일, 중계 서버 배포, 웹 클리퍼 |
 
 ## 빌드
 
-Rust stable과 Node.js 22가 필요합니다. Go 1.27 이상은 구형 데이터 변환·Go 백업 호환성 검사에만 필요합니다.
+Rust stable과 Node.js 22가 필요합니다.
 암호화 빌드에는 `perl`, `make`, C 컴파일러도 필요합니다.
 Linux에서 Windows용으로 빌드하려면 mingw-w64와 `rustup target add x86_64-pc-windows-gnu`가 필요합니다.
 
@@ -74,6 +73,11 @@ Rust 테스트에 `--features encrypted-storage`를 붙이면 암호화 저장�
 `bash tools/scripts/package-sync-relay.sh`를 실행하면 `dist/`에 컨테이너 패키지가 만들어집니다.
 그 폴더에서 `.env.example`을 `.env`로 복사하고, 32자 이상의 무작위 `INKISM_RELAY_TOKEN`을 정한 뒤
 `docker compose -p inkism-sync up -d --build`를 실행하세요.
+
+중계 서버는 Rust 크레이트 `core/sync-relay`이고 데이터를 SQLite에 저장합니다. 예전 Go(bbolt) 중계 서버의
+`relay.db`는 더 이상 열거나 변환하지 않습니다. 한 번만 쓰는 변환 도구(`desktop/cmd/relay-export`,
+`inkism-sync-relay --import-bolt-dump`)는 git 기록의 커밋 `3ca693d`에 남아 있습니다. 그 커밋으로 패키지를
+만들어(Go 도구도 필요) 예전 DB를 한 번 변환하세요.
 
 ## 라이선스
 

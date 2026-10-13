@@ -12,9 +12,7 @@ const base=process.env.INKISM_URL!;
 // redirects and X-Frame-Options through the browser's network stack.
 const temporary=mkdtempSync(path.join(os.tmpdir(),'inkism-viewer-'));
 const key=path.join(temporary,'key.pem'),cert=path.join(temporary,'cert.pem');
-// Absolute path so the certificate tool is never resolved through PATH; override with OPENSSL_BIN.
-const openssl=process.env.OPENSSL_BIN??(process.platform==='win32'?'C:\\Program Files\\Git\\usr\\bin\\openssl.exe':'/usr/bin/openssl');
-execFileSync(openssl,['req','-x509','-newkey','rsa:2048','-nodes','-keyout',key,'-out',cert,'-subj','/CN=viewer.example','-days','1'],{stdio:'ignore'});
+execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',key,'-out',cert,'-subj','/CN=viewer.example','-days','1'],{stdio:'ignore'});
 const received:string[]=[];
 const fixture=createServer({key:readFileSync(key),cert:readFileSync(cert)},(req,res)=>{
  received.push(req.url??'');

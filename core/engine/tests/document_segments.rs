@@ -74,6 +74,12 @@ fn collect(
             let start: Vec<Ancestor> =
                 serde_json::from_value(chunk["start_context"].clone()).unwrap();
             let end: Vec<Ancestor> = serde_json::from_value(chunk["end_context"].clone()).unwrap();
+            // Every ancestor names the note byte offset of its exact opening tag.
+            for ancestor in start.iter().chain(&end) {
+                let at = ancestor.at.expect("ancestor offset") as usize;
+                assert!(at >= byte_start && at < bytes + raw.len());
+                assert!(source[at - byte_start..].starts_with(&ancestor.open));
+            }
             let wrapped = render(raw, &start, &end);
             assert!(
                 segments::split(&wrapped).is_some(),

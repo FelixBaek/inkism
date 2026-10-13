@@ -3,7 +3,7 @@
 //! folder is never touched: only the names in `PACKAGE_FILES` are.
 //!
 //! The feed format (`latest.json` + base64 ed25519 `latest.json.sig`, zip
-//! layout, key files) is shared with the Go desktop build and must not change.
+//! layout, key files) is shared with already published builds and must not change.
 
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
@@ -22,7 +22,7 @@ use url::Url;
 
 pub use ed25519_dalek::{SigningKey, VerifyingKey};
 
-const EMBEDDED_PUBLIC_KEY: &str = include_str!("../../../desktop/internal/appupdate/pubkey.txt");
+const EMBEDDED_PUBLIC_KEY: &str = include_str!("../pubkey.txt");
 
 const MAX_MANIFEST: u64 = 64 << 10;
 const MAX_SIGNATURE: u64 = 1 << 10;

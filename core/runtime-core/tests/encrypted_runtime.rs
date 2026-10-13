@@ -56,7 +56,7 @@ fn scan(dir: &Path) {
 }
 #[test]
 fn encrypted_runtime_syncs_notes_files_and_reopens_all_databases() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let ap = dir.path().join("a.db");
     let bp = dir.path().join("b.db");
@@ -134,7 +134,7 @@ fn encrypted_runtime_syncs_notes_files_and_reopens_all_databases() {
 #[test]
 fn encrypted_incoming_failure_preserves_bytes_and_allows_later_note_after_restart() {
     use sync_core::{Entity, EntityKind, Key, SyncConfig, SyncEngine};
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let vault = Key::generate();
     let writer = SyncEngine::open(SyncConfig::new(

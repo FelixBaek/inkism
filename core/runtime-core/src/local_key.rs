@@ -218,7 +218,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("notes.db");
         let db = db.to_str().unwrap();
-        // The Go shell acquires this before starting the Rust process.
+        // The desktop shell acquires this before starting the Rust process.
         let lock = format!("{db}.lock");
         std::fs::write(&lock, b"").unwrap();
         assert!(ensure_new(db).is_ok());

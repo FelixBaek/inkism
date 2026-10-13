@@ -1,6 +1,7 @@
 //! Differential test: every fixture in tests/fixtures/cases.json must give
-//! exactly the Go output recorded in go-expected.json (html, text, error).
-//! Regenerate the Go side with tests/oracle/regen.sh.
+//! exactly the output the former Go implementation recorded in go-expected.json
+//! (html, text, error). The Go generator was removed with the Go tree; the
+//! oracle script is in git history (tests/oracle/ at commit 3ca693d).
 
 use inkism_web_content::{clean, clean_export, source_url, Cleaned, Error};
 use serde_json::{json, Value};

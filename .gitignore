@@ -1,0 +1,34 @@
+# 빌드 산출물
+/core/*/target/
+/frontend/node_modules/
+/frontend/dist/
+/dist/
+/.test-data/
+/.impeccable/review/
+*.db
+*.db-shm
+*.db-wal
+*.db.search*
+*.db.sync*
+*.sync.json
+*.sync.json.tmp*
+*.db.lock
+
+*.db.attachments*
+/tools/deploy/sync-relay/.env
+/tools/deploy/sync-relay/.env.local
+
+# 디자인 도구 상태
+.impeccable/
+.env
+.env.*
+!.env.example
+
+# 공개하지 않는 설계·기술 문서는 모두 여기에 둔다(공개 저장소에는 루트 README만)
+/.private/
+/docs/
+.scannerwork/
+
+# 내부 인계 문서·테스트 잔여물
+/HANDOFF.md
+*:memory:*

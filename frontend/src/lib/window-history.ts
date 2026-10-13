@@ -101,7 +101,10 @@ export class WindowHistory {
       selection(e.afterDocumentSelection) &&
       (e.edits === undefined ||
         (Array.isArray(e.edits) &&
-          e.edits.length === 2 &&
+          // Block moves use two splices; an edit inside a large block adds one
+          // splice per outside opening tag that received an identity.
+          e.edits.length >= 2 &&
+          e.edits.length <= 130 &&
           e.edits.every(
             (edit) =>
               edit &&
@@ -172,6 +175,41 @@ export class WindowHistory {
       const removed = this.done.shift()!;
       bytes -= this.size(removed);
     }
+  }
+  /** An edit that also spliced opening tags before its window (new block
+   * identities, `edits` ending with the window splice). When it continues the
+   * previous plain edit of the same typing group — an IME composition whose
+   * identity is assigned right after it ends — fold that edit in, so one undo
+   * removes the composition together with its identity. */
+  recordSpliced(edit: WindowEdit & { edits: BodySplice[] }, previousFrom: number) {
+    const last = this.done.at(-1),
+      window = edit.edits.at(-1)!;
+    if (
+      last &&
+      !last.edits &&
+      !this.undone.length &&
+      last.session === edit.session &&
+      last.group === edit.group &&
+      edit.time - last.time < 500 &&
+      last.from === previousFrom &&
+      last.after === window.expected
+    ) {
+      this.done.pop();
+      edit = {
+        ...edit,
+        edits: [...edit.edits.slice(0, -1), { ...window, expected: last.before }],
+        beforeCount: last.beforeCount,
+        beforeSelection: last.beforeSelection,
+        beforeDocumentSelection: last.beforeDocumentSelection,
+        // A spliced entry has no single before string: the preview keeps its raw window.
+        beforePreview: last.beforePreview && {
+          ...last.beforePreview,
+          raw: last.beforePreview.raw ?? last.before,
+          relativeFrom: edit.beforePreview?.relativeFrom,
+        },
+      };
+    }
+    this.record(edit);
   }
   prepare(direction: "undo" | "redo") {
     const origin = direction === "undo" ? this.done : this.undone;

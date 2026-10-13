@@ -1,10 +1,10 @@
 //! Trusted boundary for imported, published and exported HTML.
 //!
-//! Port of the Go package `desktop/internal/webcontent`. It never fetches URLs
+//! Port of the former Go implementation's sanitizer. It never fetches URLs
 //! and drops active content; the export policy keeps a small set of static
 //! formatting attributes. The policy (tags, attributes, styles, URL rules,
-//! limits, error messages) is identical to Go and checked against Go output in
-//! `tests/differential.rs` (refresh with `tests/oracle/regen.sh`).
+//! limits, error messages) is identical to Go and checked against recorded Go
+//! output in `tests/differential.rs` (`tests/fixtures/go-expected.json`).
 //!
 //! Known gap: parsing uses html5ever (WHATWG spec) where Go uses
 //! `golang.org/x/net/html`. They build different trees for some malformed

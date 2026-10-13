@@ -1,8 +1,10 @@
 // Full-selection structural commands compared with an unmodified native editor.
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright-core';
+import {waitSaved} from './save-state.ts';
 import {waitForPredicate} from './wait-for-predicate.ts';
 import {historyKey} from './history-keys.ts';
+import {assertBlockBytes,withoutBlockIds} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL;
 assert.ok(base,'isolated application URL required');
 const range=process.env.INKISM_STRUCTURE_SELECTION==='range';
@@ -22,7 +24,7 @@ await page.addInitScript(()=>{
 });
 const editor=page.locator('.tiptap-prose');
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized&&Array.from(document.querySelectorAll<HTMLButtonElement>('.window-controls button')).some(button=>button.textContent==='이동'&&!button.disabled));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>waitSaved(page);
 const focus=()=>editor.evaluate((el:any)=>el.editor.view.focus());
 const command=name=>editor.evaluate((el:any,name)=>el.editor.chain().focus()[name]().run(),name);
 const body=async id=>(await rpc('get',{id})).content;
@@ -34,6 +36,16 @@ const expectBody=async(id,expected,label)=>{
   actual=await body(id);return actual===expected;
  },label+'; expected chars='+expected.length,15000);
  assert.ok(actual===expected,label);
+};
+// Like expectBody, ignoring generated identities; then exactly `added` of them.
+const expectEdited=async(id,expected,added,label)=>{
+ let actual='';
+ await waitForPredicate(async()=>{
+  const error=await page.locator('.window-error').count()?await page.locator('.window-error').textContent():null;
+  if(error)throw Error(label+': '+error);
+  actual=await body(id);return withoutBlockIds(actual)===expected;
+ },label+'; expected chars='+expected.length,15000);
+ return assertBlockBytes(actual,expected,{added,message:label});
 };
 try{
  const names=process.env.INKISM_STRUCTURE_CASES?.split(',')??['toggleBulletList','toggleOrderedList','toggleTaskList','toggleBlockquote','toggleCodeBlock'];
@@ -98,7 +110,9 @@ try{
     finally{native.destroy();}
    },oracle.model);
    await editor.getByRole('checkbox').first().check();
-   await expectBody(note.id,checked,'checkbox updates only the first task item');await saved();
+   // The toggled item is the edited block: it and the list enclosing it
+   // (opened in this internal window) gain identities, as in the editor.
+   await expectEdited(note.id,checked,2,'checkbox updates only the first task item');await saved();
    await historyKey(page,'undo');
    await expectBody(note.id,oracle.formatted,'checkbox undo preserves the other 999 items');await saved();
   }

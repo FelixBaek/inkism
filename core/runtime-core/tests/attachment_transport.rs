@@ -1,4 +1,4 @@
-//! Real Rust encryption -> authenticated Go relay -> independent receiving client.
+//! Real Rust encryption -> authenticated Rust relay -> independent receiving client.
 mod common;
 use common::{Relay, TOKEN};
 use sync_core::attachment::{
@@ -8,7 +8,7 @@ use sync_core::Key;
 
 #[test]
 fn encrypted_chunks_cross_real_relay_with_safe_retries() {
-    let relay = Relay::start().expect("real Go relay must build and start");
+    let relay = Relay::start().expect("real Rust relay must build and start");
     let sender = AttachmentTransport::new(&relay.url, TOKEN).unwrap();
     let receiver = AttachmentTransport::new(&relay.url, TOKEN).unwrap();
     let key = Key::generate();

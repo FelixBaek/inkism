@@ -1,7 +1,9 @@
 import {chromium} from 'playwright-core';
+import {trackSaves} from './save-state.ts';
 import assert from 'node:assert/strict';
 import {waitForPredicate} from './wait-for-predicate.ts';
 import {historyKey} from './history-keys.ts';
+import {assertBlockBytes} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48117';
 const api=process.env.INKISM_API_URL||(process.env.INKISM_URL?base:'http://127.0.0.1:48118');
 const rpc=async(op,args={})=>{const r=await fetch(api+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const v=await r.json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
@@ -11,7 +13,7 @@ const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors
 const title='전체 선택 검사 '+Date.now();
 const content=Array.from({length:10000},(_,i)=>`<p><strong>블록 ${i}</strong> 한글😀</p>`).join('');
 const note=await rpc('save',{note:{title,content,text:'선택'}});await rpc('wait_index');
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saves=trackSaves(page),saved=()=>saves.saved();
 const formatted=()=>page.waitForFunction(()=>!document.querySelector<any>('.window-error')&&Array.from(document.querySelectorAll<any>('.window-controls button')).some(b=>b.textContent==='이동'&&!b.disabled));
 const focus=()=>page.locator('.tiptap-prose').evaluate((el: any)=>{el.editor.view.focus();});
 try{
@@ -48,12 +50,18 @@ try{
  assert.equal(await page.locator('.tiptap-prose p').count(),32);
  await focus();await page.keyboard.press('Control+a');await page.keyboard.press('Delete');
  await page.waitForFunction(()=>document.querySelector('.tiptap-prose')?.textContent==='');await saved();
- assert.equal((await rpc('get',{id:note.id})).content,'<p></p>');
+ // The block left by the deletion is the one edited block: it gains an identity
+ // in the same commit (and the same undo step) as the deletion.
+ const deletedIds=assertBlockBytes((await rpc('get',{id:note.id})).content,'<p></p>',{added:1,message:'Ctrl+A Delete'});
+ await focus();await page.keyboard.press('Control+z');await saved();assert.equal((await rpc('get',{id:note.id})).content,content);
+ await historyKey(page,'redo');await saved();assertBlockBytes((await rpc('get',{id:note.id})).content,'<p></p>',{added:1,ids:deletedIds,message:'Ctrl+A Delete redo'});
  await focus();await page.keyboard.press('Control+z');await saved();assert.equal((await rpc('get',{id:note.id})).content,content);
  assert.equal(await page.locator('.tiptap-prose p').count(),32);
  await focus();await page.keyboard.press('Control+a');await page.keyboard.insertText('대체😀');
  await page.waitForFunction(()=>document.querySelector('.tiptap-prose')?.textContent==='대체😀');await saved();
- assert.equal((await rpc('get',{id:note.id})).content,'<p><strong>대체😀</strong></p>');
+ const typedIds=assertBlockBytes((await rpc('get',{id:note.id})).content,'<p><strong>대체😀</strong></p>',{added:1,message:'Ctrl+A typing'});
+ await focus();await page.keyboard.press('Control+z');await saved();assert.equal((await rpc('get',{id:note.id})).content,content);
+ await historyKey(page,'redo');await saved();assertBlockBytes((await rpc('get',{id:note.id})).content,'<p><strong>대체😀</strong></p>',{added:1,ids:typedIds,message:'Ctrl+A typing redo'});
  await focus();await page.keyboard.press('Control+z');await saved();assert.equal((await rpc('get',{id:note.id})).content,content);
  await focus();await page.keyboard.press('Control+a');await page.keyboard.press('Escape');assert.equal(await page.locator('.document-selection-status').count(),0);
  // Shift selection retains an anchor in the first window while displaying the end.
