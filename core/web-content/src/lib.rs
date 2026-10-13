@@ -182,7 +182,9 @@ impl Sanitizer {
             return;
         }
         let mut tag = "";
-        if let Some(el) = element.filter(|el| ALLOWED_TAGS.contains(&&*el.name.local)) {
+        if let Some(el) = element.filter(|el| {
+            ALLOWED_TAGS.contains(&&*el.name.local) || (self.export && export_element(n, el))
+        }) {
             tag = &el.name.local;
             if !self.open_tag(el) {
                 return;
@@ -332,8 +334,57 @@ fn hidden_style() -> &'static Regex {
     })
 }
 
-/// Export accepts exact formatting values, never URLs, arbitrary CSS, or
-/// event handlers.
+/// A fragment cannot name a resource, URL scheme, escape sequence, or markup.
+/// App footnotes and Markdown's generated definition IDs use this subset.
+fn static_fragment(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b':' | b'.'))
+}
+
+fn app_footnote_fragment(value: &str) -> bool {
+    static_fragment(value)
+        && value
+            .get(..2)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("fn"))
+}
+
+fn has_class(el: &Element, class: &str) -> bool {
+    attribute(el, "class").is_some_and(|v| v.split_ascii_whitespace().any(|c| c == class))
+}
+
+fn footnote_definition(el: &Element) -> bool {
+    &*el.name.local == "div"
+        && has_class(el, "footnote-definition")
+        && attribute(el, "id").is_some_and(|v| static_fragment(&v))
+}
+
+/// Preserve semantic super/subscripts and only local fragment anchors. Other
+/// links still become static text; imports keep their existing tag policy.
+fn export_element(n: NodeRef<'_>, el: &Element) -> bool {
+    match &*el.name.local {
+        "sup" | "sub" => true,
+        "a" => attribute(el, "href").is_some_and(|v| {
+            v.strip_prefix('#').is_some_and(|id| {
+                app_footnote_fragment(id)
+                    || (static_fragment(id)
+                        && n.parent()
+                            .and_then(|p| p.value().as_element())
+                            .is_some_and(|parent| {
+                                &*parent.name.local == "sup"
+                                    && has_class(parent, "footnote-reference")
+                            }))
+            })
+        }),
+        "div" => footnote_definition(el),
+        _ => false,
+    }
+}
+
+/// Export accepts exact formatting values and bounded local fragments, never
+/// resource URLs, arbitrary CSS, or event handlers.
 fn export_attributes(out: &mut String, el: &Element) {
     let tag: &str = &el.name.local;
     for (key, raw) in el.attrs() {
@@ -349,6 +400,39 @@ fn export_attributes(out: &mut String, el: &Element) {
             "start" => {
                 if let Some(n @ 1..=999_999) = atoi(v).filter(|_| tag == "ol") {
                     out.push_str(&format!(" start=\"{n}\""));
+                }
+                false
+            }
+            "value" => {
+                if let Some(n @ 1..=999_999) = atoi(v).filter(|_| tag == "li") {
+                    out.push_str(&format!(" value=\"{n}\""));
+                }
+                false
+            }
+            "id" => {
+                if static_fragment(raw)
+                    && ((matches!(tag, "p" | "li" | "sup" | "a") && app_footnote_fragment(raw))
+                        || footnote_definition(el))
+                {
+                    out.push_str(" id=\"");
+                    escape_into(out, raw);
+                    out.push('"');
+                }
+                false
+            }
+            "href" => {
+                if tag == "a" && raw.strip_prefix('#').is_some_and(static_fragment) {
+                    out.push_str(" href=\"");
+                    escape_into(out, raw);
+                    out.push('"');
+                }
+                false
+            }
+            "class" => {
+                if footnote_definition(el) {
+                    out.push_str(" class=\"footnote-definition\"");
+                } else if tag == "sup" && has_class(el, "footnote-reference") {
+                    out.push_str(" class=\"footnote-reference\"");
                 }
                 false
             }
