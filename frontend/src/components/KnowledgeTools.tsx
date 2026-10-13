@@ -94,7 +94,7 @@ function NoteGraph({onClose}:{onClose:()=>void}) {
   const open=async(id:string)=>{try{if(!await s.flushNow())return;onClose();await s.selectNote(id);}catch(e){setError(message(e));}};
   return <section aria-label={t('관계 그래프')}><div className="knowledge-row">
     <input aria-label={t('그래프 검색')} placeholder={t('제목 또는 별칭 검색')} value={query} onChange={e=>setQuery(e.target.value)}/>
-    <select aria-label={t('그래프 태그')} value={tag} onChange={e=>setTag(e.target.value)}><option value="">{t('모든 태그')}</option>{Array.from(new Set(data?.nodes.flatMap(n=>n.tags)??[])).sort().map(x=><option key={x}>{x}</option>)}</select>
+    <select aria-label={t('그래프 태그')} value={tag} onChange={e=>setTag(e.target.value)}><option value="">{t('모든 태그')}</option>{Array.from(new Set(data?.nodes.flatMap(n=>n.tags)??[])).sort((a,b)=>a.localeCompare(b)).map(x=><option key={x}>{x}</option>)}</select>
     <label><input type="checkbox" checked={local} disabled={!s.note} onChange={e=>setLocal(e.target.checked)}/>{t('현재 노트 주변')}</label>
     {local&&<select aria-label={t('연결 깊이')} value={depth} onChange={e=>setDepth(Number(e.target.value))}>{[1,2,3].map(x=><option key={x} value={x}>{x}</option>)}</select>}
     <label><input type="checkbox" checked={orphans} onChange={e=>setOrphans(e.target.checked)}/>{t('연결 없는 노트')}</label>
@@ -128,7 +128,7 @@ function NoteViews({onClose}:{onClose:()=>void}) {
   const dragging=useRef<string|null>(null);
   const reload=async(config?:KnowledgeSettings)=>{const [list,fresh]=await Promise.all([knowledge.list(),config?Promise.resolve(config):knowledge.settings()]);setItems(list.items);setTruncated(list.truncated);setSettings(fresh);setSelected(new Set());window.dispatchEvent(new Event('inkism-knowledge-changed'));};
   const select=(id:string,checked:boolean)=>setSelected(current=>{const next=new Set(current);if(checked)next.add(id);else next.delete(id);return next;});
-  const names=Array.from(new Set(items.flatMap(n=>n.properties.map(p=>p.name)))).sort();
+  const names=Array.from(new Set(items.flatMap(n=>n.properties.map(p=>p.name)))).sort((a,b)=>a.localeCompare(b));
   const result=useMemo(()=>filterView(items,view),[items,view]);
   const shown=result.slice(page*50,(page+1)*50),columns=(view.card?.visible_properties??names).slice(0,32);
   const groups=groupView(shown,view.group_by??'');
