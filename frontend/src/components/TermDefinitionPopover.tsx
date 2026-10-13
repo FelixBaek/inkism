@@ -57,7 +57,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
   const [busy, setBusy] = useState(false);
   const [aiPreview, setAiPreview] = useState(false);
   const [expand, setExpand] = useState(false);
-  const panel = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDialogElement>(null);
   const abort = useRef<AbortController>();
   const active = useRef<Target | null>(null);
   const close = () => { if(mutating.current){return;} abort.current?.abort(); active.current = null; setTarget(null); setBusy(false); };
@@ -93,8 +93,8 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
     };
     const existing = (event: Event) => {
       if (active.current || disabled) return;
-      const span = (event.target as HTMLElement)?.closest?.("[data-term-id]");
-      const id = span?.getAttribute("data-term-id");
+      const span = (event.target as HTMLElement)?.closest?.<HTMLElement>("[data-term-id]");
+      const id = span?.dataset.termId;
       if (!id) return;
       if(!span || !dom.contains(span))return;
       const occurrence=termDefinitionRange(editor.state.doc,editor.view.posAtDOM(span,0),id);
@@ -158,6 +158,12 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
     } catch(e) {if(!controller.signal.aborted && valid(target))setError(e instanceof Error ? e.message : String(e));}
     finally {if(active.current===target)setBusy(false);}
   };
+  const saveGlossary = async (target: Target, glossaryId: string|undefined, linked: string|undefined) => {
+    const selectedEntry=entries.find(entry=>entry.id===glossaryId);
+    const entry=await termGlossary.save({id:glossaryId,term:target.term,definition:definition.trim(),noteId:linked,type:selectedEntry?.type,lang:selectedEntry?.lang});
+    target.glossaryId=entry.id; setSelectedGlossaryId(entry.id);
+    return entry.id;
+  };
   const save = async () => {
     if (!target || !valid(target) || !definition.trim() || definition.length>2000 || busy) return;
     mutating.current=true; setSaving(true); setBusy(true); setError("");
@@ -171,11 +177,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
         target.createdNoteId=created.id; linked=created.id; setNoteId(created.id); store.refreshList();
       }
       if (!valid(target)) return;
-      if (glossary || (expand && glossaryId)) {
-        const selectedEntry=entries.find(entry=>entry.id===glossaryId);
-        const entry=await termGlossary.save({id:glossaryId,term:target.term,definition:definition.trim(),noteId:linked,type:selectedEntry?.type,lang:selectedEntry?.lang});
-        glossaryId=entry.id; target.glossaryId=entry.id; setSelectedGlossaryId(entry.id);
-      }
+      if (glossary || (expand && glossaryId)) glossaryId=await saveGlossary(target,glossaryId,linked);
       if (!valid(target)) return;
       const applied=editor.chain().focus().setTextSelection({from:target.from,to:target.to}).setMark("termDefinition",{id:target.id,definition:definition.trim(),glossaryId:glossaryId??null,noteId:linked??null}).run();
       if(!applied)throw new Error(t("설명을 본문에 적용하지 못했습니다. 선택 영역을 다시 확인하세요."));
@@ -186,7 +188,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
   const remove = () => { if(!target || !valid(target)){return;} editor.chain().focus().setTextSelection({from:target.from,to:target.to}).unsetMark("termDefinition").run();close(); };
   if (!target) return null;
   const preview = target.preview;
-  return createPortal(<div ref={panel} className="term-definition-popover" style={{left:target.left,top:target.top}} role="dialog" aria-label={t("용어 설명")} aria-modal="false">
+  return createPortal(<dialog open ref={panel} className="term-definition-popover" style={{left:target.left,top:target.top}} aria-label={t("용어 설명")}>
     <header><strong>{t("용어 설명")}</strong><button type="button" aria-label={t("닫기")} disabled={saving} onClick={()=>{close();if(!editor.isDestroyed)editor.view.focus();}}>×</button></header>
     <div className="term-definition-word">{target.term}</div>
     {preview ? <>
@@ -211,5 +213,5 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
       <footer><button type="button" disabled={saving} onClick={()=>{close();if(!editor.isDestroyed)editor.view.focus();}}>{t("취소")}</button><button type="button" className="term-definition-save" disabled={busy||!definition.trim()||!valid(target)} onClick={()=>void save()}>{t("설명 저장")}</button></footer>
     </>}
     {error && <p role="alert">{error}</p>}
-  </div>, document.body);
+  </dialog>, document.body);
 }
