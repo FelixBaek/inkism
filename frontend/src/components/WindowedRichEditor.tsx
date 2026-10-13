@@ -1918,20 +1918,21 @@ export function WindowedRichEditor({
     }
     return true;
   };
+  const rejectCapturedIdentity = (capture: NonNullable<typeof composition.current>, tr: Transaction) => {
+    // Plugin follow-ups are checked against the pre-input view. Reject an
+    // incompatible identity update without rejecting the user's input.
+    if (!capture.pending) return tr.steps.some((step) => stepOutside(step, step.getMap(), capture.from, capture.to));
+    try {
+      capture.pending.accept(capture.editor.state, tr);
+      return false;
+    } catch {
+      return true;
+    }
+  };
   const documentTransaction = (tr: Transaction) => {
     if (tr.docChanged && isReadOnly()) return true;
     const capture = composition.current;
-    // An appended block-ID transaction that does not fit the captured input
-    // (it is checked against the pre-input view) is dropped, never an input error.
-    if (capture && tr.getMeta("blockIdentity")) {
-      if (!capture.pending) return tr.steps.some((step) => stepOutside(step, step.getMap(), capture.from, capture.to));
-      try {
-        capture.pending.accept(capture.editor.state, tr);
-        return false;
-      } catch {
-        return true;
-      }
-    }
+    if (capture && tr.getMeta("blockIdentity")) return rejectCapturedIdentity(capture, tr);
     if (capture)
       return capture.pending ? acceptPendingTransaction(capture, tr) : rejectCompositionTransaction(capture, tr);
     if (!documentSelected.current) return false;

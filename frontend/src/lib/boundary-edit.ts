@@ -330,8 +330,12 @@ export function changeBoundary(prepared: PreparedBoundary, direction: BoundaryDi
   prepared.check();
   const editor = new Editor({
     element: document.createElement("div"),
-    // Like segment windows: an outside opening tag cannot acquire a new block ID.
-    extensions: contentExtensions({ trailingNode: false, automaticIds: false }),
+    // A complete joined block receives its identity just like a native edit.
+    // Partial segments cannot change an opening tag outside their source span.
+    extensions: contentExtensions({
+      trailingNode: false,
+      automaticIds: !prepared.region.start_context.length && !prepared.region.end_context.length,
+    }),
     content: prepared.state.doc.toJSON(),
     parseOptions: { preserveWhitespace: "full" },
     injectCSS: false,

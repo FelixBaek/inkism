@@ -30,7 +30,8 @@ try{
   const normal=await rpc('save',{note:{title:'일반 줄바꿈 '+label+Date.now(),content:source,content_format:'html'}});await rpc('wait_index');
   const first=(await rpc('document_segments',{id:normal.id,revision:1,ordinal:0,offset:0})).segments[0];
   const seam=first.byte_offset+Buffer.byteLength(first.source),origin=Buffer.from(source).subarray(Buffer.byteLength(prefix),seam).toString().length;
-  await page.goto(base+'/');await page.getByRole('button',{name:'노트 열기: '+normal.title,exact:true}).click();await page.getByRole('button',{name:'텍스트',exact:true}).click();await opened();
+  await page.goto(base+'/');await page.getByRole('button',{name:'노트 열기: '+normal.title,exact:true}).click();// The complete 1.5MiB Unicode oracle is deliberately unvirtualized; loading it can exceed Playwright's 30s default.
+  await page.getByRole('button',{name:'텍스트',exact:true}).click({timeout:120000});await opened();
   await editor.evaluate((el: any,position)=>{const e=el.editor;e.commands.setTextSelection(position);e.view.focus();e.view.dispatch(e.state.tr.scrollIntoView());},origin+1);
   await page.keyboard.press(key('down'));await page.waitForFunction(origin=>document.querySelector<any>('.tiptap-prose')?.editor?.state.selection.$head.parentOffset>origin,origin);
   const oracle=await editor.evaluate((el: any)=>({offset:el.editor.state.selection.$head.parentOffset,x:el.editor.view.coordsAtPos(el.editor.state.selection.head).left}));

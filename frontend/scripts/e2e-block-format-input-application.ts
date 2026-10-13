@@ -117,6 +117,9 @@ try{
   kind==='paste-keys'?'<p>붙임</p><p>끝abc</p>':kind==='after-range-format'?'<h2>abc</h2>':`<p>${text}</p>`;
  // Typed blocks acquire permanent IDs; every other byte must match exactly.
  await saved();const editedSource=await body(note.id),actual=editedSource.replace(/ id="ink-block-[0-9a-f-]{36}"/g,'');
+ const acquired=editedSource.match(/ id="ink-block-[0-9a-f-]{36}"/g)??[];
+ assert.ok(acquired.length<=(kind==='paste-keys'?2:1),'identities may only be added to the typed/pasted blocks');
+ assert.equal(new Set(acquired).size,acquired.length,'new block identities must be unique');
  assert.ok(actual===expected,'worker command then all-selection input; actual characters='+actual.length+', expected='+expected.length);
  const previewOracle=await editor.evaluate((el: any,oracle)=>{
   const e=el.editor,full=e.schema.nodeFromJSON(oracle.doc);

@@ -112,6 +112,9 @@ BEGIN INSERT INTO sync_journal(kind, id, deleted) VALUES('setting', NEW.key, 0);
 /// Create the host journal schema and triggers. Idempotent.
 pub fn ensure_schema(conn: &Connection) -> Result<()> {
     conn.execute_batch(HOST_SCHEMA)?;
+    // Retention is local: publishing its new key stalls older peers, whose
+    // setting validator rejects unknown keys. Discard any pre-release backlog.
+    conn.execute("DELETE FROM sync_journal WHERE kind='setting' AND id='trash_retention_days'", [])?;
     conn.execute_batch(crate::named_version_sync::SCHEMA)?;
     Ok(())
 }
@@ -554,6 +557,11 @@ fn apply_entity(conn: &Connection, entity: &Entity, sealer: Sealer) -> Result<()
 /// Merge by decision time, so arrival order and sync-core's staging-time
 /// winner cannot replace a newer choice. Conflicts merge both sides.
 fn apply_setting(conn: &Connection, entity: &Entity) -> Result<()> {
+    // A pre-release peer may have published this policy. Never let a remote
+    // setting opt this device into permanent deletion.
+    if entity.id == "trash_retention_days" {
+        return Ok(());
+    }
     if !settings::is_known_key(&entity.id) {
         return Err(RuntimeError::internal(format!("unknown setting {}", entity.id)));
     }
@@ -1849,6 +1857,22 @@ mod tests {
         let tag = Entity::new(EntityKind::Setting, settings::DEFAULT_TAG, json!({"value":"업무","updated_at":1}));
         apply_one(conn, &incoming("tag", tag)).unwrap();
         assert_eq!(engine.execute(json!({"op":"defaults_get"}))["data"]["tag"], "업무");
+    }
+
+    #[test]
+    fn retention_policy_is_local_and_never_blocks_legacy_sync_peers() {
+        let (_dir, engine) = open_host();
+        let conn = engine.connection();
+        let before: i64 = conn.query_row("SELECT count(*) FROM sync_journal", [], |r| r.get(0)).unwrap();
+        assert_eq!(engine.execute(json!({"op":"trash_retention_set","days":7}))["ok"], true);
+        assert_eq!(conn.query_row("SELECT count(*) FROM sync_journal", [], |r| r.get::<_,i64>(0)).unwrap(), before);
+        conn.execute("INSERT INTO sync_journal(kind,id,deleted) VALUES('setting','trash_retention_days',0)", []).unwrap();
+        ensure_schema(conn).unwrap();
+        assert_eq!(conn.query_row("SELECT count(*) FROM sync_journal WHERE id='trash_retention_days'", [], |r| r.get::<_,i64>(0)).unwrap(), 0);
+        assert_eq!(settings::stored(conn, "trash_retention_days").unwrap(), None);
+        let remote = Entity::new(EntityKind::Setting, "trash_retention_days", json!({"value":"30","updated_at":999}));
+        apply_one(conn, &incoming("retention", remote)).unwrap();
+        assert_eq!(engine.execute(json!({"op":"trash_retention_get"}))["data"]["days"], 7);
     }
 
     #[test]

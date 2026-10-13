@@ -1485,28 +1485,31 @@ fn patch_assignments(
 pub fn delete(conn: &Connection, args: &Value) -> Result<Value> {
     let id = arg_id(args)?;
     conn.execute_batch("BEGIN IMMEDIATE;")?;
-    let result = (|| -> Result<Value> {
-        let trashed: Option<i64> = conn
-            .query_row(
-                "SELECT trashed FROM notes_meta WHERE id = ?1",
-                params![id],
-                |r| r.get(0),
-            )
-            .optional()?;
-        match trashed {
-            None => Err(EngineError::NotFound(format!("note {id}"))),
-            Some(0) => Err(EngineError::Invalid(
-                "note is not in trash; move it to trash first".into(),
-            )),
-            Some(_) => {
-                crate::knowledge::delete_local(conn, &id)?;
-                conn.execute("DELETE FROM notes_meta WHERE id = ?1", params![id])?;
-                indexer::enqueue(conn, &id, i64::MAX)?;
-                Ok(json!({ "deleted": true }))
-            }
-        }
-    })();
+    let result = delete_tx(conn, &id);
     finish_tx(conn, result)
+}
+
+/// Caller holds the write transaction, including any retention eligibility check.
+pub(crate) fn delete_tx(conn: &Connection, id: &str) -> Result<Value> {
+    let trashed: Option<i64> = conn
+        .query_row(
+            "SELECT trashed FROM notes_meta WHERE id = ?1",
+            params![id],
+            |r| r.get(0),
+        )
+        .optional()?;
+    match trashed {
+        None => Err(EngineError::NotFound(format!("note {id}"))),
+        Some(0) => Err(EngineError::Invalid(
+            "note is not in trash; move it to trash first".into(),
+        )),
+        Some(_) => {
+            crate::knowledge::delete_local(conn, &id)?;
+            conn.execute("DELETE FROM notes_meta WHERE id = ?1", params![id])?;
+            indexer::enqueue(conn, &id, i64::MAX)?;
+            Ok(json!({ "deleted": true }))
+        }
+    }
 }
 
 /// Snapshot inside SQLite, without copying the body into a foreground Note.
