@@ -2,7 +2,7 @@ import {waitForAsync} from './async-browser-condition.ts';
 // A burst of real keys while the next window read is deliberately delayed.
 // The expected cursor/range comes from the ordinary browser editor.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {historyKey} from './history-keys.ts';
 const base=process.env.INKISM_URL;assert.ok(base);
 const shift=process.env.INKISM_VERTICAL_SHIFT==='1';

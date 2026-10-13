@@ -1,5 +1,5 @@
 import {waitForAsync} from './async-browser-condition.ts';
-import assert from 'node:assert/strict';import {chromium} from 'playwright-core';
+import assert from 'node:assert/strict';import {chromium} from './browser-env.ts';
 const base=process.env.INKISM_URL!;
 const rpc=async(op:string,args:any={})=>{const env=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(env.ok,true,JSON.stringify(env));return env.data;};
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.addInitScript(()=>{localStorage.setItem('inkism.lang','ko');localStorage.setItem('inkism.inspector','false');});

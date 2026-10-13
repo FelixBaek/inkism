@@ -1,7 +1,7 @@
 // Every toolbar mark/attribute must survive save → reload and stay editable (inspectRichHTML admission).
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 // esbuild IIFE global injected into the page
 declare const rich: any;
 const bundle=await build({stdin:{contents:"export {inspectRichHTML,canonicalRichHTML} from './lib/rich-document';",resolveDir:'frontend/src',loader:'ts'},

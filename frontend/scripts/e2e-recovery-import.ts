@@ -1,5 +1,5 @@
 import {waitForPredicate} from './wait-for-predicate.ts';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47972';
 const rpc=async(op,args={})=>{

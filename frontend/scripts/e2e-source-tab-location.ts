@@ -1,5 +1,5 @@
 import {waitForAsync} from './async-browser-condition.ts';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47982';
 const rpc=async(op,args={})=>{

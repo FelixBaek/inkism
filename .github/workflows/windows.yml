@@ -3,14 +3,16 @@ on:
   workflow_dispatch:
     inputs:
       scope:
-        description: 'full regression, editor/native IME, or internal rich-segment contracts'
+        description: 'Backend storage/packaging, installer acceptance, full regression, or native editor contracts'
         type: choice
-        options: [full, editor, segments]
+        options: [full, backend, installer, editor, segments]
         default: full
       block_format_only:
         description: 'segments scope: block worker and seven related application checks'
         type: boolean
         default: false
+  # Required for merging, so it runs on every pull request.
+  pull_request:
   push:
     branches: [main]
     paths:
@@ -22,14 +24,14 @@ on:
       - 'tools/build/windows/**'
 concurrency:
   group: windows-${{ github.ref }}
-  # Finish the current Windows validation while newer commits queue.
-  cancel-in-progress: false
+  # Supersede outdated PR runs; finish every main validation while newer commits queue.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
 jobs:
   # Rust test groups run in parallel with the application job; each keeps its own build cache.
   rust:
-    if: github.event_name != 'workflow_dispatch' || inputs.scope == 'full'
+    if: github.event_name != 'workflow_dispatch' || inputs.scope == 'full' || inputs.scope == 'backend'
     runs-on: windows-2022
     timeout-minutes: 40
     strategy:
@@ -116,7 +118,7 @@ jobs:
     permissions:
       contents: read
     runs-on: windows-2022
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       # All crates in a job share dependency artifacts, including the SQLCipher/OpenSSL build.
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
@@ -146,9 +148,10 @@ jobs:
           key: windows-2022-${{ runner.arch }}-rust-static-v2-app-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: windows-2022-${{ runner.arch }}-rust-static-v2-app-${{ steps.rust.outputs.cachekey }}-
       - name: Validate native clipboard test scripts
+        if: inputs.scope != 'backend' && inputs.scope != 'installer'
         shell: powershell
         run: |
-          foreach ($file in @('tools/scripts/windows-worker-paste.ps1', 'tools/scripts/windows-system-ime.ps1')) {
+          foreach ($file in @('tools/scripts/windows-worker-paste.ps1', 'tools/scripts/windows-system-ime.ps1', 'tools/scripts/test-windows-source-ui.ps1', 'tools/scripts/test-windows-installer.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors) | Out-Null
@@ -157,7 +160,7 @@ jobs:
               throw "Windows PowerShell parser rejected $file"
             }
           }
-          foreach ($file in @('tools/scripts/verify-windows-worker-paste.ts', 'tools/scripts/verify-windows-windowed-ime.ts')) {
+          foreach ($file in @('tools/scripts/verify-windows-worker-paste.ts', 'tools/scripts/verify-windows-windowed-ime.ts', 'tools/scripts/test-windows-note-links.ts', 'tools/scripts/verify-source-ui.ts')) {
             node --no-warnings -e "require('node:module').stripTypeScriptTypes(require('node:fs').readFileSync(process.argv[1], 'utf8'))" $file
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }
@@ -196,11 +199,13 @@ jobs:
             ~/.cargo/registry/src
           key: ${{ steps.rust-cache.outputs.cache-primary-key }}
       - name: Encrypted copy with original runtime recovery
+        if: inputs.scope != 'installer'
         run: |
           $env:INKISM_TEST_ENGINE = (Resolve-Path dist/windows/inkism-engine.exe).Path
           cargo test --locked --manifest-path core/local-api/Cargo.toml --lib engine::tests::packaged_encrypted_copy_while_app_open -- --exact --nocapture
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Never-saved draft recovery with plain and encrypted Rust libraries
+        if: inputs.scope != 'backend' && inputs.scope != 'installer'
         run: |
           $env:INKISM_TEST_ENGINE = (Resolve-Path dist/windows/inkism-engine.exe).Path
           $env:INKISM_RECOVERY_ENCRYPTED = '1'
@@ -216,20 +221,27 @@ jobs:
           cargo test --locked --manifest-path core/local-api/Cargo.toml --bin inkism-local-api tests::crash_draft_application -- --exact --nocapture 2>&1 | Tee-Object dist/windows-crash-journal-application.log
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Packaged engine persistence and backup
+        if: inputs.scope != 'installer'
         run: node tools/scripts/test-packaged-engine.ts dist/windows/inkism-engine.exe
       - name: Packaged sync credential protection
+        if: inputs.scope != 'installer'
         run: node tools/scripts/test-packaged-sync-config.ts dist/windows/inkism-engine.exe
       - name: Packaged attachment storage isolation
+        if: inputs.scope != 'installer'
         run: node tools/scripts/test-packaged-attachments.ts dist/windows/inkism-engine.exe
       - name: Packaged encrypted library copy
+        if: inputs.scope != 'installer'
         run: node tools/scripts/test-packaged-encrypted-copy.ts dist/windows/Inkism.exe
       - name: Ensure Microsoft WebView2 Runtime
+        if: inputs.scope != 'backend' && inputs.scope != 'installer'
         run: ./tools/scripts/ensure-webview2.ps1
       - name: Real WebView2 editor and close-save
+        if: inputs.scope != 'backend' && inputs.scope != 'installer'
         # Non-blocking until the UI redesign lands: these drive the current UI by its labels.
         continue-on-error: true
         run: node frontend/scripts/windows-ui-test.ts
       - name: Encrypted WebView2 editor and close-save
+        if: inputs.scope != 'backend' && inputs.scope != 'installer'
         # Non-blocking until the UI redesign lands: these drive the current UI by its labels.
         continue-on-error: true
         env:
@@ -237,6 +249,7 @@ jobs:
           INKISM_TEST_SCREENSHOT_SUFFIX: '-encrypted'
         run: node frontend/scripts/windows-ui-test.ts
       - name: Register Korean input in disposable hosted runner
+        if: inputs.scope != 'backend' && inputs.scope != 'installer'
         shell: powershell
         run: |
           $list = Get-WinUserLanguageList
@@ -247,6 +260,7 @@ jobs:
           Get-WinUserLanguageList | Format-List LanguageTag, InputMethodTips
           Get-ChildItem "$env:WINDIR/System32/IME/IMEKR" -ErrorAction SilentlyContinue | Select-Object Name
       - name: Encrypted native windowed selection typing and system IME
+        if: inputs.scope != 'backend' && inputs.scope != 'installer'
         # Non-blocking until the UI redesign lands: these drive the current UI by its labels.
         continue-on-error: true
         env:

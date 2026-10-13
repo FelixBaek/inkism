@@ -1,8 +1,9 @@
 import {waitForAsync} from './async-browser-condition.ts';
 // A real drag across two source pieces of the same oversized paragraph.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {historyKey} from './history-keys.ts';
+import {assertBlockBytes} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL;assert.ok(base);
 const rpc=async(op,args={})=>{const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const value=await response.json();assert.ok(value.ok,value.error);return value.data;};
 const prefix='<p><strong>',text='a'.repeat(1024*1024),suffix='</strong></p><p>후미 원문 &amp;😀</p>',source=prefix+text+suffix;
@@ -31,7 +32,8 @@ try{
  assert.equal((await rpc('get',{id:note.id})).content,source,'mouse selection does not write');
  assert.ok(reads.every(input=>(input.limit??1)<=32));assert.ok(await page.locator('*').count()<1500);
  await page.keyboard.type('z');await saved();const actual=(await rpc('get',{id:note.id})).content,expected=prefix+text.slice(0,seam-10)+'z'+text.slice(seam+20)+suffix;
- assert.ok(actual===expected,'exact 30-character replacement and outer formatting/source preservation');
+ // The edited giant paragraph gains its identity; every other byte is exact.
+ assertBlockBytes(actual,expected,{added:1,message:'exact 30-character replacement and outer formatting/source preservation'});
  await historyKey(page,'undo');await saved();assert.equal((await rpc('get',{id:note.id})).content,source,'undo restores the full oversized paragraph');
  assert.deepEqual(errors,[]);console.log('PASS internal mouse drag: exact 30 characters across source seam, clipboard/replacement/undo, strong and trailing source preserved, bounded reads/DOM; lazy='+process.env.INKISM_LAZY);
 }catch(error){console.error(await page.evaluate(()=>({error:document.querySelector('.window-error')?.textContent,segment:document.querySelector('[data-segment-start]')?.getAttribute('data-segment-start'),selection:document.querySelector<any>('.tiptap-prose')?.editor?.state.selection.toJSON(),save:document.querySelector('.status-save')?.textContent})));throw error;}finally{await browser.close();}

@@ -27,7 +27,9 @@ for (const test of tests) {
   const suffix = process.platform === 'win32' ? '.exe' : '';
   const preview = process.env.INKISM_TEST_PREVIEW || path.join(root, 'core/local-api/target/release/inkism-local-api' + suffix);
   const engine = process.env.INKISM_TEST_ENGINE || path.join(root, 'core/runtime-core/target/release/inkism-engine' + suffix);
-  const server = spawn(preview, ['--listen', `127.0.0.1:${port}`, '--db', path.join(temporary, 'notes.db'), '--engine', engine], {cwd: root, stdio: ['ignore', 'ignore', 'pipe']});
+  // INKISM_TEST_ASSETS: a fresh frontend build to serve instead of frontend/dist.
+  const assets = process.env.INKISM_TEST_ASSETS ? ['--assets', process.env.INKISM_TEST_ASSETS] : [];
+  const server = spawn(preview, ['--listen', `127.0.0.1:${port}`, '--db', path.join(temporary, 'notes.db'), '--engine', engine, ...assets], {cwd: root, stdio: ['ignore', 'ignore', 'pipe']});
   let serverLog = '';
   server.stderr.on('data', data => { serverLog += data; });
   const stopped = new Promise<void>(resolve => { server.once('close', () => resolve()); });
