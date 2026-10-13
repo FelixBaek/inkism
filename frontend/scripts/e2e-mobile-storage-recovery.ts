@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright-core';
-const root = process.env.INKISM_SOURCE_ROOT || process.cwd();
+const root = process.env.INKISM_SOURCE_ROOT || resolve(import.meta.dirname, '../..');
 const html = readFileSync(resolve(root, 'desktop-tauri/src-tauri/src/mobile-storage-recovery.html'), 'utf8');
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, args: ['--no-sandbox'] });
 try {

@@ -506,6 +506,8 @@ pub fn init_main(conn: &Connection) -> Result<()> {
             "cover",
             "ALTER TABLE notebooks ADD COLUMN cover TEXT;",
         )?;
+        // Additive local table + triggers; no version bump needed.
+        crate::trash_retention::init(conn)?;
         conn.pragma_update(None, "user_version", MAIN_USER_VERSION)
     })();
     finish_tx(conn, r)

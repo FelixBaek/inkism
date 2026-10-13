@@ -3,7 +3,9 @@ import {navigateNoteAnchor} from '../lib/note-anchor';
 import {knowledge} from '../lib/knowledge';
 import type {Note} from '../types';
 import React, { useEffect, useRef, useState } from "react";
-import { X, Pin, Star, Archive, History, Link2, PencilOff } from "../icons";
+import { X, Pin, Star, Archive, PencilOff, FileText } from "../icons";
+import { KNOWLEDGE_EVENT, PropertyEditor } from "./KnowledgeTools";
+import { NoteConnections } from "./NoteConnections";
 import { api } from "../api";
 import { useStore } from "../store";
 import { lang, t } from "../i18n";
@@ -14,6 +16,8 @@ type DragState = { x: number; width: number; current: number };
 type Store = ReturnType<typeof useStore>;
 
 const timestamp = (value?: number) => (value ? new Date(value).toLocaleString(lang) : t("저장 후 표시"));
+const shortTime = (value: number) =>
+  new Date(value).toLocaleString(lang, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 /** Esc closes the panel; in overlay mode Tab cycles inside it. */
 function handleInspectorKeys(event: React.KeyboardEvent<HTMLElement>, overlay: boolean, onClose: () => void) {
@@ -135,7 +139,7 @@ export function BacklinkList({ s }: Readonly<{ s: Store }>) {
     await navigateNoteAnchor(locatedNote,location.anchor);
   }catch(e){setError(e instanceof Error?t(e.message):String(e));}};
   if(s.backlinks===null)return <p className="inspector-hint">{t('연결 정보를 확인하는 중…')}</p>;
-  return <>{(error||s.backlinksError)&&<p role="alert">{error||s.backlinksError}</p>}{!s.backlinks.length&&<p className="inspector-hint">{t('이 노트를 가리키는 노트가 없습니다.')}</p>}<ul className="inspector-list">{s.backlinks.map(note=><li key={note.id}><button type="button" aria-label={t('역링크 노트 열기: {title}',{title:note.title||t('제목 없음')})} onClick={()=>void open(note.id)}>{note.title||t('제목 없음')}</button><p className="inspector-hint" aria-label={t('역링크 문맥')}>{contexts[note.id]?.context??note.preview}</p></li>)}</ul>{s.backlinksCursor&&<button className="btn" disabled={s.backlinksBusy} onClick={()=>void s.loadMoreBacklinks()}>{s.backlinksBusy?t('불러오는 중…'):t('역링크 더 불러오기')}</button>}</>;
+  return <>{(error||s.backlinksError)&&<p role="alert">{error||s.backlinksError}</p>}{!s.backlinks.length&&<p className="inspector-hint">{t('이 노트를 가리키는 노트가 없습니다.')}</p>}<ul className="inspector-list">{s.backlinks.map(note=><li key={note.id}><button type="button" aria-label={t('역링크 노트 열기: {title}',{title:note.title||t('제목 없음')})} onClick={()=>void open(note.id)}><FileText size={16} aria-hidden/><span>{note.title||t('제목 없음')}</span></button><p className="inspector-hint" aria-label={t('역링크 문맥')}>{contexts[note.id]?.context??note.preview}</p></li>)}</ul>{s.backlinksCursor&&<button className="btn" disabled={s.backlinksBusy} onClick={()=>void s.loadMoreBacklinks()}>{s.backlinksBusy?t('불러오는 중…'):t('역링크 더 불러오기')}</button>}</>;
 }
 
 function HistoryBody({
@@ -155,12 +159,53 @@ function HistoryBody({
   retry: () => void;
   restore: (historyId: string) => Promise<void>;
 }>) {
+  const [picked, setPicked] = useState<string | null>(null);
+  const [copying, setCopying] = useState(false);
+  const [changes, setChanges] = useState<Record<string, { added: number | null; removed: number | null }>>({});
+  const noteId = s.note?.id;
+  useEffect(() => {
+    if (!noteId || !history?.length) return;
+    let live = true;
+    void api
+      .historyChanges(noteId, 5)
+      .then((result) => {
+        if (live) setChanges(Object.fromEntries(result.items.map((item) => [item.id, item])));
+      })
+      .catch(() => {}); // Older engines without the op keep showing titles.
+    return () => {
+      live = false;
+    };
+  }, [noteId, history]);
+  // Same copy the history dialog makes: the old body as a new note beside the current one.
+  const saveCopy = async (entry: HistoryEntry) => {
+    const note = s.note;
+    if (!note || copying) return;
+    setCopying(true);
+    try {
+      if (!(await s.flushNow())) return;
+      const old = await api.historyBody(note.id, entry.id);
+      const copy = await api.save({
+        id: crypto.randomUUID(),
+        title: (entry.title || "제목 없음") + " (이전 버전 사본)",
+        content: old.content,
+        content_format: old.content_format ?? entry.content_format ?? "html",
+        notebook_id: note.notebook_id ?? null,
+        tags: note.tags ?? [],
+      });
+      s.refreshList();
+      await s.selectNote(copy.id);
+    } catch (e) {
+      await s.showError(t("사본으로 저장"), e instanceof Error ? e.message : t("사본을 저장하지 못했습니다"));
+    } finally {
+      setCopying(false);
+    }
+  };
   if (!persisted) return <p className="inspector-hint">{t("노트를 저장하면 기록이 표시됩니다.")}</p>;
   if (historyError)
     return (
       <div role="alert">
-        <p>{historyError}</p>
-        <button className="btn btn-small" type="button" onClick={retry}>
+        <p className="inspector-hint">{historyError}</p>
+        <button className="btn btn-ghost" type="button" onClick={retry}>
           {t("기록 다시 불러오기")}
         </button>
       </div>
@@ -172,34 +217,66 @@ function HistoryBody({
       </p>
     );
   if (history.length === 0) return <p className="inspector-hint">{t("아직 저장된 버전이 없습니다.")}</p>;
+  const entries = history.slice(0, 5);
+  const selected = entries.find((entry) => entry.id === picked) ?? entries[0];
+  const time = timestamp(selected.created_at);
   return (
-    <ul className="inspector-history-list">
-      {history.slice(0, 5).map((entry) => (
-        <li key={entry.id}>
-          <div>
-            <span title={entry.title}>{entry.label ? t("보관: {name}",{name:entry.label}) : entry.title || t("제목 없음")}</span>
-            <time dateTime={new Date(entry.created_at).toISOString()}>{timestamp(entry.created_at)}</time>
-          </div>
-          <button
-            type="button"
-            className="btn btn-small"
-            aria-label={t("버전 비교: {time}", { time: timestamp(entry.created_at) })}
-            onClick={() => s.openHistory(entry.id)}
-          >
-            {t("비교")}
-          </button>
-          <button
-            type="button"
-            className="btn btn-small"
-            disabled={working}
-            aria-label={t("버전 복원: {time}", { time: timestamp(entry.created_at) })}
-            onClick={() => void restore(entry.id)}
-          >
-            {t("복원")}
-          </button>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="inspector-history-list">
+        {entries.map((entry) => (
+          <li key={entry.id}>
+            <button type="button" aria-pressed={entry.id === selected.id} onClick={() => setPicked(entry.id)}>
+              <time dateTime={new Date(entry.created_at).toISOString()} title={timestamp(entry.created_at)}>
+                {shortTime(entry.created_at)}
+              </time>
+              <span title={entry.title}>
+                {entry.label
+                  ? t("보관: {name}", { name: entry.label })
+                  : changes[entry.id]?.added != null
+                    ? t("{added}개 추가 / {removed}개 삭제", { added: changes[entry.id].added!, removed: changes[entry.id].removed! })
+                    : entry.title || t("제목 없음")}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="inspector-actions">
+        <button type="button" className="btn" aria-label={t("버전 비교: {time}", { time })} onClick={() => s.openHistory(selected.id)}>
+          {t("비교")}
+        </button>
+        <button type="button" className="btn" disabled={copying} onClick={() => void saveCopy(selected)}>
+          {t("사본으로 저장")}
+        </button>
+      </div>
+      <button
+        type="button"
+        className="btn btn-primary inspector-wide"
+        disabled={working}
+        aria-label={t("버전 복원: {time}", { time })}
+        onClick={() => void restore(selected.id)}
+      >
+        {t("이 버전으로 복원")}
+      </button>
+    </>
+  );
+}
+
+/** Remounts the editor when another surface saves properties, so stale aliases are never written back. */
+function InspectorProperties() {
+  const [generation, setGeneration] = useState(0);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // This panel's own save keeps focus inside it; skip that one so its "saved" notice stays.
+    const reload = () => {
+      if (!root.current?.contains(document.activeElement)) setGeneration((value) => value + 1);
+    };
+    window.addEventListener("inkism-knowledge-changed", reload);
+    return () => window.removeEventListener("inkism-knowledge-changed", reload);
+  }, []);
+  return (
+    <div ref={root} className="inspector-properties">
+      <PropertyEditor key={generation} />
+    </div>
   );
 }
 
@@ -216,9 +293,9 @@ export function NoteInspector({ open, onClose }: Readonly<{ open: boolean; onClo
   const [width, setWidth] = useState(() => {
     try {
       const saved = Number(localStorage.getItem("inkism.inspector.width"));
-      return Number.isFinite(saved) && saved >= 220 && saved <= 480 ? saved : 280;
+      return Number.isFinite(saved) && saved >= 220 && saved <= 480 ? saved : 300;
     } catch {
-      return 280;
+      return 300;
     }
   });
   const drag = useRef<DragState | null>(null);
@@ -319,9 +396,9 @@ export function NoteInspector({ open, onClose }: Readonly<{ open: boolean; onClo
           onClose={onClose}
         />
         <header>
-          <h2 id="note-inspector-title">{t("속성")}</h2>
+          <h2 id="note-inspector-title">{t("노트 정보")}</h2>
           <button type="button" className="icon-btn" ref={closeRef} aria-label={t("노트 속성 닫기")} onClick={onClose}>
-            <X size={18} />
+            <X size={16} />
           </button>
         </header>
         {!s.draft ? (
@@ -381,7 +458,7 @@ export function NoteInspector({ open, onClose }: Readonly<{ open: boolean; onClo
                   onChange={(e) => void change({ archived: e.target.checked })}
                 />
               </label>
-              <h3 className="inspector-notebooks-heading">{t("노트북")}</h3>
+              <h3 className="inspector-notebooks-heading">{t("폴더")}</h3>
               <button
                 className="inspector-notebook"
                 onClick={() => document.getElementById("notebook-select")?.focus()}
@@ -407,18 +484,22 @@ export function NoteInspector({ open, onClose }: Readonly<{ open: boolean; onClo
                 </div>
               </dl>
             </section>
-            <section aria-labelledby="inspector-links">
-              <h3 id="inspector-links">
-                <Link2 size={15} aria-hidden />
-                {t("연결된 노트")} <span>{s.backlinks?.length ?? 0}</span>
-              </h3>
-              <BacklinkList s={s} />
-            </section>
+            {s.note && <InspectorProperties key={s.note.id} />}
+            {s.note && (
+              <section aria-labelledby="inspector-connections">
+                <h3 id="inspector-connections">{t("노트 연결")}</h3>
+                <NoteConnections key={s.note.id} compact onClose={onClose} />
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => window.dispatchEvent(new CustomEvent(KNOWLEDGE_EVENT, { detail: "note" }))}
+                >
+                  {t("연결 목록과 언급 보기")}
+                </button>
+              </section>
+            )}
             <section aria-labelledby="inspector-history">
-              <h3 id="inspector-history">
-                <History size={15} aria-hidden />
-                {t("버전 기록")}
-              </h3>
+              <h3 id="inspector-history">{t("버전 기록")}</h3>
               <HistoryBody
                 s={s}
                 persisted={persisted}
@@ -428,12 +509,23 @@ export function NoteInspector({ open, onClose }: Readonly<{ open: boolean; onClo
                 retry={() => setAttempt((value) => value + 1)}
                 restore={restore}
               />
-              {persisted && (
-                <button type="button" className="btn btn-small" onClick={() => s.openHistory()}>
-                  {t("전체 버전 기록 보기")}
-                </button>
+              <p className="inspector-note">{t("복원 전에 현재 내용이 버전으로 보관됩니다.")}</p>
+              {persisted && !historyError && (
+                <div className="inspector-links">
+                  <button type="button" className="btn btn-ghost" onClick={() => setAttempt((value) => value + 1)}>
+                    {t("기록 다시 불러오기")}
+                  </button>
+                  <button type="button" className="btn btn-ghost" onClick={() => s.openHistory()}>
+                    {t("전체 버전 기록 보기")}
+                  </button>
+                </div>
               )}
-              <p className="inspector-hint">{t("복원 전에 현재 내용이 버전으로 보관됩니다.")}</p>
+            </section>
+            <section aria-labelledby="inspector-links">
+              <h3 id="inspector-links">
+                {t("역링크")} <span className="inspector-count">{s.backlinks?.length ?? 0}</span>
+              </h3>
+              <BacklinkList s={s} />
             </section>
           </div>
         )}

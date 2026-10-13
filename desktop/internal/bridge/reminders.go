@@ -72,7 +72,7 @@ func reminderMutation(raw json.RawMessage) bool {
 		return false
 	}
 	switch req.Op {
-	case "delete", "restore", "import", "sync_now", "delete_notebook", "trash_notebook", "restore_notebook", "merge_notes", "merge_apply", "merge_undo":
+	case "delete", "trash_purge", "restore", "import", "sync_now", "delete_notebook", "trash_notebook", "restore_notebook", "merge_notes", "merge_apply", "merge_undo":
 		return true
 	case "save", "patch":
 		fields := req.Note

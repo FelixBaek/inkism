@@ -13,7 +13,7 @@ page.on('pageerror',error=>errors.push(error.message));
 const title='연속 키 입력 '+Date.now();
 const content=Array.from({length:10000},(_,i)=>`<p>nativeblock${String(i).padStart(5,'0')} original paragraph 한글😀</p>`).join('');
 const focus=()=>page.locator('.tiptap-prose').evaluate((el:any)=>el.editor.view.focus());
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
 try{
  const note=await rpc('save',{note:{title,content,content_format:'html'}});await rpc('wait_index');
  await page.goto(base+'/?virtual=1'+(process.env.INKISM_LAZY==='0'?'':'&lazy=1'));
@@ -37,7 +37,7 @@ try{
  assert.equal(await page.locator('.tiptap-prose').textContent(),'native_typed','a refused paste retains all accepted keys');
  assert.ok((await page.locator('.window-error').textContent()).includes('큰 붙여넣기'));
  release();await page.waitForFunction(()=>!document.querySelector('.document-selection-status'));await saved();
- assert.equal((await rpc('get',{id:note.id})).content,'<p>native_typed</p>','all successive keys must survive selected-range preparation');
+ assert.match((await rpc('get',{id:note.id})).content,/^<p id="ink-block-[0-9a-f-]{36}">native_typed<\/p>$/,'all successive keys must survive selected-range preparation');
  await page.unroute('**/api/rpc');
  await focus();await page.keyboard.press('Control+z');await saved();
  assert.equal((await rpc('get',{id:note.id})).content===content,true,'one undo restores all original blocks');

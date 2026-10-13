@@ -1,0 +1,21 @@
+/* 10px 안쪽 여백, 12px 글자, 경고 면 */
+.trashed-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 4px 10px;
+  box-sizing: border-box;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+}
+.trashed-banner > span {
+  flex: 1;
+  min-width: 0;
+}
+.trashed-banner > .btn {
+  height: 28px;
+  font-size: var(--fs-small);
+}

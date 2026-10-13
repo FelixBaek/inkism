@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Download, X } from "../icons";
+import { printNote } from "../lib/print-note";
 import { useStore } from "../store";
 import { flushEditors } from "../lib/editor-flush";
 import { readPagedBody } from "../lib/paged-body";
@@ -26,11 +27,16 @@ function sourceExtension(format: string) {
 function sameSaved(current: Draft | null, note: Draft) {
   return current?.id === note.id && current.revision === note.revision && current.content === note.content;
 }
-async function requestExport(kind: "preview" | "html" | "pdf", note: Draft, signal: AbortSignal) {
-  const response = await fetch("/api/export/" + (kind === "pdf" ? "pdf" : "html"), {
+type SavedKind = "preview" | "html" | "pdf" | "markdown";
+async function requestExport(kind: SavedKind, note: Draft, signal: AbortSignal) {
+  const markdown =
+    kind === "markdown"
+      ? (await import("../lib/markdown")).sourceToMarkdown(note.content, note.content_format)
+      : undefined;
+  const response = await fetch("/api/export/" + (kind === "preview" ? "html" : kind), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id: note.id, revision: note.revision }),
+    body: JSON.stringify({ id: note.id, revision: note.revision, ...(markdown === undefined ? {} : { source: note.content, markdown }) }),
     signal,
   });
   if (!response.ok) {
@@ -53,6 +59,13 @@ function download(blob: Blob, name: string) {
 }
 
 export const PREVIEW_EVENT = "inkism-open-preview";
+type ExportFormat = "pdf" | "source" | "html" | "markdown";
+const EXPORT_FORMATS: [ExportFormat, string][] = [
+  ["pdf", "PDF"],
+  ["source", "원문"],
+  ["html", "서식 HTML"],
+  ["markdown", "Markdown + 첨부 ZIP"],
+];
 const ABORTED_MESSAGE = t("작업을 취소했거나 제한 시간을 초과했습니다. 원문은 그대로입니다.");
 function errorMessage(e: unknown) {
   return e instanceof Error ? e.message : String(e);
@@ -73,7 +86,8 @@ export function PreviewExport({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [html, setHTML] = useState(""),
-    [snapshot, setSnapshot] = useState("");
+    [snapshot, setSnapshot] = useState(""),
+    [format, setFormat] = useState<ExportFormat>("pdf");
   const id = store.draft?.id;
   const cancel = () => {
     generation.current++;
@@ -102,7 +116,7 @@ export function PreviewExport({
     if (ticket !== generation.current || signal.aborted || store.readDraft()?.id !== raw.id) return;
     download(new Blob([content], { type: "text/plain;charset=utf-8" }), name);
   };
-  const exportSaved = async (kind: "preview" | "html" | "pdf", before: Draft, ticket: number, signal: AbortSignal) => {
+  const exportSaved = async (kind: SavedKind, before: Draft, ticket: number, signal: AbortSignal) => {
     if (!(await store.flushNow())) throw new Error(t("저장하지 못했습니다. 원문을 확인한 뒤 다시 시도해 주세요."));
     const note = store.readDraft();
     if (note?.id !== before.id || ticket !== generation.current) return;
@@ -110,7 +124,7 @@ export function PreviewExport({
     if (ticket !== generation.current || !sameSaved(store.readDraft(), note))
       throw new Error(t("내용이 변경되어 이전 결과를 사용하지 않았습니다. 다시 시도해 주세요."));
     if (kind !== "preview") {
-      download(blob, filename(note.title, kind));
+      download(blob, filename(note.title, kind === "markdown" ? "zip" : kind));
       return;
     }
     const document = await blob.text(),
@@ -119,23 +133,26 @@ export function PreviewExport({
     setHTML(document);
     setSnapshot(t("{title} · 저장 버전 {revision}", { title: note.title || t("제목 없음"), revision: note.revision }));
   };
-  const perform = async (kind: "preview" | "html" | "pdf" | "source") => {
+  const perform = async (kind: SavedKind | "source" | "print") => {
     if (request.current) return;
     const ticket = ++generation.current,
       controller = new AbortController();
     request.current = controller;
     setError("");
     setBusy(true);
-    if (kind === "preview") {
-      setHTML("");
-      dialog.current?.showModal();
-    }
+    if (kind === "preview") setHTML("");
     const timeout = setTimeout(() => controller.abort(), 120000);
     try {
       const before = store.readDraft();
       if (!before) throw new Error(t("노트를 먼저 선택해 주세요."));
       if (kind === "source") {
         await exportSource(before, ticket, controller.signal);
+        return;
+      }
+      if (kind === "print") {
+        if (!(await store.flushNow())) throw new Error(t("저장하지 못했습니다. 원문을 확인한 뒤 다시 시도해 주세요."));
+        const note = store.readDraft();
+        if (note?.id === before.id && ticket === generation.current) await printNote(note.id, note.revision);
         return;
       }
       await exportSaved(kind, before, ticket, controller.signal);
@@ -153,7 +170,11 @@ export function PreviewExport({
   performRef.current = perform;
   // The note menus open the preview; the top row only keeps raw export.
   useEffect(() => {
-    const open = () => void performRef.current("preview");
+    const open = () => {
+      setHTML("");
+      setError("");
+      dialog.current?.showModal();
+    };
     window.addEventListener(PREVIEW_EVENT, open);
     return () => window.removeEventListener(PREVIEW_EVENT, open);
   }, []);
@@ -185,7 +206,7 @@ export function PreviewExport({
       )}
       <dialog
         ref={dialog}
-        className="preview-dialog"
+        className={"preview-dialog" + (html ? " is-previewing" : "")}
         aria-labelledby="preview-title"
         onCancel={() => cancel()}
         onClose={() => {
@@ -194,47 +215,49 @@ export function PreviewExport({
           setError("");
         }}
       >
-        <header>
-          <h2 id="preview-title">{t("미리보기 · 내보내기")}</h2>
+        <header className="dialog-title-row">
+          <h2 id="preview-title" className="dialog-title">{t("내보내기")}</h2>
           <button
             type="button"
             className="icon-btn"
             aria-label={t("미리보기 닫기")}
             onClick={() => dialog.current?.close()}
           >
-            <X size={20} />
+            <X size={16} />
           </button>
         </header>
-        <p>
+        <fieldset className="plain-fieldset export-formats" disabled={busy}>
+          <legend className="field-label">{t("파일 형식")}</legend>
+          {EXPORT_FORMATS.map(([value, label]) => (
+            <label key={value} className="export-format">
+              <input type="radio" name="export-format" value={value} checked={format === value} onChange={() => setFormat(value)} />
+              {t(label)}
+            </label>
+          ))}
+        </fieldset>
+        <div className="export-tools">
+          <button type="button" className="btn" disabled={busy} onClick={() => void perform("preview")}>
+            {html ? t("미리보기 새로고침") : t("미리보기")}
+          </button>
+          <button type="button" className="btn" disabled={busy} onClick={() => void perform("print")}>
+            {t("인쇄")}
+          </button>
+        </div>
+        {snapshot && html && <p className="preview-snapshot">{snapshot}</p>}
+        {html && <iframe title={t("저장된 원문의 미리보기")} sandbox="" srcDoc={html} />}
+        <p className="dialog-note">
           {t(
             "저장된 원문을 요청할 때만 표시합니다. 원문은 바꾸지 않습니다. 이미지는 대체 텍스트, 수식은 원문으로 표시하며 외부 리소스와 실행 코드는 포함하지 않습니다.",
           )}
         </p>
-        {snapshot && html && <p className="preview-snapshot">{snapshot}</p>}
-        {busy && (
-          <p>
-            <output>
-              {t("서식 문서를 준비하는 중…")}{" "}
-              <button type="button" className="btn btn-small" onClick={cancel}>
-                {t("작업 취소")}
-              </button>
-            </output>
-          </p>
-        )}
+        {busy && <output className="preview-busy">{t("서식 문서를 준비하는 중…")}</output>}
         {error && <p role="alert">{error}</p>}
-        {html && <iframe title={t("저장된 원문의 미리보기")} sandbox="" srcDoc={html} />}
-        <footer>
-          <button type="button" className="btn" disabled={busy} onClick={() => void perform("preview")}>
-            {t("미리보기 새로고침")}
+        <footer className="dialog-actions">
+          <button type="button" className="btn" onClick={busy ? cancel : () => dialog.current?.close()}>
+            {busy ? t("작업 취소") : t("닫기")}
           </button>
-          <button type="button" className="btn" disabled={busy} onClick={() => void perform("html")}>
-            {t("서식 HTML 내보내기")}
-          </button>
-          <button type="button" className="btn" disabled={busy} onClick={() => void perform("pdf")}>
-            {t("PDF 내보내기")}
-          </button>
-          <button type="button" className="btn" onClick={() => dialog.current?.close()}>
-            {t("닫기")}
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void perform(format)}>
+            {t("{format} 내보내기", { format: t(EXPORT_FORMATS.find(([v]) => v === format)![1]) })}
           </button>
         </footer>
       </dialog>

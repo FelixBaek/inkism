@@ -7,7 +7,7 @@ const rpc=async(op,args={})=>{const response=await fetch(base+'/api/rpc',{method
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 const page=await browser.newPage({viewport:{width:1440,height:960}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
 const editor=page.locator('.tiptap-prose'),ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized);
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
 try{
  const seed=await rpc('save',{note:{title:'표 스키마 '+Date.now(),content:'<table><tbody><tr><td><p>셀😀&amp;</p></td><td><p>옆</p></td></tr></tbody></table>',text:'표'}});
  await page.goto(base+'/?virtual=1&lazy=1');await page.getByRole('button',{name:'노트 열기: '+seed.title,exact:true}).click();await page.getByRole('button',{name:'텍스트',exact:true}).click();await ready();

@@ -8,7 +8,7 @@ import "./ShortcutsDialog.css";
 export const SHORTCUTS_EVENT = "inkism-shortcuts";
 
 /** 이 앱에 실제로 구현된 단축키만 적는다(store 전역 단축키, Tiptap 확장, BlockTools, callout, 슬래시 메뉴). */
-const GROUPS: { title: string; rows: [string, string][] }[] = [
+export const SHORTCUT_GROUPS: { title: string; rows: [string, string][] }[] = [
   {
     title: t("전체"),
     rows: [
@@ -130,7 +130,7 @@ export function ShortcutsDialog() {
             </button>
           </header>
           <div className="shortcuts-body">
-            {GROUPS.map((g) => (
+            {SHORTCUT_GROUPS.map((g) => (
               <section key={g.title} className="shortcuts-group" aria-label={g.title}>
                 <h3>{g.title}</h3>
                 <dl>

@@ -5,7 +5,7 @@
   margin: 12px 0;
   padding: 6px 8px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 0;
 }
 .tiptap-prose .inkism-details > button {
   flex: 0 0 24px;
@@ -13,7 +13,7 @@
   height: 28px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--muted);
   background: transparent;
   cursor: pointer;
@@ -23,7 +23,7 @@
   background: var(--hover);
 }
 .tiptap-prose .inkism-details > button:focus-visible {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--accent-text);
 }
 .tiptap-prose .inkism-details > div {
   flex: 1;
@@ -45,5 +45,5 @@
   margin-bottom: 4px;
 }
 .tiptap-prose .inkism-details.ProseMirror-selectednode {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--accent-text);
 }

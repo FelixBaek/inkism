@@ -36,7 +36,7 @@ await page.addInitScript(()=>{
 });
 const editor=page.locator('.tiptap-prose');
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized&&Array.from(document.querySelectorAll<any>('.window-controls button')).some(b=>b.textContent==='이동'&&!b.disabled));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
 const body=async id=>(await rpc('get',{id})).content;
 try{
  const supported=['keys','keys-caret','keys-selection','paste-keys','composition','after-format','after-range-format','after-format-right','after-range-left'];
@@ -115,7 +115,8 @@ try{
  const expected=kind==='after-format-right'?formatted.replace(/<\/h2>$/,'z</h2>'):
   kind==='after-range-left'?formatted.replace(/^<h2>/,'<h2>z'):
   kind==='paste-keys'?'<p>붙임</p><p>끝abc</p>':kind==='after-range-format'?'<h2>abc</h2>':`<p>${text}</p>`;
- await saved();const actual=await body(note.id);
+ // Typed blocks acquire permanent IDs; every other byte must match exactly.
+ await saved();const editedSource=await body(note.id),actual=editedSource.replace(/ id="ink-block-[0-9a-f-]{36}"/g,'');
  assert.ok(actual===expected,'worker command then all-selection input; actual characters='+actual.length+', expected='+expected.length);
  const previewOracle=await editor.evaluate((el: any,oracle)=>{
   const e=el.editor,full=e.schema.nodeFromJSON(oracle.doc);
@@ -125,7 +126,8 @@ try{
   const selection={...oracle.selection,anchor:oracle.selection.anchor-shift,head:oracle.selection.head-shift};
   return {doc,selection};
  },oracle);
- assert.deepEqual(await editor.evaluate((el: any)=>el.editor.state.doc.toJSON()),previewOracle.doc,'bounded native model parity');
+ // The plugin-free oracle has no block identity; compare edited blocks without their acquired IDs.
+ assert.deepEqual(await editor.evaluate((el: any)=>JSON.parse(JSON.stringify(el.editor.state.doc.toJSON()),(key,value)=>key==='id'&&typeof value==='string'&&value.startsWith('ink-block-')?null:value)),previewOracle.doc,'bounded native model parity');
  assert.deepEqual(await editor.evaluate((el: any)=>el.editor.state.selection.toJSON()),previewOracle.selection,'bounded native selection parity');
  await page.reload();await ready();
  await historyKey(page,'undo');await saved();
@@ -148,7 +150,7 @@ try{
   await historyKey(page,'redo');await saved();
   assert.equal(((await body(note.id)).match(/<h2>/g)||[]).length,10000,'first restart redo restores format');
  }
- await historyKey(page,'redo');await saved();assert.equal(await body(note.id),expected,'restart redo retains busy-worker input');
+ await historyKey(page,'redo');await saved();assert.equal(await body(note.id),editedSource,'restart redo retains busy-worker input');
  assert.deepEqual(errors,[]);
  console.log('PASS 10000-block worker + '+kind+': guarded source, full-model selection, restart undo/redo; lazy='+(process.env.INKISM_LAZY!=='0'));
  }

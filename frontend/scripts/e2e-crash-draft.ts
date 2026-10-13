@@ -62,7 +62,7 @@ try{
  const title=scenario==='split'?original.title:'강제 종료 '+scenario+' '+Date.now();
  if(scenario!=='split')await page.locator('.title-input').fill(title);
  if(!original){
-  await page.getByRole('combobox',{name:'이 노트가 속한 노트북',exact:true}).selectOption(notebook.id);
+  await page.getByRole('combobox',{name:'이 노트가 속한 폴더',exact:true}).selectOption(notebook.id);
   // Keep this fixture in the existing title/body paths; new-note tags are empty.
  }
  if(scenario==='paged'){

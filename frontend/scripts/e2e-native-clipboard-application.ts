@@ -9,7 +9,7 @@ const page=await browser.newPage({viewport:{width:1440,height:960},permissions:[
 page.on('pageerror',e=>errors.push(e.message));
 const editor=page.locator('.tiptap-prose'),focus=()=>editor.evaluate((el: any)=>el.editor.view.focus());
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized&&Array.from(document.querySelectorAll<any>('.window-controls button')).some(b=>b.textContent==='이동'&&!b.disabled));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
 const settled=async()=>{await page.waitForFunction(()=>!document.querySelector('.document-selection-status')&&!document.querySelector('.window-error'));await saved();};
 const body=async id=>(await rpc('get',{id})).content;
 const bounded=async()=>{assert.ok(await page.locator('*').count()<1500);assert.ok((await editor.textContent()).length<40000);};

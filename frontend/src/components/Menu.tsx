@@ -15,6 +15,8 @@ export interface MenuItemSpec {
   items?: MenuItemSpec[];
   /** 이 항목 앞에 구분선을 그린다. */
   separatorBefore?: boolean;
+  /** 오른쪽에 보이는 단축키(예: "Del"). 표시만 하고, 키 처리는 부른 쪽이 한다. */
+  shortcut?: string;
 }
 
 const ITEM = ':scope > [role^="menuitem"]:not(:disabled)';
@@ -124,6 +126,7 @@ function MenuList({
             type="button"
             role={item.checked === undefined ? "menuitem" : "menuitemcheckbox"}
             aria-checked={item.checked}
+            aria-keyshortcuts={item.shortcut === "Del" ? "Delete" : item.shortcut}
             aria-haspopup={item.items ? "menu" : undefined}
             aria-expanded={item.items ? sub === i : undefined}
             data-index={i}
@@ -145,6 +148,7 @@ function MenuList({
           >
             {item.icon && <span className="menu-item-icon">{item.icon}</span>}
             <span className="menu-item-label">{item.label}</span>
+            {item.shortcut && <kbd className="menu-item-end menu-item-kbd">{item.shortcut}</kbd>}
             {item.checked && <Check size={14} className="menu-item-end" aria-hidden />}
             {item.items && <ChevronRight size={13} className="menu-item-end" aria-hidden />}
           </button>

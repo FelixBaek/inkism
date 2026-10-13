@@ -330,7 +330,8 @@ export function changeBoundary(prepared: PreparedBoundary, direction: BoundaryDi
   prepared.check();
   const editor = new Editor({
     element: document.createElement("div"),
-    extensions: contentExtensions({ trailingNode: false }),
+    // Like segment windows: an outside opening tag cannot acquire a new block ID.
+    extensions: contentExtensions({ trailingNode: false, automaticIds: false }),
     content: prepared.state.doc.toJSON(),
     parseOptions: { preserveWhitespace: "full" },
     injectCSS: false,

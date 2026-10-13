@@ -1,7 +1,29 @@
-.portable-plan { padding: 12px; max-width: 100%; overflow-wrap: anywhere; }
-.portable-plan > .btn { margin: 4px; }
-.portable-change-list { list-style: none; padding: 0; max-height: 320px; overflow-y: auto; }
-.portable-change-list label { display: flex; gap: 10px; align-items: start; padding: 10px 0; min-height: 44px; }
-.portable-change-list small { display: block; opacity: .75; }
-.portable-library-settings .settings-card__action { flex-wrap: wrap; gap: 8px; }
-.portable-library-settings .settings-card__action label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+/* 외부 편집 폴더 (nocturne 28): 두 열(폴더 동작, 변경 비교)이 설정 화면의 2단 칸에 그대로 들어가도록 감싸개는 상자를 만들지 않는다. */
+.portable-library-settings { display: contents; }
+.portable-column { font-size: var(--fs-caption); line-height: 1.5; }
+.portable-column { display: flex; flex-direction: column; align-items: stretch; gap: 12px; min-width: 0; }
+.portable-column > h3 { margin: 0; padding-bottom: 12px; border-bottom: 1px solid var(--border); font-size: var(--fs-body); font-weight: 500; }
+.portable-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.portable-library-settings .btn { min-height: 30px; border: 1px solid var(--border); border-radius: 0; background: var(--hover); color: var(--text); font-size: var(--fs-caption); }
+.portable-library-settings .btn:hover:not(:disabled) { background: var(--active); }
+.portable-note, .portable-warning { margin: 0; padding: 10px; background: var(--hover); color: var(--muted); font-size: var(--fs-small); overflow-wrap: anywhere; }
+.portable-warning { background: var(--warning-soft); color: var(--warning); }
+.portable-note p, .portable-warning p { margin: 0; }
+.portable-note p + p, .portable-warning p + p { margin-top: 4px; }
+.portable-status { margin: 0; color: var(--muted); font-size: var(--fs-small); overflow-wrap: anywhere; }
+.portable-switch { display: grid; grid-template-columns: 128px auto 1fr; align-items: center; gap: 10px; color: var(--text); cursor: pointer; }
+.portable-switch > span:first-child { color: var(--muted); font-size: var(--fs-small); }
+.portable-switch input { appearance: none; -webkit-appearance: none; position: relative; width: 32px; height: 18px; margin: 0; border-radius: 999px; background: var(--hover); box-shadow: inset 0 0 0 1px var(--border-strong); cursor: pointer; }
+.portable-switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform 180ms; }
+.portable-switch input:checked { background: var(--green); box-shadow: none; }
+.portable-switch input:checked::after { transform: translateX(14px); background: var(--on-accent); }
+.portable-switch input:disabled { cursor: default; opacity: .5; }
+.portable-plan { display: flex; flex-direction: column; gap: 12px; overflow-wrap: anywhere; }
+.portable-plan > p { margin: 0; color: var(--muted); font-size: var(--fs-small); }
+.portable-change-list { display: flex; flex-direction: column; gap: 4px; margin: 0; list-style: none; padding: 0; max-height: 320px; overflow-y: auto; }
+.portable-change-list li > label, .portable-conflict { display: grid; grid-template-columns: 128px 1fr; gap: 10px; align-items: start; padding: 4px 0; cursor: pointer; }
+.portable-conflict { cursor: default; }
+.portable-kind { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--fs-small); }
+.portable-change-list strong { display: block; font-weight: 400; }
+.portable-change-list small { display: block; color: var(--muted); font-size: var(--fs-small); }
+@media (prefers-reduced-motion: reduce) { .portable-switch input::after { transition: none; } }

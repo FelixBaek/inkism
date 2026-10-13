@@ -95,7 +95,7 @@ fn bundle(h: &Handler, deadline: Deadline) -> Result<Vec<u8>> {
         archive.write_all(format!("- [{}]({})\n", title, entry["path"].as_str().unwrap_or("")).as_bytes())?;
     }
     archive.start_file("README.txt", options)?;
-    archive.write_all("Inkism 외부 편집 폴더\n\nnotes 폴더의 .md / .html / .txt를 다른 편집기에서 열 수 있습니다.\n첨부파일과 .inkism-portable.json을 함께 유지하세요. 문서 이름 변경은 같은 내용의 파일을 자동으로 연결합니다. 이름과 본문을 동시에 바꿀 때에는 문서 ID 파일명을 유지하세요.\n앱 설정의 ‘편집한 폴더 반영’으로 변경 목록을 확인하고 선택한 항목을 반영합니다. 삭제는 휴지통으로 이동합니다.\n앱에서 노트가 바뀌었으면 충돌로 표시하며 덮어쓰지 않습니다.\nnotes의 신규 파일, 이름 변경, 삭제와 첨부 변경, 목록 파일의 제목·태그·노트북 변경을 미리보기에서 확인할 수 있습니다. 자동 감지는 앱 설정 화면이 열린 동안만 작동하며 자동 저장하지 않습니다.\n잠긴 노트와 휴지통은 제외됩니다. 완전한 복원에는 ZIP 백업을 사용하세요.\n이 폴더는 암호화되지 않은 사본입니다.\n".as_bytes())?;
+    archive.write_all("Inkism 외부 편집 폴더\n\nnotes 폴더의 .md / .html / .txt를 다른 편집기에서 열 수 있습니다.\n첨부파일과 .inkism-portable.json을 함께 유지하세요. 문서 이름 변경은 같은 내용의 파일을 자동으로 연결합니다. 이름과 본문을 동시에 바꿀 때에는 문서 ID 파일명을 유지하세요.\n앱 설정의 ‘편집한 폴더 반영’으로 변경 목록을 확인하고 선택한 항목을 반영합니다. 삭제는 지운 노트로 이동합니다.\n앱에서 노트가 바뀌었으면 충돌로 표시하며 덮어쓰지 않습니다.\nnotes의 신규 파일, 이름 변경, 삭제와 첨부 변경, 목록 파일의 제목·태그·폴더 변경을 미리보기에서 확인할 수 있습니다. 자동 감지는 앱 설정 화면이 열린 동안만 작동하며 자동 저장하지 않습니다.\n잠긴 노트와 지운 노트는 제외됩니다. 완전한 복원에는 ZIP 백업을 사용하세요.\n이 폴더는 암호화되지 않은 사본입니다.\n".as_bytes())?;
     let bytes = archive.finish()?.0.into_inner();
     if bytes.len() > LIMIT { return Err("폴더 내보내기 크기가 64 MiB를 넘습니다".into()); } Ok(bytes)
 }

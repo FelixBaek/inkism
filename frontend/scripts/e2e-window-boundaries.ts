@@ -20,7 +20,7 @@ const cursor=async(edge)=>{
 };
 const selectedBlock=()=>page.evaluate(()=>getSelection()?.anchorNode?.parentElement?.closest('p')?.textContent);
 const readyCursor=()=>page.waitForFunction(()=>document.activeElement?.classList.contains('tiptap-prose'));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
 try {
  await page.addInitScript(()=>{
    (window as any).boundaryTrace=[];

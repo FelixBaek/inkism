@@ -50,7 +50,8 @@ try {
   if(missing){
    await page.getByText('편집 기준 버전이 이력에 없습니다.',{exact:false}).waitFor();
    let requests=0;
-   const count=()=>requests++;
+   // Background panels (backlinks, journal, inspector) may poll; only note reads/writes count.
+   const count=(r)=>{let op;try{op=r.postDataJSON()?.op;}catch{}if(r.url().includes('/api/export/')||['get','save','patch','revision_body'].includes(op)||String(op).startsWith('document_'))requests++;};
    page.on('request',count);
    const downloaded=page.waitForEvent('download');
    await page.getByRole('button',{name:'미저장 편집 파일로 보관',exact:true}).click();
@@ -74,7 +75,7 @@ try {
    assert.equal((await rpc('get',{id:note.id})).content,remote.content);
    assert.ok((await page.locator('.tiptap-prose').textContent()).includes('내편집'));
   }else{
-   await page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+   await page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
    const stored=await rpc('get',{id:note.id});
    assert.ok(stored.content.includes('내편집 기준😀 0'));
    if(scenario==='typing')assert.ok(stored.content.includes('후속입력'));

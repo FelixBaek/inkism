@@ -12,6 +12,7 @@ type SecurityController interface {
 	Login(context.Context) error
 	Cancel()
 	Lock() error
+	Disable(context.Context) error
 }
 
 func (h *Handler) security(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +36,18 @@ func (h *Handler) security(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
 		defer cancel()
 		if err := h.Security.Login(ctx); err != nil {
+			fail(w, 409, err)
+			return
+		}
+	case "/api/security/disable":
+		if status := h.Security.Status(); !status.Available || !status.Configured || status.Locked {
+			fail(w, 409, fmt.Errorf("잠금을 해제한 상태에서만 끌 수 있습니다"))
+			return
+		}
+		// Always a full Google login inside; there is no body or flag to skip it.
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
+		defer cancel()
+		if err := h.Security.Disable(ctx); err != nil {
 			fail(w, 409, err)
 			return
 		}

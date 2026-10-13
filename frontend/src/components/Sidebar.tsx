@@ -5,7 +5,7 @@ import { SettingsDialog } from "./SettingsDialog";
 import React, { useEffect, useState } from "react";
 import {
   FileText,
-  Notebook as NotebookIcon,
+  Folder,
   Star,
   Tag as TagIcon,
   Archive,
@@ -14,7 +14,10 @@ import {
   MoreVertical,
   Pencil,
   RefreshCw,
-  House,
+  Files,
+  Bell,
+  List,
+  Link2,
   Hash,
   Search,
   ChevronDown,
@@ -23,6 +26,13 @@ import {
 import { useStore, type StoreValue } from "../store";
 import type { Notebook, View } from "../types";
 import { Menu } from "./Menu";
+import { CalendarBlankIcon, FolderIcon } from "@phosphor-icons/react";
+import { KNOWLEDGE_EVENT } from "./KnowledgeTools";
+import { SyncIndicator } from "./SyncSettings";
+import { WRITING_TOOL_EVENT } from "./WritingTools";
+import type { ShellPanel } from "./ShellLists";
+import { useNarrow } from "../lib/narrow";
+import { api } from "../api";
 import { IconButton } from "./IconButton";
 import "./Sidebar.css";
 
@@ -33,21 +43,27 @@ const tabOf = (v: View): SideTab => {
 };
 
 function isActive(current: View, v: View): boolean {
+  if (current.type === "trash" && v.type === "archive") return true;
   if (current.type !== v.type) return false;
   if (current.type === "notebook" && v.type === "notebook") return current.id === v.id;
   if (current.type === "tag" && v.type === "tag") return current.name === v.name;
   return true;
 }
 
-export function Sidebar() {
+export function Sidebar({
+  panel,
+  onPanel,
+  onDaily,
+}: Readonly<{ panel: ShellPanel | null; onPanel: (panel: ShellPanel) => void; onDaily: () => void }>) {
   const s = useStore();
+  const narrow = useNarrow();
 
   const navItem = (v: View, label: string, icon: React.ReactNode, count?: number) => (
     <button
       type="button"
-      className={`side-item ${isActive(s.view, v) ? "is-active" : ""}`}
+      className={`side-item ${!panel && isActive(s.view, v) ? "is-active" : ""}`}
       onClick={() => s.setView(v)}
-      aria-current={isActive(s.view, v) ? "page" : undefined}
+      aria-current={!panel && isActive(s.view, v) ? "page" : undefined}
     >
       <span className="side-icon" aria-hidden>
         {icon}
@@ -57,13 +73,13 @@ export function Sidebar() {
     </button>
   );
 
-  // Felix DS: 위쪽 탭(메뉴·노트북·태그) 중 하나만 펼친다. 다른 곳에서 노트북·태그 보기로 바뀌면 그 탭으로 따라간다.
+  // 위쪽 탭(메뉴·폴더·태그) 중 하나만 펼친다. 다른 곳에서 폴더·태그 보기로 바뀌면 그 탭으로 따라간다.
   const [tab, setTab] = useState<SideTab>(() => tabOf(s.view));
   useEffect(() => setTab(tabOf(s.view)), [s.view]);
-  const tabs: { id: SideTab; label: string; icon: React.ReactNode }[] = [
-    { id: "menu", label: t("메뉴"), icon: <House size={16} aria-hidden /> },
-    { id: "notebooks", label: t("노트북"), icon: <NotebookIcon size={16} aria-hidden /> },
-    { id: "tags", label: t("태그"), icon: <Hash size={16} aria-hidden /> },
+  const tabs: { id: SideTab; label: string }[] = [
+    { id: "menu", label: t("메뉴") },
+    { id: "notebooks", label: t("폴더") },
+    { id: "tags", label: t("태그") },
   ];
   const onTabKey = (e: React.KeyboardEvent) => {
     const i = tabs.findIndex((tag) => tag.id === tab);
@@ -75,20 +91,56 @@ export function Sidebar() {
     setTab(tabs[next].id);
     e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   };
+  const toolItem = (label: string, icon: React.ReactNode, run: () => void, active = false) => (
+    <button
+      type="button"
+      className={`side-item ${active ? "is-active" : ""}`}
+      aria-current={active ? "page" : undefined}
+      onClick={run}
+    >
+      <span className="side-icon" aria-hidden>
+        {icon}
+      </span>
+      <span className="side-label">{label}</span>
+    </button>
+  );
+  // 폴더 탭을 열 때와 노트 수가 바뀔 때(stats) 폴더별 개수를 다시 읽는다.
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (tab !== "notebooks") return;
+    let live = true;
+    api
+      .notebookCounts()
+      .then((value) => live && setCounts(value))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [tab, s.stats, s.notebooks]);
+  const openKnowledge = (panel: "graph" | "views") =>
+    window.dispatchEvent(new CustomEvent(KNOWLEDGE_EVENT, { detail: panel }));
 
   return (
     <nav className="sidebar" aria-label={t("탐색")}>
       <div className="side-brand" data-tauri-drag-region="deep">
-        <span>inkism</span>
-        <IconButton label={t("노트 검색 열기")} onClick={() => window.dispatchEvent(new Event("inkism-open-search"))}>
-          <Search size={16} />
-        </IconButton>
-        <IconButton label={t("새 노트 만들기")} onClick={()=>s.newNote()}>
-          <Plus size={16} />
-        </IconButton>
+        <span className="side-brand-dot" aria-hidden />
+        <span className="side-brand-name">inkism</span>
       </div>
+      <button
+        type="button"
+        className="side-search"
+        aria-label={t("노트 검색 열기")}
+        onClick={() => window.dispatchEvent(new Event("inkism-open-search"))}
+      >
+        <Search size={16} aria-hidden />
+        <span>{t("노트 검색")}</span>
+        <kbd>{/Mac|iP/.test(navigator.platform) ? "⌘ P" : "Ctrl P"}</kbd>
+      </button>
+      <button type="button" className="side-new-note" onClick={() => s.newNote()}>
+        {t("새 노트")}
+      </button>
       <div className="side-tabs">
-        <div role="tablist" aria-label={t("탐색 구분")} style={{ display: "flex", gap: 4 }}>
+        <div role="tablist" aria-label={t("탐색 구분")} className="side-tablist">
           {tabs.map((tag) => (
             <button
               key={tag.id}
@@ -99,54 +151,43 @@ export function Sidebar() {
               aria-selected={tab === tag.id}
               tabIndex={tab === tag.id ? 0 : -1}
               className="side-tab"
-              title={tag.label}
-              aria-label={tag.label}
               onClick={() => setTab(tag.id)}
               onKeyDown={onTabKey}
             >
-              {tag.icon}
+              {tag.label}
             </button>
           ))}
         </div>
-        {tab === "notebooks" && (
-          <span className="side-tabs-actions">
-            <IconButton label={t("새 노트북 만들기")} onClick={() => void s.addNotebook()}>
-              <Plus size={16} aria-hidden />
-            </IconButton>
-          </span>
-        )}
       </div>
       <div className="side-scroll" role="tabpanel" id="side-tabpanel" aria-labelledby={`side-tab-${tab}`}>
         {tab === "menu" && (
           <div className="side-group">
-            {navItem({ type: "all" }, t("노트"), <FileText size={16} />, s.stats?.notes)}
+            {navItem({ type: "all" }, t("전체 노트"), <FileText size={16} />, s.stats?.notes)}
             {navItem({ type: "favorites" }, t("즐겨찾기"), <Star size={16} />, s.stats?.favorites)}
-            {navItem({ type: "archive" }, t("보관함"), <Archive size={16} />, s.stats?.archive)}
-            {navItem({ type: "trash" }, t("휴지통"), <Trash2 size={16} />, s.stats?.trash)}
-            {(s.notebooks.length > 0 || s.tags.length > 0) && <div className="side-heading">{t("바로가기")}</div>}
-            {s.notebooks.slice(0, 2).map((nb) => (
-              <React.Fragment key={nb.id}>
-                {navItem({ type: "notebook", id: nb.id }, nb.name, <NotebookIcon size={16} />)}
-              </React.Fragment>
-            ))}
-            {s.tags.slice(0, 1).map((tag) => (
-              <React.Fragment key={tag.name}>
-                {navItem({ type: "tag", name: tag.name }, tag.name, <Hash size={16} />)}
-              </React.Fragment>
-            ))}
+            {/* 지운 노트는 보관함 화면의 탭이다(Figma 07·08). */}
+            {navItem({ type: "archive" }, t("보관함"), <Archive size={16} />, (s.stats?.archive ?? 0) + (s.stats?.trash ?? 0))}
+            <hr className="side-divider" />
+            {toolItem(t("오늘의 노트"), <CalendarBlankIcon size={16} />, onDaily, panel === "daily")}
+            {toolItem(t("템플릿"), <Files size={16} />, () =>
+              window.dispatchEvent(new CustomEvent(WRITING_TOOL_EVENT, { detail: "templates" })),
+            )}
+            {toolItem(t("노트 모아보기"), <List size={16} />, () => openKnowledge("views"))}
+            {toolItem(t("관계 그래프"), <Link2 size={16} />, () => openKnowledge("graph"))}
           </div>
         )}
 
         {tab === "notebooks" && (
           <fieldset className="side-group plain-fieldset" aria-labelledby="side-notebooks">
             <div className="side-heading" id="side-notebooks">
-              <span>{t("노트북 {n}", { n: s.notebooks.length })}</span>
+              <span>{t("폴더 {n}", { n: s.notebooks.length })}</span>
+              <IconButton label={t("새 폴더 만들기")} onClick={() => void s.addNotebook()}>
+                <Plus size={14} aria-hidden />
+              </IconButton>
             </div>
-            {s.notebooks.length === 0 && <p className="side-empty">{t("노트북이 없습니다")}</p>}
-            <NotebookTree store={s} />
+            {s.notebooks.length === 0 && <p className="side-empty">{t("폴더가 없습니다")}</p>}
+            <NotebookTree store={s} counts={counts} />
           </fieldset>
         )}
-
         {tab === "tags" && (
           <fieldset className="side-group plain-fieldset" aria-labelledby="side-tags">
             <div className="side-heading" id="side-tags">
@@ -199,9 +240,16 @@ export function Sidebar() {
       </div>
 
       <div className="side-footer">
+        {toolItem(t("알림"), <Bell size={16} />, () => onPanel("reminders"), panel === "reminders")}
         <WebReaderDialog />
         <WebClipperDialog />
         <SettingsDialog />
+        <hr className="side-divider" />
+        {!narrow && (
+          <div className="side-sync">
+            <SyncIndicator />
+          </div>
+        )}
         {s.connError && (
           <div className="side-appinfo" aria-label={t("앱 정보")}>
             <button type="button" className="conn-error" onClick={s.retryConnection}>
@@ -214,8 +262,8 @@ export function Sidebar() {
   );
 }
 
-/** 하위 노트북은 parent_id로 들여쓰고 접는다. 부모가 없거나 순환이면 맨 위에 둔다. */
-function NotebookTree({ store }: Readonly<{ store: StoreValue }>) {
+/** 하위 폴더는 parent_id로 들여쓰고 접는다. 부모가 없거나 순환이면 맨 위에 둔다. */
+function NotebookTree({ store, counts }: Readonly<{ store: StoreValue; counts: Record<string, number> }>) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const ids = new Set(store.notebooks.map((n) => n.id));
   const children = new Map<string | null, Notebook[]>();
@@ -238,6 +286,7 @@ function NotebookTree({ store }: Readonly<{ store: StoreValue }>) {
             key={nb.id}
             nb={nb}
             store={store}
+            count={counts[nb.id]}
             depth={depth}
             tree={nested}
             expanded={kids ? open : undefined}
@@ -264,6 +313,7 @@ function NotebookTree({ store }: Readonly<{ store: StoreValue }>) {
 function NotebookRow({
   nb,
   store,
+  count,
   depth,
   tree,
   expanded,
@@ -271,6 +321,7 @@ function NotebookRow({
 }: Readonly<{
   nb: Notebook;
   store: StoreValue;
+  count?: number;
   depth: number;
   tree?: boolean;
   expanded?: boolean;
@@ -285,7 +336,7 @@ function NotebookRow({
         <button
           type="button"
           className="side-caret"
-          aria-label={t("{name} 하위 노트북 {action}", { name: nb.name, action: expanded ? t("접기") : t("펼치기") })}
+          aria-label={t("{name} 하위 폴더 {action}", { name: nb.name, action: expanded ? t("접기") : t("펼치기") })}
           aria-expanded={expanded}
           onClick={onToggle}
         >
@@ -299,12 +350,13 @@ function NotebookRow({
         aria-current={active ? "page" : undefined}
       >
         <span className="side-icon" aria-hidden style={nb.color ? { color: nb.color } : undefined}>
-          <NotebookIcon size={16} />
+          <FolderIcon size={16} />
         </span>
         <span className="side-label">{nb.name}</span>
+        {!!count && <span className="side-count">{count}</span>}
       </button>
       <Menu
-        buttonLabel={t("노트북 {name} 옵션", { name: nb.name })}
+        buttonLabel={t("폴더 {name} 옵션", { name: nb.name })}
         icon={<MoreVertical size={14} aria-hidden />}
         items={[
           {
@@ -313,13 +365,13 @@ function NotebookRow({
             onSelect: () => void store.renameNotebook(nb),
           },
           {
-            label: t("하위 노트북 만들기"),
+            label: t("하위 폴더 만들기"),
             icon: <Plus size={14} aria-hidden />,
             onSelect: () => void store.addNotebook(nb),
           },
           {
-            label: store.defaults.notebook_id === nb.id ? t("기본 노트북 해제") : t("기본 노트북으로 설정"),
-            icon: <NotebookIcon size={14} aria-hidden />,
+            label: store.defaults.notebook_id === nb.id ? t("기본 폴더 해제") : t("기본 폴더로 설정"),
+            icon: <Folder size={14} aria-hidden />,
             onSelect: () => store.toggleDefaultNotebook(nb),
           },
           {

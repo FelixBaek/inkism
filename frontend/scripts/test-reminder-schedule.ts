@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+const result=await build({entryPoints:['frontend/src/lib/reminder-schedule.ts'],bundle:true,write:false,format:'esm',platform:'node'});
+const {nextOccurrence}=await import('data:text/javascript;base64,'+Buffer.from(result.outputFiles[0].text).toString('base64'));
+const hour=3_600_000,at=Date.UTC(2026,9,12,9);
+assert.equal(nextOccurrence(at,null,at+hour),null);
+assert.equal(nextOccurrence(at,0,at+hour),null);
+assert.equal(nextOccurrence(at,24,at+hour),at+24*hour);
+assert.equal(nextOccurrence(at,24,at+24*hour),at+48*hour,'exactly on a repeat moves to the next one');
+assert.equal(nextOccurrence(at,168,at+20*24*hour),at+21*24*hour);
+assert.ok(nextOccurrence(at,1,at+5.5*hour)!>at+5.5*hour);
+console.log('PASS reminder schedule: once clears, repeats advance to the first future occurrence');

@@ -9,7 +9,7 @@ const other=await rpc('save',{note:{title:'이동 검사 '+Date.now(),content:'<
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 const page=await browser.newPage({viewport:{width:1440,height:960}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
 const editor=page.locator('.tiptap-prose');const panel=page.getByTestId('windowed-rich-editor');
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
 const jump=async n=>{await page.getByLabel('이동할 블록 번호').fill(String(n));await page.getByRole('button',{name:'이동',exact:true}).click();await page.waitForFunction(offset=>document.querySelector('[data-window-start]')?.getAttribute('data-window-start')===String(offset),n-1);};
 try {
  await page.goto(base+'/?virtual=1');await page.getByRole('button',{name:'노트 열기: '+title,exact:true}).click();await panel.waitFor();await editor.waitFor();

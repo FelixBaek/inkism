@@ -14,6 +14,8 @@ type SecurityValue = {
   lock: () => Promise<void>;
   login: () => Promise<SecurityStatus | null>;
   cancel: () => Promise<void>;
+  refresh: () => Promise<SecurityStatus | null>;
+  disable: () => Promise<boolean>;
 };
 const SecurityContext = createContext<SecurityValue | null>(null);
 function SetupNotice() {
@@ -66,6 +68,22 @@ function GoogleUnlockAction({
     <button type="button" className="btn btn-primary" disabled={pending} onClick={onLogin}>
       {t("Google로 잠금 해제")}
     </button>
+  );
+}
+/** 로그인 대기 남은 시간. 엔진의 로그인 제한(LOGIN_TIMEOUT 180초)과 같은 값으로 센다. */
+function LoginCountdown() {
+  const [left, setLeft] = useState(180);
+  useEffect(() => {
+    const end = Date.now() + 180_000;
+    const timer = setInterval(() => setLeft(Math.max(0, Math.round((end - Date.now()) / 1000))), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <p className="security-countdown">
+      {t("브라우저에서 로그인 대기 중 · {time}", {
+        time: `${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`,
+      })}
+    </p>
   );
 }
 export function SecurityBoundary({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -169,6 +187,35 @@ export function SecurityBoundary({ children }: Readonly<{ children: React.ReactN
       }
     }
   }, [status, refresh]);
+  /** 잠금 끄기: 엔진이 Google 재로그인으로 같은 계정을 확인한 뒤에만 등록을 지운다. */
+  const disable = useCallback(async () => {
+    if (active.current) return false;
+    active.current = true;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    const ticket = ++generation.current,
+      controller = new AbortController();
+    loginRequest.current = controller;
+    try {
+      const value = await securityRequest("disable", controller.signal);
+      if (ticket !== generation.current) return false;
+      setStatus(value);
+      return true;
+    } catch (e) {
+      if (ticket === generation.current) {
+        setError(e instanceof Error ? e.message : t("앱 잠금을 끄지 못했습니다."));
+        await refresh();
+      }
+      return false;
+    } finally {
+      if (ticket === generation.current) {
+        active.current = false;
+        setBusy(false);
+        loginRequest.current = null;
+      }
+    }
+  }, [refresh]);
   const cancel = useCallback(async () => {
     if (canceling.current) return;
     canceling.current = true;
@@ -214,8 +261,8 @@ export function SecurityBoundary({ children }: Readonly<{ children: React.ReactN
   }, []);
   const pending = busy || Boolean(status?.pending);
   const contextValue = useMemo(
-    () => (status ? { status, error, message, busy: pending, lock, login, cancel } : null),
-    [status, error, message, pending, lock, login, cancel],
+    () => (status ? { status, error, message, busy: pending, lock, login, cancel, refresh, disable } : null),
+    [status, error, message, pending, lock, login, cancel, refresh, disable],
   );
   if (!status || status.locked)
     return (
@@ -226,8 +273,8 @@ export function SecurityBoundary({ children }: Readonly<{ children: React.ReactN
         </header>
         <main className="security-screen" aria-label={t("앱 잠금")}>
           <div className="security-card">
-            <LockKeyhole size={28} aria-hidden />
-            <h1>inkism</h1>
+            <LockKeyhole size={22} aria-hidden />
+            <h1>{status?.locked ? t("작업실이 잠겨 있습니다.") : "inkism"}</h1>
             <p>
               <output>{status?.locked ? t("앱이 잠겨 있습니다.") : t("앱 잠금 상태를 확인하는 중…")}</output>
             </p>
@@ -248,6 +295,7 @@ export function SecurityBoundary({ children }: Readonly<{ children: React.ReactN
                 <button type="button" className="btn" onClick={() => void cancel()}>
                   {t("Google 로그인 취소")}
                 </button>
+                <LoginCountdown />
               </output>
             )}
             {message && (
@@ -395,6 +443,100 @@ export function LockNowButton() {
           </button>
         </div>
       </dialog>
+    </>
+  );
+}
+
+/** 설정 › 앱 잠금 (Figma 39): 지금 상태·잠그기·다시 확인. 등록·잠그기 동작은 LockNowButton 그대로. */
+export function LockSettings() {
+  const security = useContext(SecurityContext);
+  const store = useStore();
+  const [notice, setNotice] = useState("");
+  const [checking, setChecking] = useState(false);
+  const status = security?.status;
+  return (
+    <>
+      <div className="settings-card">
+        <div className="settings-card__text">
+          <strong>{t("Google 로그인 잠금")}</strong>
+          {status && (
+            <dl className="settings-kv">
+              <dt>{t("잠금 사용")}</dt>
+              <dd>
+                <input
+                  type="checkbox"
+                  className="toggle"
+                  aria-label={t("잠금 사용")}
+                  checked={status.configured}
+                  disabled={!status.configured || status.locked || security.busy}
+                  onChange={async () => {
+                    const ok = await store.confirm({
+                      title: t("앱 잠금 끄기"),
+                      message: t(
+                        "Google 로그인으로 같은 계정을 다시 확인한 뒤에만 잠금을 끕니다. 끄면 앱을 열 때 더 이상 로그인을 묻지 않습니다.",
+                      ),
+                      confirmLabel: t("Google로 확인하고 끄기"),
+                    });
+                    setNotice("");
+                    if (ok && (await security.disable())) setNotice(t("앱 잠금을 껐습니다."));
+                  }}
+                />
+              </dd>
+              <dt>{t("허용된 계정")}</dt>
+              <dd>{status.configured ? status.account_hint ?? "" : ""}</dd>
+              <dt>{t("잠금 서버")}</dt>
+              <dd>{status.available && !status.setup_required ? t("연결됨") : t("설정 필요")}</dd>
+            </dl>
+          )}
+          {security?.busy && status?.configured && !status.locked && (
+            <p>
+              <output>{t("기본 브라우저에서 Google 로그인을 완료해 주세요. 확인 결과를 기다리고 있습니다.")}</output>
+            </p>
+          )}
+          {/* 등록 전 안내·오류는 등록 대화상자가 보여 준다 */}
+          {status?.configured && security?.error && <p role="alert">{security.error}</p>}
+          {status?.configured && security?.message && (
+            <p>
+              <output>{security.message}</output>
+            </p>
+          )}
+          {notice && (
+            <p>
+              <output>{notice}</output>
+            </p>
+          )}
+          <p>{t("Google 로그인으로 이 앱을 잠급니다. 잠금 서버가 설정된 기기에서만 쓸 수 있습니다.")}</p>
+        </div>
+        <div className="settings-card__action">
+          <LockNowButton />
+          {security?.busy && status?.configured && !status.locked && (
+            <button type="button" className="btn" onClick={() => void security.cancel()}>
+              {t("Google 로그인 취소")}
+            </button>
+          )}
+          {security && (
+            <button
+              type="button"
+              className="btn"
+              disabled={checking || security.busy}
+              onClick={() => {
+                setChecking(true);
+                void security.refresh().finally(() => setChecking(false));
+              }}
+            >
+              {t("잠금 상태 다시 확인")}
+            </button>
+          )}
+        </div>
+      </div>
+      {status?.configured && (
+        <div className="settings-card">
+          <div className="settings-card__text">
+            <strong>{t("잠금 해제")}</strong>
+            <p>{t("잠기면 허용된 Google 계정으로 로그인해야 노트와 첨부 파일을 열 수 있어요. 잠금 해제 버튼을 누르면 브라우저가 열리고, 3분 안에 로그인을 마치면 돼요.")}</p>
+          </div>
+        </div>
+      )}
     </>
   );
 }

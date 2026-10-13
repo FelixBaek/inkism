@@ -13,7 +13,7 @@ try {
   const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base+'/?virtual=1'+(mode==='lazy'?'&lazy=1':''));
   await page.locator('[data-window-start="0"]').waitFor();
-  const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+  const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
   if(mode==='denied')await page.evaluate(()=>{navigator.clipboard.write=async()=>{throw new DOMException('denied','NotAllowedError');};});
   if(mode==='typing'||mode==='switch')await page.evaluate(()=>{navigator.clipboard.write=()=>new Promise(resolve=>{(window as any).finishCut=resolve;});});
   await page.getByRole('button',{name:'문서 전체 잘라내기',exact:true}).click();

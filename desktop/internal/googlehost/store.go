@@ -62,6 +62,17 @@ func (s FileStore) Load() (Identity, bool, error) {
 	}
 	return identity, true, nil
 }
+
+// Remove deletes the binding file (and the Rust host's masked-account hint).
+func (s FileStore) Remove() error {
+	for _, path := range []string{s.Path + ".hint", s.Path} {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s FileStore) Save(identity Identity) error {
 	raw, err := json.Marshal(identity)
 	if err != nil {

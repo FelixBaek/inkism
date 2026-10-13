@@ -15,7 +15,7 @@ try {
  await page.getByRole('button',{name:'노트 열기: '+b.title,exact:true}).click();
  await page.getByRole('button',{name:'노트 열기: '+a.title,exact:true}).click();
  release();await handled;await page.unroute('**/api/rpc');
- await page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+ await page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
  // Drain the old selection's 25 ms flush waiter as well as React's commit.
  await page.waitForTimeout(100);
  assert.equal(await page.getByLabel('노트 제목',{exact:true}).inputValue(),a.title);
@@ -24,8 +24,8 @@ try {
  await root.click();await page.keyboard.press('Control+End');await page.keyboard.insertText(' 충돌');await page.keyboard.press('Control+s');
  await page.getByRole('button',{name:'서버 버전으로 교체',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.tiptap-prose')?.textContent==='원격 새 내용');
  await root.click();await page.keyboard.press('Control+End');await page.keyboard.insertText(' 이후편집');await page.keyboard.press('Control+s');
- await page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
- assert.equal((await rpc('get',{id:a.id})).content,'<p>원격 새 내용 이후편집</p>');
+ await page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
+ assert.match((await rpc('get',{id:a.id})).content,/^<p id="ink-block-[0-9a-f-]{36}">원격 새 내용 이후편집<\/p>$/);
  // Discarding a conflicting source editor must not flush its last buffered keys
  // back over the explicitly selected server version during unmount.
  await page.getByRole('button',{name:'HTML',exact:true}).click();
@@ -33,6 +33,8 @@ try {
  const latest=await rpc('get',{id:a.id});await rpc('save',{note:{id:a.id,revision:latest.revision,content:'<p>원격 원문</p>',text:'원격 원문'}});
  await source.click();await page.keyboard.press('Control+End');await page.keyboard.insertText('<p>로컬</p>');await page.keyboard.press('Control+s');
  await page.getByRole('button',{name:'서버 버전으로 교체',exact:true}).waitFor();
+ // The conflict dialog is modal: close it and keep typing; the next autosave hits the same conflict and reopens it.
+ await page.getByRole('button',{name:'대화상자 닫기',exact:true}).click();await page.getByRole('button',{name:'서버 버전으로 교체',exact:true}).waitFor({state:'hidden'});
  await source.click();await page.keyboard.insertText('버릴 입력');await page.getByRole('button',{name:'서버 버전으로 교체',exact:true}).click();
  await page.waitForFunction(()=>document.querySelector('.cm-content')?.textContent==='<p>원격 원문</p>');
  assert.equal((await rpc('get',{id:a.id})).content,'<p>원격 원문</p>');

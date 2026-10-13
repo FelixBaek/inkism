@@ -26,7 +26,7 @@ try {
  await page.locator('.tiptap-prose p').first().click();await page.keyboard.press('Home');await page.keyboard.insertText('첫편집 ');await page.keyboard.press('Control+s');await received;
  // Continue typing while an earlier snapshot is already committed but its response is delayed.
  await page.keyboard.insertText('추가편집 ');await page.keyboard.press('Control+s');release();
- await page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+ await page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
  assert.equal(requests[0].metadata.title,title+' 함께 수정');assert.equal(requests[1].metadata,undefined);
  assert.equal(requests.length,2);assert.equal(requests[1].revision,requests[0].revision+1);
  assert.equal(requests[1].content.expected,requests[0].content.replacement);
@@ -34,10 +34,11 @@ try {
  assert.equal(requests[0].content.start,expectedStart);assert.equal(requests[1].content.start,expectedStart);
  assert.equal((requests[0].content.expected.match(/<p>/g)||[]).length,32);
  assert.equal(workers.some(url=>/\/(splice|plaintext)\.worker-/.test(url)),false);
- const saved=await rpc('get',{id:note.id});assert.equal(saved.title,title+' 함께 수정');assert.equal(saved.content,html.replace('한글😀 3200</strong>','첫편집 추가편집 한글😀 3200</strong>'));
+ const saved=await rpc('get',{id:note.id});assert.equal(saved.title,title+' 함께 수정');// 편집한 블록은 블록 ID를 받는다(block-identity: 열기만 한 블록은 그대로). 그 하나만 빼고 원문이 그대로여야 한다.
+ assert.equal((saved.content.match(/ id="ink-block-[0-9a-f-]+"/g)||[]).length,1);assert.equal(saved.content.replace(/ id="ink-block-[0-9a-f-]+"/,''),html.replace('한글😀 3200</strong>','첫편집 추가편집 한글😀 3200</strong>'));
  // Another save in the same window must keep using the latest accepted window.
  await page.keyboard.insertText('세번째 ');await page.keyboard.press('Control+s');
- await page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+ await page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
  assert.equal(requests.length,3);assert.equal(requests[2].content.expected,requests[1].content.replacement);
  assert.equal(workers.some(url=>/\/(splice|plaintext)\.worker-/.test(url)),false);assert.deepEqual(errors,[]);
  console.log('PASS: exact UTF-8 cached position, repeated direct window saves and typing during delayed response without whole-document diff/text workers');

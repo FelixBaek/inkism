@@ -2,6 +2,11 @@
 .tag-input-wrap {
   position: relative;
   display: inline-flex;
+  flex: 1 1 120px;
+  min-width: 100px;
+}
+.tag-input-wrap > .tag-input {
+  width: 100%;
 }
 .tag-suggest {
   position: absolute;
@@ -15,22 +20,25 @@
   margin: 0;
   padding: 4px;
   list-style: none;
-  background: var(--canvas);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: var(--raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
   box-shadow: var(--shadow);
 }
 .tag-suggest li {
   padding: 6px 10px;
-  border-radius: 5px;
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   color: var(--muted);
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tag-suggest li.is-active {
+.tag-suggest li:hover {
   background: var(--hover);
   color: var(--text);
+}
+.tag-suggest li.is-active {
+  background: var(--active);
+  color: var(--accent-text);
 }

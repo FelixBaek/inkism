@@ -1,7 +1,7 @@
 /* Menu 확장: 구분선·체크 표시·하위 메뉴·포인터 위치 메뉴 */
 .menu-separator {
   height: 1px;
-  margin: 4px 6px;
+  margin: 4px 0;
   background: var(--border);
   flex: none;
 }
@@ -15,10 +15,11 @@
 .menu-item-end {
   flex: none;
   margin-left: 12px;
-  color: var(--muted);
+  font: 400 var(--fs-small) / 1.5 var(--font-mono);
+  color: var(--faint);
 }
 .menu-item.is-open {
-  background: var(--hover);
+  background: var(--active);
 }
 .menu-popup.menu-sub {
   top: 0;
@@ -39,5 +40,5 @@
 }
 .context-menu > .menu-popup {
   position: static;
-  min-width: 220px;
+  min-width: 250px;
 }

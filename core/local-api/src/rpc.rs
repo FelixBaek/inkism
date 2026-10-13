@@ -26,6 +26,7 @@ const RENDERER_OPS: &[&str] = &[
     "patch",
     "delete",
     "notebooks",
+    "notebook_counts",
     "save_notebook",
     "delete_notebook",
     "trash_notebook",
@@ -53,7 +54,8 @@ const RENDERER_OPS: &[&str] = &[
     "tag_change_undo",
     "tag_change_list",
     "stats",
-    "history", "history_name_current", "history_rename", "history_delete_named", "history_body",
+    "trash_retention_get", "trash_retention_set", "trash_times", "trash_purge",
+    "history", "history_name_current", "history_rename", "history_delete_named", "history_body", "history_changes",
     "revision_body",
     "restore",
     "health",
@@ -280,13 +282,26 @@ mod tests {
     }
 
     #[test]
+    fn trash_and_folder_count_operations_reach_renderer_engine() {
+        let engine = Arc::new(FakeEngine::default());
+        let h = Handler { engine: Some(engine.clone()), ..Handler::default() };
+        for op in ["trash_retention_get", "trash_retention_set", "trash_times", "trash_purge"] {
+            let body = format!(r#"{{"op":"{op}"}}"#);
+            let out = h.handle(&request("POST", "inkism.local", "/api/rpc", &body, &[("Content-Type", "application/json")]));
+            assert_eq!(out.status, 200, "renderer rejected {op}");
+            assert_eq!(engine.last().unwrap(), body.as_bytes(), "renderer did not forward {op}");
+        }
+        assert!(crate::reminders::mutation(br#"{"op":"trash_purge"}"#), "purge must refresh reminders");
+    }
+
+    #[test]
     fn recovery_operations_never_reach_renderer_engine() {
         let engine = Arc::new(FakeEngine::default());
         let h = Handler {
             engine: Some(engine.clone()),
             ..Handler::default()
         };
-        for op in ["sync_recovery_export", "sync_recovery_import"] {
+        for op in ["sync_recovery_export", "sync_recovery_import", "sync_relay_token"] {
             let body = format!(r#"{{"op":"{op}","confirmed_server_recovery":true}}"#);
             let out = h.handle(&request(
                 "POST",

@@ -212,3 +212,107 @@ func TestEnrollmentWriteFailureRetryAndPartialFile(t *testing.T) {
 		})
 	}
 }
+
+type removableStore struct {
+	memoryStore
+	removeErr error
+	removed   int
+}
+
+func (s *removableStore) Remove() error {
+	if s.removeErr != nil {
+		return s.removeErr
+	}
+	s.removed++
+	s.exists = false
+	s.identity = Identity{}
+	return nil
+}
+
+func unlockedController(t *testing.T, p Provider, store Store) *Controller {
+	t.Helper()
+	c := New(p, store)
+	gate := c.Attach(func() error { return nil }, func(context.Context) error { return nil })
+	if err := gate.UnlockWithSetup(context.Background(), func(context.Context) error { return nil }, func(context.Context) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+func TestDisableRequiresSameAccountReauthentication(t *testing.T) {
+	bound := func() *removableStore {
+		return &removableStore{memoryStore: memoryStore{identity: account, exists: true}}
+	}
+	// Locked: refused before any login.
+	var calls atomic.Int32
+	counted := fakeProvider{func(context.Context) (Identity, error) { calls.Add(1); return account, nil }}
+	store := bound()
+	locked := New(counted, store)
+	locked.Attach(func() error { return nil }, func(context.Context) error { return nil })
+	if err := locked.Disable(context.Background()); err == nil || calls.Load() != 0 || store.removed != 0 {
+		t.Fatal("locked app disabled or logged in", err)
+	}
+	// Other account, other issuer, failed login: binding stays.
+	for _, p := range []Provider{
+		provider(Identity{"https://accounts.google.com", "someone-else"}, nil),
+		provider(Identity{"https://evil.example", account.Subject}, nil),
+		provider(Identity{}, errors.New("network")),
+	} {
+		store := bound()
+		c := unlockedController(t, p, store)
+		if err := c.Disable(context.Background()); err == nil || store.removed != 0 || !c.Status().Configured {
+			t.Fatal("binding removed without matching re-login", err)
+		}
+	}
+	// Cancelled login.
+	store = bound()
+	c := unlockedController(t, provider(account, nil), store)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := c.Disable(ctx); err == nil || store.removed != 0 {
+		t.Fatal("cancelled disable removed binding", err)
+	}
+	// Store without Remove, or a failing Remove, keeps the lock.
+	plain := &memoryStore{identity: account, exists: true}
+	if err := unlockedController(t, provider(account, nil), plain).Disable(context.Background()); err == nil {
+		t.Fatal("store without Remove disabled the lock")
+	}
+	failing := bound()
+	failing.removeErr = errors.New("disk")
+	c = unlockedController(t, provider(account, nil), failing)
+	if err := c.Disable(context.Background()); err == nil || !c.Status().Configured {
+		t.Fatal("failed removal reported success", err)
+	}
+	// Same issuer+subject after a fresh login turns it off.
+	store = bound()
+	c = unlockedController(t, provider(account, nil), store)
+	if err := c.Disable(context.Background()); err != nil || store.removed != 1 {
+		t.Fatal(err)
+	}
+	if s := c.Status(); s.Configured || s.Locked || c.Lock() == nil {
+		t.Fatal("lock still active after disable", s)
+	}
+}
+
+func TestFileStoreRemoveDeletesBindingAndHint(t *testing.T) {
+	root := t.TempDir()
+	store := FileStore{Path: filepath.Join(root, "policy"), Protect: func(b []byte) ([]byte, error) { return b, nil }, Unprotect: func(b []byte) ([]byte, error) { return b, nil }}
+	if err := store.Save(account); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(store.Path+".hint", []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Remove(); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists, err := store.Load(); exists || err != nil {
+		t.Fatal("binding survived Remove", exists, err)
+	}
+	if _, err := os.Stat(store.Path + ".hint"); !os.IsNotExist(err) {
+		t.Fatal("hint survived Remove")
+	}
+	if err := store.Remove(); err != nil {
+		t.Fatal("second Remove", err)
+	}
+}

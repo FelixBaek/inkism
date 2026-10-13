@@ -8,7 +8,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import type { BlockSpecificAction } from "../../extensions/block-actions";
 import type { Editor } from "@tiptap/core";
-import { Check, ChevronRight, Copy, Files, Palette, Trash2, X } from "../../icons";
+import { ArrowDown, ArrowUp, Check, ChevronRight, Copy, Files, Palette, Trash2, X } from "../../icons";
 import {
   TURN_INTO,
   TEXT_COLORS,
@@ -40,7 +40,7 @@ const COLOR_NAMES: Record<string, string> = {
   brown: t("갈색"),
   yellow: t("노랑"),
 };
-export type BlockMenuAction = "duplicate" | "copy" | "delete" | "copy-link";
+export type BlockMenuAction = "up" | "down" | "duplicate" | "copy" | "delete" | "copy-link";
 interface Props {
   markdownCompatible?: boolean;
   editor: Editor;
@@ -335,6 +335,8 @@ export function BlockActionMenu({
           {t("자주 쓰는 것")}
         </div>
         {!markdownCompatible && <BlockStyleMenu node={node} onApply={onStyle} />}
+        {row("up", t("위로 이동"), ArrowUp, "var(--text)", "Alt+Shift+↑")}
+        {row("down", t("아래로 이동"), ArrowDown, "var(--text)", "Alt+Shift+↓")}
         {row("duplicate", t("복제"), Copy, "var(--text-color-blue)", "Ctrl+D")}
         {!markdownCompatible&&row("copy-link", t("문단 링크 복사"), Files, "var(--text)", "")}
         {row("copy", t("복사"), Files, "var(--text-color-light-blue)", "Ctrl+C")}

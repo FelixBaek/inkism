@@ -96,6 +96,11 @@ pub trait SecurityController: Send + Sync {
     fn login(&self, deadline: Deadline) -> Result<()>;
     fn cancel(&self);
     fn lock(&self) -> Result<()>;
+    /// Turns the lock off after a fresh login proves the same account.
+    /// Hosts without that flow refuse.
+    fn disable(&self, _deadline: Deadline) -> Result<()> {
+        Err("app lock cannot be turned off here".into())
+    }
 }
 
 /// Native capabilities only the shell can provide. Each is optional; `None`

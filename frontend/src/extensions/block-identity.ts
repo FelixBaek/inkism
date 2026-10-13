@@ -1,5 +1,5 @@
 import {Extension} from '@tiptap/core';
-import {Plugin} from '@tiptap/pm/state';
+import {NodeSelection,Plugin} from '@tiptap/pm/state';
 import {isHistoryTransaction} from '@tiptap/pm/history';
 import {cloneSliceIdentity,newBlockId} from '../lib/block-identity';
 /** IDs are added to edited/new blocks, never merely by opening a document. */
@@ -26,6 +26,10 @@ export const BlockIdentity=Extension.create({
       // not enter history. They must never acquire IDs or rewrite the source;
       // only real user edits (or a user paste) can create new identities.
       if (tx.getMeta("addToHistory") === false && tx.getMeta("uiEvent") !== "paste") continue;
+      // Re-rendering the composing block (new id attr) breaks the native IME:
+      // the commit is inserted twice and composition never ends. The block
+      // gets its id from the next non-IME edit (space, Enter, delete, paste).
+      if (tx.getMeta("composition") != null) continue;
       tx.mapping.maps.forEach(map => map.forEach((_oldFrom,_oldTo,newFrom,newTo) => {
         touched.push([Math.max(0,newFrom-1), Math.min(state.doc.content.size,newTo+1)]);
       }));
@@ -40,7 +44,10 @@ export const BlockIdentity=Extension.create({
    state.doc.descendants((node,pos)=>{const id=node.attrs.id;if(!id)return;
     if(seen.has(id))tr.setNodeMarkup(pos,undefined,{...node.attrs,id:newBlockId()});else seen.add(id);
    });
-   return tr.docChanged?tr:null;
+   // setNodeMarkup maps a NodeSelection on that node to a text cursor; keep the
+   // selected block selected (a duplicated block is typed over as a whole).
+   if(tr.docChanged&&state.selection instanceof NodeSelection&&!(tr.selection instanceof NodeSelection))tr.setSelection(NodeSelection.create(tr.doc,state.selection.from));
+   return tr.docChanged?tr.setMeta('blockIdentity',true):null;
   }
  })];}
 });

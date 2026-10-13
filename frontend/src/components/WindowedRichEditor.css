@@ -19,7 +19,7 @@
   color: inherit;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 0;
 }
 .window-scroll {
   flex: 1;
@@ -52,7 +52,7 @@
   color: inherit;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 0;
 }
 .document-search-results {
   max-height: 140px;
@@ -73,7 +73,7 @@
   cursor: pointer;
 }
 .document-search-results button:hover {
-  background: var(--surface);
+  background: var(--raised);
 }
 .document-search-results strong {
   flex: none;

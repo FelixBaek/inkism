@@ -10,7 +10,7 @@ const note=await rpc('save',{note:{title,content:initial,text:'한글'}});await 
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 const page=await browser.newPage({viewport:{width:1440,height:960}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
 const root=page.locator('.tiptap-prose');
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
 const at=offset=>page.waitForFunction(offset=>document.querySelector('[data-window-start]')?.getAttribute('data-window-start')===String(offset),offset);
 const jump=async offset=>{await page.getByLabel('이동할 블록 번호').fill(String(offset+1));await page.getByRole('button',{name:'이동',exact:true}).click();await at(offset);};
 const type=async text=>{await root.locator('p').first().click();await page.keyboard.press('Home');await page.keyboard.insertText(text);await page.keyboard.press('Control+s');await saved();};
