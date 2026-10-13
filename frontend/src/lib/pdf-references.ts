@@ -6,17 +6,26 @@ export function pageUrl(url:string,page:number){const u=new URL(url,location.hre
 export function extractPdfPageLinks(source:string):PdfPageLink[]{const out:PdfPageLink[]=[];for(const m of source.matchAll(/\[([^\]]+)\]\(([^)\s]+#page=(\d+)[^)]*)\)/gi)){try{out.push({label:m[1],page:Number(m[3]),url:pageUrl(m[2],Number(m[3]))});}catch{}}for(const m of source.matchAll(/<a\b[^>]*href=["']([^"']+#page=(\d+)[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi)){try{out.push({label:m[3].replace(/<[^>]+>/g,''),page:Number(m[2]),url:pageUrl(m[1].replace(/&amp;/g,'&'),Number(m[2]))});}catch{}}return out;}
 /** Exact closing token, including nested same-tag elements. Quoted attributes,
  * comments and raw text cannot supply a closing tag for the definition. */
+const TAG_PART=/"[^"]*"|'[^']*'|[^'">]/.source;
+const HTML_TOKEN=[
+ /<!--[\s\S]*?(?:-->|$)/.source, // comment, possibly unterminated
+ String.raw`<(script|style|textarea|title|pre|code)\b(?:${TAG_PART})*?>[\s\S]*?(?:<\/\1\s*>|$)`, // raw text element
+ String.raw`<\/?([a-z][a-z0-9]*)\b(?:${TAG_PART})*?>`, // complete tag
+ String.raw`<\/?([a-z][a-z0-9]*)\b(?:${TAG_PART})*(?:"[^"]*|'[^']*|$)`, // unterminated tag
+].join('|');
 function htmlTokens(){
- return /<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|title|pre|code)\b(?:"[^"]*"|'[^']*'|[^'">])*?>[\s\S]*?(?:<\/\1\s*>|$)|<\/?([a-z][a-z0-9]*)\b(?:"[^"]*"|'[^']*'|[^'">])*?>|<\/?([a-z][a-z0-9]*)\b(?:"[^"]*"|'[^']*'|[^'">])*(?:"[^"]*|'[^']*|$)/gi;
+ return new RegExp(HTML_TOKEN,'gi');
 }
 /** Consume complete attributes, so an id/href/value inside another quoted
  * attribute can never become a source edit target. Keep their exact spans. */
+const HTML_ATTRIBUTE_VALUE=/"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)/.source;
+const HTML_ATTRIBUTE=new RegExp(String.raw`^(\s+)([^\s"'<>/=]+)(?:\s*=\s*(?:${HTML_ATTRIBUTE_VALUE}))?`);
 function htmlAttributes(opening:string){
  const tag=/^<[a-z][a-z0-9]*\b/i.exec(opening);if(!tag)return undefined;
  const attributes:{name:string;value:string;from:number;to:number}[]=[];let offset=tag[0].length;
  while(offset<opening.length){
   const rest=opening.slice(offset);if(/^\s*\/?>$/.test(rest))return attributes;
-  const attr=/^(\s+)([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/.exec(rest);
+  const attr=HTML_ATTRIBUTE.exec(rest);
   if(!attr)return undefined;
   attributes.push({name:attr[2].toLowerCase(),value:attr[3]??attr[4]??attr[5]??'',from:offset,to:offset+attr[0].length});offset+=attr[0].length;
  }
