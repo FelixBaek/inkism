@@ -118,7 +118,7 @@ impl<W: Write> Write for VerifiedAsset<'_, W> {
     }
 }
 
-const README: &str = "Inkism Markdown 내보내기\n\nZIP 전체를 풀고 note.md를 여세요. attachments 폴더를 함께 유지해 주세요.\n일부 서식과 특수 블록은 Markdown 안의 HTML로 보존됩니다. 다른 앱의 표시 방식은 다를 수 있습니다.\n외부 웹 자료는 다운로드하지 않습니다. 다른 Inkism 노트로 연결되는 note:// 링크는 Inkism에서 사용합니다.\nsource 파일은 첨부 주소를 상대 경로로 바꾼 사본입니다. note.json은 정확한 원문과 메타데이터입니다.\n이 ZIP은 암호화되지 않습니다. 전체 라이브러리 복원에는 앱의 ZIP 백업을 사용하세요.\n";
+const README: &str = "Inkism Markdown 내보내기\n\nZIP 전체를 풀고 note.md를 여세요. attachments 폴더를 함께 유지해 주세요.\n일부 서식과 특수 블록은 Markdown 안의 HTML로 보존됩니다. 다른 앱의 표시 방식은 다를 수 있습니다.\n외부 웹 자료는 다운로드하지 않습니다. 다른 Inkism 노트로 가는 링크는 inkism://note/<ID> 형식으로 바뀝니다.\nsource 파일은 첨부 주소와 노트 링크를 바꾼 사본입니다. note.json은 정확한 원문과 메타데이터입니다.\n이 ZIP은 암호화되지 않습니다. 전체 라이브러리 복원에는 앱의 ZIP 백업을 사용하세요.\n";
 
 fn bundle(h: &Handler, req: &ExportRequest, deadline: Deadline) -> Result<Vec<u8>> {
     let engine = h.engine()?;
@@ -180,8 +180,10 @@ fn bundle(h: &Handler, req: &ExportRequest, deadline: Deadline) -> Result<Vec<u8
         paths.insert(id.clone(), asset_path(&meta));
         metadata.insert(id, meta);
     }
-    let markdown = rewrite(&req.markdown, &paths)?;
-    let source = rewrite(&req.source, &paths)?;
+    // Same link policy as the folder export: only this note is in the ZIP.
+    let links = BTreeMap::from([(req.id.clone(), "note.md".to_owned())]);
+    let markdown = crate::portable::note_links(&rewrite(&req.markdown, &paths)?, &links);
+    let source = crate::portable::note_links(&rewrite(&req.source, &paths)?, &links);
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
     let mut archive = ZipWriter::new(LimitedZip::default());
     for (path, content) in [

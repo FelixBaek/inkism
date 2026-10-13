@@ -10,6 +10,10 @@ const decode=async(file:File)=>new TextDecoder('utf-8',{fatal:true,ignoreBOM:tru
 const extension=(path:string):ContentFormat|undefined=>({md:'markdown',html:'html',txt:'text'} as const)[path.split('.').pop() as 'md'];
 const safePath=(path:string)=>!path.startsWith('/')&&!path.includes('\\')&&!path.split('/').some(x=>!x||x==='.'||x==='..')&&!/[\u0000-\u001f]/.test(path);
 const rx=(text:string)=>text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+/** Exported .md files start with an informational YAML block; it is never part of the note body. */
+export const stripFrontmatter=(text:string)=>text.replace(/^---\r?\nid: "[^\n]*\n(?:[^\n]*\n)*?---\r?\n/,'');
+const fileFormat=(entry:PortableEntry)=>entry.file_format??entry.format;
+const fromMarkdown=async(markdown:string,format:ContentFormat)=>{if(format==='markdown')return markdown;const html=(await import('./markdown')).markdownToHTML(markdown);return format==='text'?html.text:html.content;};
 const refs=(source:string,path:string)=>new RegExp(`(^|[="'\\s(<])\\.\\./${rx(path)}(?=[?"'\\s<>\\)\\]#]|$)`,'gm');
 export async function collectFolderFiles(files:File[]):Promise<Map<string,File>> {
  if(files.length>4096||files.reduce((n,f)=>n+f.size,0)>LIMIT)throw new Error(t('외부 편집 폴더는 64 MiB 이하만 지원합니다.'));
@@ -30,7 +34,7 @@ export async function planFolderChanges(files:File[],get:typeof api.get=api.get)
  for(const entry of manifest.notes){
   let path=entry.path,file=byPath.get(path),kind:FolderChange['kind']='update';
   const details:string[]=[];
-  if(!file){const matches=[...candidates].filter(([p,f])=>!used.has(p)&&extension(p)===entry.format&&f.hash===entry.portable_sha256);if(matches.length===1&&manifest.notes.filter(n=>!byPath.has(n.path)&&n.format===entry.format&&n.portable_sha256===entry.portable_sha256).length>1){plan.conflicts.push(`${entry.path}: ${t('같은 내용의 원본이 여러 개여서 이름 변경을 판단할 수 없습니다.')}`);continue;}if(matches.length===1){[path,{file}]=matches[0];used.add(path);kind='rename';details.push(t('파일 이름 변경'));}else if(matches.length>1){plan.conflicts.push(`${entry.path}: ${t('같은 내용의 새 파일이 여러 개여서 이름 변경을 판단할 수 없습니다.')}`);continue;}else kind='delete';}
+  if(!file){const matches=[...candidates].filter(([p,f])=>!used.has(p)&&extension(p)===fileFormat(entry)&&f.hash===entry.portable_sha256);if(matches.length===1&&manifest.notes.filter(n=>!byPath.has(n.path)&&fileFormat(n)===fileFormat(entry)&&n.portable_sha256===entry.portable_sha256).length>1){plan.conflicts.push(`${entry.path}: ${t('같은 내용의 원본이 여러 개여서 이름 변경을 판단할 수 없습니다.')}`);continue;}if(matches.length===1){[path,{file}]=matches[0];used.add(path);kind='rename';details.push(t('파일 이름 변경'));}else if(matches.length>1){plan.conflicts.push(`${entry.path}: ${t('같은 내용의 새 파일이 여러 개여서 이름 변경을 판단할 수 없습니다.')}`);continue;}else kind='delete';}
   try{
    const portable=file?await decode(file):'',metadata=entry.metadata as {title?:string;tags?:string[];notebook_id?:string|null},baseline=(entry as PortableEntry&{baseline_metadata?:typeof metadata}).baseline_metadata;
    const metadataChanged=baseline!==undefined&&JSON.stringify([metadata.title,metadata.tags??[],metadata.notebook_id??null])!==JSON.stringify([baseline.title,baseline.tags??[],baseline.notebook_id??null]);
@@ -43,7 +47,7 @@ export async function planFolderChanges(files:File[],get:typeof api.get=api.get)
    if(restorePortableLinks(current.content,manifest)!==current.content)throw new Error(t('원문에 내보낸 파일과 같은 상대 경로가 있어 자동으로 반영할 수 없습니다.'));
    if(metadataChanged){if(typeof metadata.title!=='string'||!Array.isArray(metadata.tags)||metadata.tags.some(t=>typeof t!=='string')||!(metadata.notebook_id===null||typeof metadata.notebook_id==='string'))throw new Error(t('제목·태그·폴더 메타데이터가 올바르지 않습니다.'));details.push(t('제목·태그·폴더'));}
    if(bodyChanged)details.push(t('본문'));if(assets.length)details.push(t('첨부파일 새 사본'));
-   plan.changes.push({key:entry.id,kind,path,previousPath:kind==='rename'?entry.path:undefined,title:kind==='rename'?path.slice(6).replace(/\.[^.]+$/,''):(metadataChanged?metadata.title!:current.title),tags:metadataChanged?metadata.tags:current.tags,notebook_id:metadataChanged?metadata.notebook_id:current.notebook_id,entry,current,content:portable,assets,details});
+   plan.changes.push({key:entry.id,kind,path,previousPath:kind==='rename'?entry.path:undefined,title:kind==='rename'?path.slice(6).replace(/\.[^.]+$/,''):(metadataChanged?metadata.title!:current.title),tags:metadataChanged?metadata.tags:current.tags,notebook_id:metadataChanged?metadata.notebook_id:current.notebook_id,entry,current,content:path.endsWith('.md')?stripFrontmatter(portable):portable,assets,details});
   }catch(e){plan.conflicts.push(`${path}: ${e instanceof Error?e.message:'확인 실패'}`);}
  }
  for(const [path,{file}] of candidates){if(used.has(path))continue;try{const content=await decode(file);for(const match of content.matchAll(/\.\.\/attachments\/[^\s\"'<>\)\]?#]+/g)){if(!plan.assets.has(match[0].slice(3)))throw new Error(t('참조하는 첨부파일이 없습니다.'));}const assets=[...plan.assets.keys()].filter(p=>refs(content,p).test(content)&&changedAssets.has(p));plan.changes.push({key:'portable-'+(await hashText(JSON.stringify(manifest.notes.map(n=>[n.id,n.source_sha256]).sort((a,b)=>String(a)<String(b)?-1:String(a)>String(b)?1:0))+'\n'+path)).slice(0,48),kind:'create',path,title:path.slice(6).replace(/\.[^.]+$/,''),content,assets,details:[t('새 노트')]});}catch(e){plan.conflicts.push(`${path}: ${e instanceof Error?e.message:'확인 실패'}`);}}
@@ -52,7 +56,7 @@ export async function planFolderChanges(files:File[],get:typeof api.get=api.get)
 }
 export type FolderApplyResult={saved:number;errors:string[];applied:Map<string,Note|{id:string;revision:number}>};
 /** Immutable attachment copies and guarded individual writes: no destructive file writes. */
-export async function applyFolderChanges(plan:FolderPlan,selected:Set<string>,deps={save:api.save,patch:(id:string,revision:number,sourceHash:string)=>rpc<{id:string;revision:number}>('patch',{id,revision,changes:{trashed:true},require_editable:true,expected_source_sha256:sourceHash}),upload:api.uploadAttachment}):Promise<FolderApplyResult>{
+export async function applyFolderChanges(plan:FolderPlan,selected:Set<string>,deps:{save:typeof api.save;patch:(id:string,revision:number,sourceHash:string)=>Promise<{id:string;revision:number}>;upload:typeof api.uploadAttachment;fromMarkdown?:typeof fromMarkdown}={save:api.save,patch:(id:string,revision:number,sourceHash:string)=>rpc<{id:string;revision:number}>('patch',{id,revision,changes:{trashed:true},require_editable:true,expected_source_sha256:sourceHash}),upload:api.uploadAttachment}):Promise<FolderApplyResult>{
  const result:FolderApplyResult={saved:0,errors:[],applied:new Map()},uploaded=new Map<string,string>();
  const selectedChanges=plan.changes.filter(c=>selected.has(c.key));
  const references=(content:string,path:string)=>new RegExp(`(^|[="'\\s(<\\[])(?:\\./)?${rx(path.slice(6))}(?=[#?|"'\\s<>\\)\\]]|$)`,'m').test(content);
@@ -70,6 +74,8 @@ export async function applyFolderChanges(plan:FolderPlan,selected:Set<string>,de
   for(const other of plan.changes.filter(x=>x.kind==='create'&&!selected.has(x.key))){if(new RegExp(`(^|[=\"'\\s(<\\[])(?:\\./)?${rx(other.path.slice(6))}(?=[#?|\"'\\s<>\\)\\]]|$)`,'m').test(content))throw new Error(t('참조하는 새 노트도 함께 선택해 주세요.'));}
   for(const path of c.assets){let id=uploaded.get(path);if(!id){const file=plan.assets.get(path);if(!file)throw new Error(t('첨부파일이 없습니다.'));id=(await deps.upload(file,new AbortController().signal)).id;uploaded.set(path,id);}content=content.replace(refs(content,path),(_all,prefix)=>`${prefix}/api/attachments/${id}`);}
   content=restorePortableLinks(content,links);
+  // HTML/text notes exported as Markdown are converted back to their own format.
+  if(c.entry&&fileFormat(c.entry)!==c.entry.format)content=await (deps.fromMarkdown??fromMarkdown)(content,c.entry.format);
   const saved=await deps.save({id:c.key,title:c.title,content,content_format:c.entry?.format??extension(c.path)!,tags:c.tags??[],notebook_id:c.notebook_id??null,...(c.current?{revision:c.current.revision,require_existing:true,expected_source_sha256:c.entry!.source_sha256}:{require_absent:true})});result.applied.set(c.key,saved);result.saved++;
  }catch(e){failed.add(c.key);result.errors.push(`${c.title||c.path}: ${e instanceof Error?e.message:'저장 실패'}`);}}
  return result;
@@ -89,9 +95,18 @@ export interface WritableFolderHandle extends FolderHandle {
 
 /** Stored ZIP exported by our bounded, hash-verified backend. No third-party
  * archive paths are accepted and every managed payload is checked below. */
+/** HTML/text notes are converted with the editor's lossless Markdown converter;
+ * a note it cannot preserve keeps its exact source file. */
+export async function fetchPortableZip():Promise<{response:Response;locked:number}> {
+ const post=async(body:unknown)=>{const response=await fetch('/api/portable/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!response.ok)throw new Error((await response.json().catch(()=>({}))).error||t('폴더 내보내기에 실패했습니다.'));return response;};
+ const {notes}=await (await post({sources:true})).json() as {notes:{id:string;revision:number;format:ContentFormat;content:string}[]};
+ const markdown:Record<string,{revision:number;markdown:string}>={};
+ if(notes.length){const m=await import('./markdown');for(const n of notes){try{markdown[n.id]={revision:n.revision,markdown:n.format==='text'?m.textToMarkdown(n.content):m.htmlToMarkdown(n.content)};}catch{/* exact source file */}}}
+ const response=await post({markdown});
+ return {response,locked:Number(response.headers.get('x-inkism-locked-skipped'))||0};
+}
 async function exportSnapshot():Promise<Map<string,Blob>> {
- const response=await fetch('/api/portable/export',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
- if(!response.ok)throw new Error((await response.json()).error||t('폴더 내보내기에 실패했습니다.'));
+ const {response}=await fetchPortableZip();
  const bytes=new Uint8Array(await response.arrayBuffer());if(bytes.length>LIMIT)throw new Error(t('내보내기 용량이 너무 큽니다.'));
  const view=new DataView(bytes.buffer),files=new Map<string,Blob>();let pos=0;
  while(pos+30<=bytes.length&&view.getUint32(pos,true)===0x04034b50){
