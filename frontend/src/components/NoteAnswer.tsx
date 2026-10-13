@@ -44,7 +44,7 @@ export function NoteAnswer({ question, loadCandidates, loadText, onOpen }: Reado
       {busy && <button type="button" onClick={cancel}>{t("취소")}</button>}
     </div>
     {error && <p role="alert" className="search-error">{error}</p>}
-    {answer && <div className="note-answer-text" role="status" aria-label={t("답변: {question}", { question: asked ?? "" })}>{answerParts(answer, evidence).map((part, i) => "cite" in part ? cite(part.cite) : <React.Fragment key={i}>{part.text}</React.Fragment>)}</div>}
+    {answer && <output className="note-answer-text" aria-label={t("답변: {question}", { question: asked ?? "" })}>{answerParts(answer, evidence).map(part => "cite" in part ? cite(part.cite) : <React.Fragment key={`t${part.at}`}>{part.text}</React.Fragment>)}</output>}
     {evidence.length > 0 && <details className="note-answer-sources"><summary>{t("AI에 보낸 근거 {count}개", { count: evidence.length })}</summary><ol className="global-search-results">{evidence.map(e => <li key={e.n} value={e.n}><button type="button" onClick={() => onOpen?.(e.note.id, undefined, e.hit)}><strong>{e.note.title}</strong><span>{e.text.slice(0, 240)}</span></button></li>)}</ol></details>}
   </section>;
 }
