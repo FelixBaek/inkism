@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+pub mod agent;
 pub mod engine;
 pub mod gate;
 
@@ -35,6 +36,7 @@ pub use gate::{SecurityStatus, SessionGate};
 pub use attachments::UploadAccess;
 pub use upload_server::{start_upload_server, UploadServer};
 pub use clipper::Clipper;
+pub use agent::AgentApi;
 
 /// Request deadline. Go used a context with a 90 s timeout; engine calls that
 /// pass it kill the child, so a late answer is never read as the next one.
@@ -131,6 +133,7 @@ pub struct Handler {
     pub host: String,
     pub upload: Option<attachments::UploadAccess>,
     pub clipper: Option<Arc<clipper::Clipper>>,
+    pub agent: Option<Arc<agent::AgentApi>>,
     pub reminders: Option<Arc<inkism_reminders::Service>>,
     pub update: Option<Arc<app_update::Updater>>,
     /// Unsplash key file; `None` = `<database>.unsplash-key`.
@@ -202,6 +205,7 @@ impl Handler {
             (_, p) if p.starts_with("/api/unsplash/") => unsplash::serve(self, r, deadline),
             (_, "/api/reader") => reader::serve(r),
             (_, "/api/clipper") => clipper::serve(self, r),
+            (_, "/api/agent") => agent::settings(self, r),
             (_, "/api/publications") => publications::serve(self, r),
             ("GET" | "HEAD", p) if p.starts_with(attachments::PATH_PREFIX) => attachments::download(self, r),
             (_, p) if p.starts_with("/api/update/") => update::serve(self, r),
