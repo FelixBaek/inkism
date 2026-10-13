@@ -91,7 +91,7 @@ function mathLeafEnd(source: string, at: number, openingEnd: number): number | u
     if (source.length > at + 32768) throw new Error("큰 서식 토큰의 표시 범위를 준비하지 못했습니다. 원문을 유지합니다.");
     return;
   }
-  const closing = new RegExp(`^<\\/${tag}\\s*>`, "i").exec(source.slice(openingEnd + close, openingEnd + close + 64));
+  const closing = new RegExp(String.raw`^<\/${tag}\s*>`, "i").exec(source.slice(openingEnd + close, openingEnd + close + 64));
   return closing ? openingEnd + close + closing[0].length : undefined;
 }
 

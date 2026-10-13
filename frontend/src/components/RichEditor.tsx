@@ -75,6 +75,7 @@ interface Props {
   onChange: (content: string, text: string, change: RichChange) => void;
 }
 
+type HeadingLevel = 1 | 2 | 3;
 type BoundaryCallback = NonNullable<Props["onBoundary"]>;
 
 /** Ctrl/⌘+Home/End: move to the document (or window) edge. */
@@ -310,11 +311,11 @@ export function RichEditor({
               if (!(markdownCompatible ? [1,2,3,4,5,6] : [1,2,3]).includes(attributes.level)) return false;
               return (
                 intercept(
-                  { kind: "block", type: "heading", level: attributes.level as 1 | 2 | 3, toggle: false },
+                  { kind: "block", type: "heading", level: attributes.level as HeadingLevel, toggle: false },
                   props,
                 ) ||
                 (canEdit.current && mountedBlockFormat(props, {
-                  kind: "block", type: "heading", level: attributes.level as 1 | 2 | 3, toggle: false,
+                  kind: "block", type: "heading", level: attributes.level as HeadingLevel, toggle: false,
                 }))
               );
             },
@@ -322,11 +323,11 @@ export function RichEditor({
               if (!(markdownCompatible ? [1,2,3,4,5,6] : [1,2,3]).includes(attributes.level)) return false;
               return (
                 intercept(
-                  { kind: "block", type: "heading", level: attributes.level as 1 | 2 | 3, toggle: true },
+                  { kind: "block", type: "heading", level: attributes.level as HeadingLevel, toggle: true },
                   props,
                 ) ||
                 (canEdit.current && mountedBlockFormat(props, {
-                  kind: "block", type: "heading", level: attributes.level as 1 | 2 | 3, toggle: true,
+                  kind: "block", type: "heading", level: attributes.level as HeadingLevel, toggle: true,
                 }))
               );
             },
