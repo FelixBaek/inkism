@@ -126,12 +126,9 @@ function* pickRegionPiece(
     const end = segment.byte_offset + encoder.encode(segment.source).length;
     const piece = { segment, block, innerIndex, end };
     last = piece;
-    if (selectionMode === "text" && targetByte < end) {
-      chosen = piece;
-      break;
-    }
-    if (selectionMode === "node" && !chosen && targetByte < end) chosen = piece;
+    if (targetByte < end) chosen ??= piece;
     if (chosen) {
+      if (selectionMode === "text") break;
       nodePieces.push(segment);
       if (headPoint.byte <= end) break;
     }
