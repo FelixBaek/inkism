@@ -525,6 +525,8 @@ function Verify-SourceData {
     node (Join-Path $root 'tools/scripts/verify-source-ui.ts') (Join-Path (Split-Path $binary) 'inkism-engine.exe') $db $expectedPath
     if($LASTEXITCODE){throw 'Source bytes/format/restart verification failed'}
 }
+# Blocks edited in the rich editor gain a random ink-block id; every other byte must match.
+function Remove-BlockIds([string]$text) { $text -creplace ' id="ink-block-[0-9a-f-]{36}"','' }
 function Wait-TestDownload([string]$title,[string]$extension,[DateTime]$since,[scriptblock]$ready = $null) {
     $deadline=[DateTime]::UtcNow.AddSeconds(30)
     do {
@@ -650,10 +652,13 @@ try {
         if((Read-Field (Find-Element '노트 제목')) -ne $title){throw 'Active source tab did not restore'}
         Wait-SourceMarker $format 'native_typed'
         $before=[DateTime]::UtcNow
-        Invoke-Element (Find-Element '원문 내보내기' ([System.Windows.Automation.ControlType]::Button))
+        # Raw source export is a note command (command palette), no longer a toolbar button.
+        Invoke-Element (Find-Element '명령창 열기' ([System.Windows.Automation.ControlType]::Button))
+        Invoke-Element (Find-Element '다른 형식으로 내보내기' ([System.Windows.Automation.ControlType]::ListItem))
+        Invoke-Element (Find-Element '원문' ([System.Windows.Automation.ControlType]::ListItem))
         $extension=switch($format){'html'{'html'}'markdown'{'md'}default{'txt'}}
-        $download=Wait-TestDownload $title $extension $before {param([byte[]]$data) [System.Text.Encoding]::UTF8.GetString($data) -ceq $content}
-        if([System.IO.File]::ReadAllText($download,[System.Text.Encoding]::UTF8) -cne $content){throw 'Downloaded source differs from canonical content'}
+        $download=Wait-TestDownload $title $extension $before {param([byte[]]$data) (Remove-BlockIds ([System.Text.Encoding]::UTF8.GetString($data))) -ceq $content}
+        if((Remove-BlockIds ([System.IO.File]::ReadAllText($download,[System.Text.Encoding]::UTF8))) -cne $content){throw 'Downloaded source differs from canonical content'}
         # Observe preview open/close without silently reinterpreting the source.
         Invoke-Element (Find-Element '미리보기' ([System.Windows.Automation.ControlType]::Button))
         Find-Element '미리보기 · 내보내기' | Out-Null
