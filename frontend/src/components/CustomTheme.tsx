@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Palette } from "../icons";
 import { useStore } from "../store";
 import { t } from "../i18n";
 
@@ -13,23 +12,25 @@ const fields = {
   border: t("테두리"),
 } as const;
 type Colors = Record<keyof typeof fields, string>;
+const ROWS: (keyof Colors)[][] = [["canvas"], ["surface"], ["text", "muted"], ["green", "border"]];
 type Themes = { version: 1; light?: Colors; dark?: Colors };
+// 기본값 = styles.css 의 nocturne 토큰(Paper·Black)
 const defaults: Record<"light" | "dark", Colors> = {
   light: {
-    canvas: "#f7f6f3",
-    surface: "#efede9",
-    text: "#232221",
-    muted: "#4a4743",
-    green: "#403e3b",
-    border: "#dedbd5",
+    canvas: "#f3eee3",
+    surface: "#e8e1d2",
+    text: "#1c1b19",
+    muted: "#5e594f",
+    green: "#1d4e9e",
+    border: "#d3cbba",
   },
   dark: {
-    canvas: "#232221",
-    surface: "#1d1c1b",
-    text: "#efede9",
-    muted: "#c2beb6",
-    green: "#e4e1db",
-    border: "#403e3b",
+    canvas: "#121110",
+    surface: "#0c0b0a",
+    text: "#f3eee3",
+    muted: "#b3ac9f",
+    green: "#1d4e9e",
+    border: "#2e2c28",
   },
 };
 const luminance = (s: string) =>
@@ -68,19 +69,23 @@ function parse(value: string): Themes {
     ...(data.dark ? { dark: validateColors(data.dark) } : {}),
   };
 }
-export function CustomTheme() {
+const CHANGED = "inkism-custom-theme";
+function loadSaved(): Themes {
+  try {
+    return parse(localStorage.getItem(KEY) || '{"version":1}');
+  } catch {
+    return { version: 1 };
+  }
+}
+/** 저장한 사용자 테마를 화면에 입힌다. 설정 화면이 닫혀 있어도 늘 붙어 있어야 한다(SettingsDialog가 올린다). */
+export function CustomThemeApplier() {
   const { theme } = useStore();
-  const [saved, setSaved] = useState<Themes>(() => {
-    try {
-      return parse(localStorage.getItem(KEY) || '{"version":1}');
-    } catch {
-      return { version: 1 };
-    }
-  });
-  const [draft, setDraft] = useState<Colors>(defaults[theme]);
-  const [error, setError] = useState("");
-  const dialog = useRef<HTMLDialogElement>(null),
-    file = useRef<HTMLInputElement>(null);
+  const [saved, setSaved] = useState<Themes>(loadSaved);
+  useEffect(() => {
+    const reload = () => setSaved(loadSaved());
+    window.addEventListener(CHANGED, reload);
+    return () => window.removeEventListener(CHANGED, reload);
+  }, []);
   useEffect(() => {
     const root = document.documentElement,
       colors = saved[theme];
@@ -97,121 +102,161 @@ export function CustomTheme() {
         root.style.removeProperty("--" + key);
     };
   }, [saved, theme]);
+  return null;
+}
+export function CustomTheme() {
+  const { theme } = useStore();
+  const [saved, setSaved] = useState<Themes>(loadSaved);
+  const [draft, setDraft] = useState<Colors>(() => saved[theme] || defaults[theme]);
+  const [error, setError] = useState("");
+  const file = useRef<HTMLInputElement>(null);
+  // 모드가 바뀌면 그 모드의 저장값으로 편집을 다시 시작한다.
+  useEffect(() => {
+    setDraft(saved[theme] || defaults[theme]);
+    setError("");
+  }, [theme]); // eslint-disable-line react-hooks/exhaustive-deps
   function persist(next: Themes) {
     try {
       localStorage.setItem(KEY, JSON.stringify(next));
       setSaved(next);
+      window.dispatchEvent(new Event(CHANGED));
       setError("");
-      dialog.current?.close();
+      setDraft(next[theme] || defaults[theme]);
     } catch {
       setError(t("설정을 저장하지 못했습니다. 현재 테마는 유지됩니다."));
     }
   }
+  const ratio = contrast(draft.canvas, draft.text);
+  const weak = [draft.canvas, draft.surface].some((bg) => [draft.text, draft.muted].some((fg) => contrast(bg, fg) < 4.5));
   return (
     <>
-      <button
-        type="button"
-        className="side-item"
-        onClick={() => {
-          setDraft(saved[theme] || defaults[theme]);
-          setError("");
-          dialog.current?.showModal();
+      <form
+        className="settings-card custom-theme"
+        aria-labelledby="custom-theme-title"
+        onSubmit={(e) => {
+          e.preventDefault();
+          try {
+            persist({ ...saved, [theme]: validateColors(draft) });
+          } catch (e) {
+            setError(String((e as Error).message));
+          }
         }}
       >
-        <span className="side-icon">
-          <Palette size={15} />
-        </span>
-        <span className="side-label">{t("사용자 테마")}</span>
-      </button>
-      <dialog ref={dialog} className="custom-theme dialog" aria-labelledby="custom-theme-title">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            try {
-              persist({ ...saved, [theme]: validateColors(draft) });
-            } catch (e) {
-              setError(String((e as Error).message));
-            }
-          }}
-        >
-          <h2 id="custom-theme-title">
+        <div className="settings-card__text">
+          <strong id="custom-theme-title">
             {t("사용자 테마 · {mode}", { mode: theme === "dark" ? t("다크") : t("라이트") })}
-          </h2>
-          <p>{t("현재 모드의 색상을 설정합니다. 저장하기 전에는 적용되지 않습니다.")}</p>
-          {Object.entries(fields).map(([key, label]) => (
-            <label key={key} style={{ display: "flex", justifyContent: "space-between", margin: "12px 0" }}>
-              {label}
-              <input
-                aria-label={t("{label} 색상", { label })}
-                type="color"
-                value={draft[key as keyof Colors]}
-                onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
-              />
-            </label>
+          </strong>
+          {ROWS.map((keys) => (
+            <div key={keys.join()} className="settings-field">
+              {keys.map((k) => fields[k]).join(" / ")}
+              <div className="custom-theme__row">
+                <output>{keys.map((k) => draft[k].toUpperCase()).join("  /  ")}</output>
+                {keys.map((k) => (
+                  <input
+                    key={k}
+                    aria-label={t("{label} 색상", { label: fields[k] })}
+                    type="color"
+                    value={draft[k]}
+                    onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
           {error && <p role="alert">{error}</p>}
-          <div className="dialog-actions">
-            <button type="button" className="btn" onClick={() => file.current?.click()}>
-              {t("테마 가져오기")}
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => {
-                const blob = new Blob([JSON.stringify(saved, null, 2)], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "inkism-theme.json";
-                a.click();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-              }}
-            >
-              {t("테마 내보내기")}
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => {
-                const next = { ...saved };
-                delete next[theme];
-                persist(next);
-              }}
-            >
-              {t("기본값 복원")}
-            </button>
-          </div>
-          <div className="dialog-actions">
-            <button type="button" className="btn" onClick={() => dialog.current?.close()}>
-              {t("취소")}
-            </button>
-            <button type="submit" className="btn btn-primary">
-              {t("테마 저장")}
-            </button>
-          </div>
-        </form>
-        <input
-          ref={file}
-          type="file"
-          accept="application/json,.json"
-          hidden
-          onChange={async (e) => {
-            const f = e.target.files?.[0];
-            e.target.value = "";
-            if (!f) return;
-            try {
-              if (f.size > 4096) throw new Error(t("테마 파일은 4KB 이하여야 합니다."));
-              const imported = parse(await f.text());
-              const colors = imported[theme];
-              if (!colors) throw new Error(t("현재 모드의 색상이 파일에 없습니다."));
-              setDraft(colors);
+          <p>{t("현재 모드의 색상을 설정합니다. 저장하기 전에는 적용되지 않습니다.")}</p>
+        </div>
+        <div className="settings-card__action">
+          <button type="submit" className="btn btn-primary">
+            {t("테마 저장")}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              const next = { ...saved };
+              delete next[theme];
+              persist(next);
+            }}
+          >
+            {t("기본값 복원")}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              setDraft(saved[theme] || defaults[theme]);
               setError("");
-            } catch (e) {
-              setError((e as Error).message);
-            }
-          }}
-        />
-      </dialog>
+            }}
+          >
+            {t("취소")}
+          </button>
+        </div>
+      </form>
+      <div className="settings-card">
+        <div className="settings-card__text">
+          <strong>{t("가독성 미리보기")}</strong>
+          <div
+            className="custom-theme__preview"
+            style={{ background: draft.canvas, color: draft.text, borderColor: draft.border }}
+          >
+            <b>{t("작은 간격이 문장을 편안하게 합니다.")}</b>
+            <span style={{ color: draft.muted }}>{t("색이 달라도 글의 흐름은 선명하게 남습니다.")}</span>
+          </div>
+          <dl className="settings-kv">
+            <dt>{t("본문 명암비")}</dt>
+            <dd>{t("{ratio} : 1 · 4.5 : 1 이상 필요", { ratio: ratio.toFixed(1) })}</dd>
+          </dl>
+          {weak && <p className="custom-theme__warn">{t("대비가 부족한 색 조합은 저장할 수 없어요.")}</p>}
+        </div>
+      </div>
+      <div className="settings-card">
+        <div className="settings-card__text">
+          <strong>{t("테마 파일")}</strong>
+          <p>{t("밝기 모드별 색을 JSON으로 보관합니다. 4KB 이하·색상값과 항목 형식을 확인합니다.")}</p>
+        </div>
+        <div className="settings-card__action custom-theme">
+          <button type="button" className="btn" onClick={() => file.current?.click()}>
+            {t("테마 가져오기")}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              const blob = new Blob([JSON.stringify(saved, null, 2)], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "inkism-theme.json";
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }}
+          >
+            {t("테마 내보내기")}
+          </button>
+          <input
+            ref={file}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (!f) return;
+              try {
+                if (f.size > 4096) throw new Error(t("테마 파일은 4KB 이하여야 합니다."));
+                const imported = parse(await f.text());
+                const colors = imported[theme];
+                if (!colors) throw new Error(t("현재 모드의 색상이 파일에 없습니다."));
+                setDraft(colors);
+                setError("");
+              } catch (e) {
+                setError((e as Error).message);
+              }
+            }}
+          />
+        </div>
+      </div>
     </>
   );
 }

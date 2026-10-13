@@ -4,10 +4,17 @@ import { SyncIndicator } from "./SyncSettings";
 import { EditorZoom } from "./EditorZoom";
 import React, { useState, useMemo, useRef, lazy, Suspense } from "react";
 import { editorLocation, rememberLocation } from "../lib/editor-location";
-import { Type, FileCode2, X, Loader2, StickyNote, CheckCircle2, AlertTriangle, CloudUpload, RefreshCw } from "../icons";
+import { Type, FileCode2, X, Loader2, CheckCircle2, AlertTriangle, CloudUpload, RefreshCw, List, Settings, PanelRight, Eye } from "../icons";
+import { PREVIEW_EVENT } from "./PreviewExport";
+import { IconButton } from "./IconButton";
+import { CoverBanner } from "./NotebookCover";
 import { useStore } from "../store";
 import { htmlBlocks } from "../lib/text";
-import { DraftRecovery } from "./DraftRecovery";
+import type { ContentFormat } from "../types";
+import { useNarrow } from "../lib/narrow";
+import { SaveProtection } from "./SaveProtection";
+import { EmptyWorkspace } from "./EmptyWorkspace";
+import { TrashedNoteBanner } from "./TrashedNoteBanner";
 import { NoteInspector } from "./NoteInspector";
 import { SourceEditor } from "./SourceEditor";
 import { TagInput } from "./TagInput";
@@ -31,11 +38,15 @@ export function EditorPane({
   const s = useStore();
   const documentData=useDocumentMetadata(s.draft?.id,Boolean(s.draft?.isNew));
   const [wrap, setWrap] = usePref("inkism.source.wrap", parseWrap);
+  // 문서 설정 판은 연 노트에만 열려 있다(다른 노트로 가면 닫힘).
+  const [documentPanel, setDocumentPanel] = useState<string | null>(null);
+  const documentOpen = Boolean(s.draft) && documentPanel === s.draft?.id;
+  const setDocumentOpen = (open: boolean) => setDocumentPanel(open ? s.draft?.id ?? null : null);
 
   if (!s.draft) {
     return (
       <div className="editor-workspace">
-        <EmptyEditor />
+        <EmptyWorkspace />
         <NoteInspector open={inspectorOpen} onClose={closeInspector} />
       </div>
     );
@@ -46,6 +57,69 @@ export function EditorPane({
   return (
     <div className="editor-workspace">
       <main className="editor-pane" aria-label={t("편집기")} id="note-editor-panel" data-document-width={documentData.metadata?.document?.width} data-document-spacing={documentData.metadata?.document?.spacing} data-document-tone={documentData.metadata?.document?.tone}>
+        <div className="meta-right">
+          <fieldset className="mode-toggle plain-fieldset" aria-label={t("편집 모드")} disabled={s.editorConverting}>
+            <button
+              type="button"
+              className={`mode-btn ${s.mode === "text" ? "is-active" : ""}`}
+              aria-pressed={s.mode === "text"}
+              onClick={() => void s.setMode("text")}
+            >
+              <Type size={13} aria-hidden /> {t("텍스트")}
+            </button>
+            <button
+              type="button"
+              className={`mode-btn ${s.mode === "html" ? "is-active" : ""}`}
+              aria-pressed={s.mode === "html"}
+              onClick={() => void s.setMode("html")}
+            >
+              <FileCode2 size={13} aria-hidden /> HTML
+            </button>
+            <button
+              type="button"
+              className={`mode-btn ${s.mode === "markdown" ? "is-active" : ""}`}
+              aria-pressed={s.mode === "markdown"}
+              onClick={() => void s.setMode("markdown")}
+            >
+              <FileCode2 size={13} aria-hidden /> MARKDOWN
+            </button>
+          </fieldset>
+        </div>
+        {s.mode !== "text" && (
+          /* 원문 화면(Figma 29)의 도구줄: 서식 도구 대신 미리보기 */
+          <div className="editor-source-actions" role="group" aria-label={t("원문 편집 도구")}>
+            <IconButton label={t("미리보기")} onClick={() => window.dispatchEvent(new Event(PREVIEW_EVENT))}>
+              <Eye size={16} aria-hidden />
+            </IconButton>
+          </div>
+        )}
+        {/* Figma 01 도구줄 오른쪽: 목차 · 문서 설정 · 노트 정보 */}
+        <div className="editor-doc-actions" role="group" aria-label={t("문서 동작")}>
+          <IconButton label={t("목차")} onClick={() => window.dispatchEvent(new Event("inkism-open-outline"))}>
+            <List size={16} aria-hidden />
+          </IconButton>
+          <IconButton
+            label={t("문서 설정")}
+            active={documentOpen}
+            aria-expanded={documentOpen}
+            aria-controls="document-settings-panel"
+            onClick={() => setDocumentOpen(!documentOpen)}
+          >
+            <Settings size={16} aria-hidden />
+          </IconButton>
+          <IconButton
+            label={t("노트 정보")}
+            active={inspectorOpen}
+            aria-expanded={inspectorOpen}
+            aria-controls="note-inspector"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={inspectorOpen ? closeInspector : openInspector}
+          >
+            <PanelRight size={16} aria-hidden />
+          </IconButton>
+        </div>
+        <SaveProtection />
+        {documentData.metadata?.document?.cover && <CoverBanner cover={documentData.metadata.document.cover} />}
         <div className="editor-meta-row">
           <div className="meta-left">
             <input
@@ -72,20 +146,11 @@ export function EditorPane({
           </button>
         </div>
 
-        {s.note?.trashed && s.note.id === d.id && (
-          <p className="source-hint">
-            <output>
-              {t("휴지통에 있는 노트입니다")} ·{" "}
-              <button type="button" className="btn btn-small" onClick={() => void s.restoreSelected()}>
-                {t("복원")}
-              </button>
-            </output>
-          </p>
-        )}
+        <TrashedNoteBanner />
 
         <fieldset className="note-classification plain-fieldset" disabled={s.editorConverting}>
           <label className="visually-hidden" htmlFor="notebook-select">
-            {t("노트북 지정")}
+            {t("폴더 지정")}
           </label>
           <select
             id="notebook-select"
@@ -93,9 +158,9 @@ export function EditorPane({
             value={d.notebook_id ?? ""}
             onChange={(e) => s.updateDraft({ notebook_id: e.target.value || null })}
             disabled={Boolean(d.readonly) || s.editorConverting}
-            aria-label={t("이 노트가 속한 노트북")}
+            aria-label={t("이 노트가 속한 폴더")}
           >
-            <option value="">{t("노트북 없음")}</option>
+            <option value="">{t("폴더 없음")}</option>
             {s.notebooks.map((nb) => (
               <option key={nb.id} value={nb.id}>
                 {nb.name}
@@ -106,37 +171,9 @@ export function EditorPane({
             |
           </span>
           <TagEditor />
-          <div className="meta-right">
-            <fieldset className="mode-toggle plain-fieldset" aria-label={t("편집 모드")}>
-              <button
-                type="button"
-                className={`mode-btn ${s.mode === "text" ? "is-active" : ""}`}
-                aria-pressed={s.mode === "text"}
-                onClick={() => void s.setMode("text")}
-              >
-                <Type size={13} aria-hidden /> {t("텍스트")}
-              </button>
-              <button
-                type="button"
-                className={`mode-btn ${s.mode === "html" ? "is-active" : ""}`}
-                aria-pressed={s.mode === "html"}
-                onClick={() => void s.setMode("html")}
-              >
-                <FileCode2 size={13} aria-hidden /> HTML
-              </button>
-              <button
-                type="button"
-                className={`mode-btn ${s.mode === "markdown" ? "is-active" : ""}`}
-                aria-pressed={s.mode === "markdown"}
-                onClick={() => void s.setMode("markdown")}
-              >
-                <FileCode2 size={13} aria-hidden /> MARKDOWN
-              </button>
-            </fieldset>
-          </div>
         </fieldset>
 
-        <DocumentTools key={d.id} data={documentData}/>
+        <DocumentTools key={d.id} data={documentData} open={documentOpen} onOpenChange={setDocumentOpen}/>
         <NoteBody draft={d} wrap={wrap} setWrap={setWrap} />
       </main>
       <NoteInspector open={inspectorOpen} onClose={closeInspector} />
@@ -145,31 +182,6 @@ export function EditorPane({
 }
 
 type DraftValue = NonNullable<ReturnType<typeof useStore>["draft"]>;
-
-function EmptyEditor() {
-  const s = useStore();
-  return (
-    <main className="editor-pane editor-empty" aria-label={t("편집기")} id="note-editor-panel">
-      <div className="empty-state">
-        {s.draftLoading ? (
-          <>
-            <Loader2 size={28} className="spin" aria-hidden />
-            <p className="empty-title">{t("노트를 불러오는 중…")}</p>
-          </>
-        ) : (
-          <>
-            <StickyNote size={28} aria-hidden />
-            <p className="empty-title">{t("노트를 선택하세요")}</p>
-            <p className="empty-sub">{t("목록에서 노트를 선택하거나 새 노트를 만들어 보세요")}</p>
-            <button type="button" className="btn btn-primary" onClick={()=>s.newNote()}>
-              {t("새 노트 만들기")}
-            </button>
-          </>
-        )}
-      </div>
-    </main>
-  );
-}
 
 /** Rich, markdown or source editor for the current draft. */
 function NoteBody({
@@ -293,8 +305,11 @@ function wholeBodyUndoLabel(undo: { kind?: string; undone: boolean }) {
   return undo.undone ? t("전체 바꾸기 다시 적용") : t("최근 전체 바꾸기 취소");
 }
 
+const FORMAT_LABEL: Record<ContentFormat, string> = { html: "HTML", markdown: "Markdown", text: "TXT" };
+
 export function StatusBar() {
   const s = useStore();
+  const narrow = useNarrow();
   const d = s.draft;
   const chars = d?.content.length ?? 0;
 
@@ -355,18 +370,19 @@ export function StatusBar() {
 
   return (
     <footer className="status-bar" aria-label={t("노트 상태")}>
-      <SyncIndicator />
+      {/* 넓은 화면에서는 사이드바 아래가 동기화 상태를 보여 주고, 좁은 화면에서만 여기 보인다. */}
+      {narrow && (
+        <span className="status-sync">
+          <SyncIndicator />
+        </span>
+      )}
+      {d && <span className="status-format">{FORMAT_LABEL[d.content_format ?? "html"]}</span>}
+      {d && <WordCount draft={d} sourceChars={chars} />}
       <span className="status-spacer" />
-      <EditorZoom />
-      <WordCount draft={d} sourceChars={chars} />
+      {d && <EditorZoom />}
       <span className={`status-save ${statusClass}`} data-save-state={s.saveState} aria-live="polite">
         {status}
       </span>
-      {s.saveState === "error" && (
-        <button type="button" className="btn btn-small" onClick={s.retrySave}>
-          {t("다시 저장")}
-        </button>
-      )}
       {s.wholeBodyUndo && (
         <button
           type="button"
@@ -377,8 +393,6 @@ export function StatusBar() {
           {wholeBodyUndoLabel(s.wholeBodyUndo)}
         </button>
       )}
-      {s.saveState === "conflict" && <ConflictActions />}
-      {(s.saveState === "conflict" || s.saveState === "error") && <DraftRecovery />}
       {s.indexPending !== null && s.indexPending > 0 && (
         <span className="status-index" aria-live="polite">
           <Loader2 size={12} className="spin" aria-hidden />
@@ -480,16 +494,3 @@ function WordCount({
   );
 }
 
-function ConflictActions() {
-  const s = useStore();
-  return (
-    <span className="conflict-actions">
-      <button type="button" className="btn btn-small btn-primary" onClick={s.keepLocalVersion}>
-        {t("내 편집 유지하고 저장")}
-      </button>
-      <button type="button" className="btn btn-small" onClick={s.useServerVersion}>
-        {t("서버 버전으로 교체")}
-      </button>
-    </span>
-  );
-}

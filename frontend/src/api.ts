@@ -110,6 +110,8 @@ export interface ListParams {
   limit?: number;
   sort_by?: "created_at" | "updated_at" | "edited_at" | "title";
   sort_direction?: "asc" | "desc";
+  /** 일일 노트(id `daily-…`)만. */
+  daily?: boolean;
 }
 
 let uploadAccess: Promise<{ url: string; token: string }> | undefined;
@@ -281,6 +283,7 @@ export const api = {
   delete: (id: string) => rpc<{ deleted: boolean }>("delete", { id }),
 
   notebooks: () => rpc<Notebook[]>("notebooks"),
+  notebookCounts: () => rpc<Record<string, number>>("notebook_counts"),
 
   saveNotebook: (nb: {
     id?: string;
@@ -307,11 +310,17 @@ export const api = {
   tags: () => rpc<TagCount[]>("tags"),
 
   stats: () => rpc<Stats>("stats"),
+  /** 지운 노트 자동 삭제 기간(일). null = 안 함(기본). 보관한 노트는 지우지 않는다. */
+  trashRetention: () => rpc<{ days: TrashDays }>("trash_retention_get"),
+  setTrashRetention: (days: TrashDays) => rpc<{ days: TrashDays }>("trash_retention_set", { days }),
+  trashTimes: (ids: string[]) => rpc<{ times: Record<string, number>; days: TrashDays }>("trash_times", { ids }),
+  trashPurge: () => rpc<{ deleted: string[]; more: boolean }>("trash_purge"),
 
   revisionBody: (id: string, revision: number) =>
     rpc<{ revision: number; content: string }>("revision_body", { id, revision }),
 
   historyBody: (id:string,history_id:string)=>rpc<{title:string;content:string;content_format:import("./types").ContentFormat}>("history_body",{id,history_id}),
+  historyChanges: (id:string,limit=5)=>rpc<{items:{id:string;added:number|null;removed:number|null}[]}>("history_changes",{id,limit}),
   nameCurrentVersion: (id:string,revision:number,label:string)=>rpc<{id:string}>("history_name_current",{id,revision,label}),
   renameVersion: (id:string,revision:number,history_id:string,expected_label:string,label:string)=>rpc<{id:string}>("history_rename",{id,revision,history_id,expected_label,label}),
   deleteNamedVersion: (id:string,revision:number,history_id:string,expected_label:string)=>rpc<{id:string}>("history_delete_named",{id,revision,history_id,expected_label}),
@@ -404,3 +413,4 @@ export function summaryOf(note: Note): Summary {
   const { content: _c, text: _t, ...rest } = note;
   return { ...rest, preview: note.text.slice(0, 180) };
 }
+export type TrashDays = 7 | 30 | 90 | null;

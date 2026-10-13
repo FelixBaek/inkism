@@ -2,7 +2,7 @@ import { rpc } from '../api';
 
 export type PropertyType = 'text' | 'number' | 'date' | 'checkbox' | 'list' | 'select' | 'multiselect' | 'person' | 'relation' | 'attachment';
 export type NoteProperty = { definition_id?: string; name: string; type: PropertyType; value: string | number | boolean | string[]; options?: string[] };
-export type DocumentSettings = {parent_id?: string | null; width?: "standard"|"wide"|"full"; spacing?: "compact"|"normal"|"relaxed"; tone?: "default"|"paper"|"soft"; card_size?: "small"|"medium"|"large"; card_shadow?: boolean};
+export type DocumentSettings = {cover?: import("../types").NotebookCover | null; parent_id?: string | null; width?: "standard"|"wide"|"full"; spacing?: "compact"|"normal"|"relaxed"; tone?: "default"|"paper"|"soft"; card_size?: "small"|"medium"|"large"; card_shadow?: boolean};
 export type NoteKnowledge = { anchor_redirects?:Record<string,string>; id: string; aliases: string[]; properties: NoteProperty[]; version: number; document?: DocumentSettings };
 export type KnowledgeItem = NoteKnowledge & { title: string; tags: string[]; updated_at: number; revision: number; readonly: boolean; content_format: string };
 export type PropertyDefinition = {id:string;name:string;type:PropertyType;options?:string[]};

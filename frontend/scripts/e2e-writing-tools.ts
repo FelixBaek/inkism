@@ -1,34 +1,35 @@
+import {chromium} from './browser-env.ts';import {libraryTool} from './library-tools.ts';
 import assert from 'node:assert/strict';
-import {chromium} from './browser-env.ts';
+
 const base=process.env.INKISM_URL||'http://127.0.0.1:49323';
 const rpc=async(op:string,args={})=>{const result=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})}).then(r=>r.json());assert.equal(result.ok,true,JSON.stringify(result));return result.data;};
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 const page=await browser.newPage({viewport:{width:1400,height:1000}}),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
 await page.addInitScript(()=>{localStorage.setItem('inkism.lang','ko');localStorage.setItem('inkism.inspector','false');});
 const until=async(fn:()=>Promise<boolean>)=>{for(let i=0;i<100;i++){if(await fn())return;await page.waitForTimeout(80);}throw Error('condition timeout');};
-const tools=page.locator('.writing-tools'),modal=page.locator('.writing-tools-dialog');
+const modal=page.locator('.writing-tools-dialog');
 const currentId=async()=>{const notes=await rpc('list',{view:'all',limit:100});const title=await page.getByRole('textbox',{name:'노트 제목',exact:true}).inputValue();return notes.items.find((n:any)=>n.title===title)?.id;};
 const templateTitle='Writing template '+Date.now();
 try{
  const config=await rpc('knowledge_settings_get');await rpc('knowledge_settings_set',{version:config.version,template_ids:[],daily_template_id:null});
  const template=await rpc('save',{note:{title:templateTitle,content:'<h2>동일 제목</h2><p>첫 문단 {{title}}</p><h2>동일 제목</h2><p>날짜 {{date}} 시각 {{time}}</p>',content_format:'html'}});
  await rpc('workspace_set',{ids:[template.id],active:template.id,locations:{}});await page.goto(base);await page.locator('.tiptap').waitFor();
- await tools.getByRole('button',{name:'템플릿',exact:true}).click();await modal.getByRole('button',{name:'현재 노트를 템플릿으로 등록',exact:true}).click();await modal.locator('.writing-template-row').filter({hasText:templateTitle}).waitFor();
+ await libraryTool(page,'템플릿');await modal.getByRole('button',{name:'현재 노트를 템플릿으로 등록',exact:true}).click();await modal.locator('.writing-template-row').filter({hasText:templateTitle}).waitFor();
  await modal.getByLabel('일일 노트 템플릿').selectOption(template.id);await until(async()=>{const config=await rpc('knowledge_settings_get');return config.daily_template_id===template.id;});
- await modal.locator('.writing-template-row').getByRole('button',{name:templateTitle,exact:true}).click();
+ await modal.locator('.writing-template-row').getByRole('button',{name:'템플릿으로 새 노트: '+templateTitle,exact:true}).click();
  const prompt=page.getByRole('dialog',{name:'템플릿으로 새 노트',exact:true});await prompt.waitFor();await prompt.getByRole('textbox',{name:'노트 제목',exact:true}).fill('<em>literal title</em>');await prompt.getByRole('button',{name:'확인',exact:true}).click();
  await until(async()=>await page.getByRole('textbox',{name:'노트 제목',exact:true}).inputValue()==='<em>literal title</em>');
  const createdId=await currentId(),created=await rpc('get',{id:createdId});assert.match(created.content,/&lt;em&gt;literal title&lt;\/em&gt;/);assert.doesNotMatch(created.content,/\{\{(?:title|date|time)\}\}/);assert.equal((await rpc('get',{id:template.id})).revision,template.revision);
- await tools.getByRole('button',{name:'목차',exact:true}).click();await modal.getByRole('button',{name:'H2동일 제목',exact:true}).nth(1).click();
+ await libraryTool(page,'목차');await modal.getByRole('button',{name:'H2동일 제목',exact:true}).nth(1).click();
  const headingIndex=await page.evaluate(()=>{const selection=window.getSelection(),node=selection?.anchorNode?.parentElement?.closest('h2');return [...document.querySelectorAll('.tiptap h2')].indexOf(node!);});assert.equal(headingIndex,1,'outline jumps to second identical heading');assert.equal((await rpc('get',{id:createdId})).revision,created.revision,'outline must not edit note');
  await page.getByRole('button',{name:'HTML',exact:true}).click();await page.locator('.cm-content').waitFor();
- await tools.getByRole('button',{name:'목차',exact:true}).click();await modal.getByRole('button',{name:'H2동일 제목',exact:true}).nth(1).click();
+ await libraryTool(page,'목차');await modal.getByRole('button',{name:'H2동일 제목',exact:true}).nth(1).click();
  const sourceOffset=await page.evaluate(()=>{const selection=window.getSelection(),content=document.querySelector('.cm-content');const range=document.createRange();range.setStart(content!,0);range.setEnd(selection!.anchorNode!,selection!.anchorOffset);return range.toString().length;});assert.equal(sourceOffset,created.content.indexOf('<h2>',1),'source outline exact offset');
  await page.keyboard.press('Control+o');await modal.getByRole('combobox').fill(templateTitle);await modal.getByRole('option',{name:templateTitle,exact:true}).click();await until(async()=>await page.getByRole('textbox',{name:'노트 제목',exact:true}).inputValue()===templateTitle);
- await tools.getByRole('button',{name:'일일 노트',exact:true}).click();await until(async()=>/^\d{4}-\d{2}-\d{2}$/.test(await page.getByRole('textbox',{name:'노트 제목',exact:true}).inputValue()));
+ await libraryTool(page,'일일 노트');await until(async()=>/^\d{4}-\d{2}-\d{2}$/.test(await page.getByRole('textbox',{name:'노트 제목',exact:true}).inputValue()));
  const dailyId=await currentId(),daily=await rpc('get',{id:dailyId});assert.match(daily.content,/첫 문단 \d{4}-\d{2}-\d{2}/);assert.doesNotMatch(daily.content,/\{\{/);
- await tools.getByRole('button',{name:'일일 노트',exact:true}).click();assert.equal(await currentId(),dailyId);
- await page.reload();await page.locator('.tiptap').waitFor();await tools.getByRole('button',{name:'템플릿',exact:true}).click();await modal.getByRole('button',{name:templateTitle,exact:true}).waitFor();assert.equal(await modal.getByLabel('일일 노트 템플릿').inputValue(),template.id);await modal.getByRole('button',{name:'닫기',exact:true}).click();
+ await libraryTool(page,'일일 노트');assert.equal(await currentId(),dailyId);
+ await page.reload();await page.locator('.tiptap').waitFor();await libraryTool(page,'템플릿');await modal.getByRole('button',{name:'템플릿으로 새 노트: '+templateTitle,exact:true}).waitFor();assert.equal(await modal.getByLabel('일일 노트 템플릿').inputValue(),template.id);await modal.getByRole('button',{name:'닫기',exact:true}).click();
  await page.keyboard.press('Control+o');await modal.getByRole('combobox').fill('Quick new unique');await modal.getByRole('button',{name:'이 제목으로 새 노트',exact:true}).click();await until(async()=>await page.getByRole('textbox',{name:'노트 제목',exact:true}).inputValue()==='Quick new unique');
  assert.deepEqual(errors,[]);console.log('PASS writing tools: template registration/config reload, literal HTML interpolation, actual create/open, repeated heading exact rich/source jump with revision unchanged, keyboard quick switch/new, atomic daily reopen/template');
 }finally{await browser.close();}

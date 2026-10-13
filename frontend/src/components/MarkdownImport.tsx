@@ -5,7 +5,7 @@ import type { Note } from "../types";
 import { useStore } from "../store";
 import { t } from "../i18n";
 
-export function MarkdownImport() {
+export function MarkdownImport({ className = "btn btn-primary" }: Readonly<{ className?: string }>) {
   const s = useStore();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -34,15 +34,13 @@ export function MarkdownImport() {
     <>
       <button
         type="button"
-        className="side-item"
+        className={className}
         disabled={busy}
         onClick={() => input.current?.click()}
         title={t("UTF-8 Markdown 파일을 새 노트로 가져옵니다. 첨부파일 원본은 ZIP 백업으로 옮겨 주세요.")}
       >
-        <span className="side-icon" aria-hidden>
-          <FileUp size={15} />
-        </span>
-        <span className="side-label">{busy ? t("Markdown 가져오는 중…") : t("Markdown 가져오기")}</span>
+        <FileUp size={14} aria-hidden />
+        {busy ? t("Markdown 가져오는 중…") : t("Markdown 가져오기")}
       </button>
       <input
         ref={input}

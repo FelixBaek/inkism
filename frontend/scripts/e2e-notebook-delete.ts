@@ -5,7 +5,7 @@ const rpc=async(op,args={})=>{
  const v=await (await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();
  assert.equal(v.ok,true,JSON.stringify(v));return v.data;
 };
-const title='노트북 삭제 '+Date.now(),nb=await rpc('save_notebook',{name:'분류 '+Date.now()});
+const title='폴더 삭제 '+Date.now(),nb=await rpc('save_notebook',{name:'분류 '+Date.now()});
 const content=Array.from({length:10000},(_,i)=>'<p>본문 '+i+' 보존</p>').join('');
 const note=await rpc('save',{note:{title,content,text:'본문',notebook_id:nb.id}});
 await rpc('wait_index');
@@ -23,7 +23,7 @@ try{
   }
   await route.continue();
  });
- await page.getByRole('tab',{name:'노트북',exact:true}).click();await page.getByRole('button',{name:'노트북 '+nb.name+' 옵션',exact:true}).click();
+ await page.getByRole('tab',{name:'폴더',exact:true}).click();await page.getByRole('button',{name:'폴더 '+nb.name+' 옵션',exact:true}).click();
  await page.getByRole('menuitem',{name:'삭제',exact:true}).click();
  await page.getByRole('button',{name:'삭제',exact:true}).click();
  if(process.env.INKISM_EXPECT_BROKEN!=='1'){
@@ -31,7 +31,7 @@ try{
   await page.locator('.cm-content').first().click();await page.keyboard.press('Control+Home');await page.keyboard.insertText('삭제중입력 ');
   await new Promise(r=>setTimeout(r,1000));release();
  }
- await page.getByRole('button',{name:'노트북 '+nb.name+' 옵션',exact:true}).waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'폴더 '+nb.name+' 옵션',exact:true}).waitFor({state:'hidden'});
  await page.locator('.cm-content').first().click();await page.keyboard.press('Control+Home');await page.keyboard.insertText('삭제후편집 ');
  await page.keyboard.press('Control+s');
  if(process.env.INKISM_EXPECT_BROKEN==='1'){

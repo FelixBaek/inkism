@@ -54,16 +54,16 @@ try{
  },{source,html,seam});
  await editor.evaluate((el: any,html)=>{el.editor.view.focus();el.editor.view.pasteHTML(html);},html);await idle();await saved();
  const expected=reference.paste;
- assert.equal(await body(),expected,'large rich paste keeps exact outside bytes and formatting');
+ const pasteIds=assertBlockBytes(await body(),expected,{added:1,message:'large rich paste keeps exact outside bytes and formatting'});
  assert.ok((await editor.textContent()).length<33000);assert.ok(await page.locator('*').count()<1500,'bounded mounted display after paste');
  await page.keyboard.insertText('후속');await saved();
  // Typing in the internal window identifies the giant paragraph enclosing it
  // (one splice of its opening tag); the native reference has no identity plugin.
- assertBlockBytes(await body(),reference.follow,{added:1,message:'follow-up typing lands at inserted end with inherited format'});
+ assertBlockBytes(await body(),reference.follow,{added:1,ids:pasteIds,message:'follow-up typing lands at inserted end with inherited format'});
  await page.reload();await ready();
- await historyKey(page,'undo');await saved();assert.equal(await body(),expected,'restart undo follow-up');
+ await historyKey(page,'undo');await saved();assertBlockBytes(await body(),expected,{added:1,ids:pasteIds,message:'restart undo follow-up'});
  await historyKey(page,'undo');await saved();assert.equal(await body(),source,'restart undo large paste');
- await historyKey(page,'redo');await saved();assert.equal(await body(),expected,'restart redo large paste');
+ await historyKey(page,'redo');await saved();assertBlockBytes(await body(),expected,{added:1,ids:pasteIds,message:'restart redo large paste'});
  assert.deepEqual(errors,[]);
  console.log('PASS large rich paste, exact outside source and marks, bounded mounted display, follow-up caret/marks, restart undo/redo; lazy='+(process.env.INKISM_LAZY!=='0'));
 }finally{await browser.close();}

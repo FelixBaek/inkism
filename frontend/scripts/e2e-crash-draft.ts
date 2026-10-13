@@ -62,7 +62,7 @@ try{
  const title=scenario==='split'?original.title:'강제 종료 '+scenario+' '+Date.now();
  if(scenario!=='split')await page.locator('.title-input').fill(title);
  if(!original){
-  await page.getByRole('combobox',{name:'이 노트가 속한 노트북',exact:true}).selectOption(notebook.id);
+  await page.getByRole('combobox',{name:'이 노트가 속한 폴더',exact:true}).selectOption(notebook.id);
   // Keep this fixture in the existing title/body paths; new-note tags are empty.
  }
  if(scenario==='paged'){
@@ -114,8 +114,15 @@ try{
  assert.deepEqual(errors,[]);
  const manifest={original,expectedContent,title,format,tags:original?.tags??[],notebook_id:notebook.id,recoverySuffix:scenario==='split'?' (분할 자동 복구)':' (자동 복구)',
   expectRecovered:!savedScenario,source_id:lastCommitted?.note.id??original?.id};
- const crashed=page.waitForEvent('crash',{timeout:15000}),cdp=await page.context().newCDPSession(page);
- void cdp.send('Page.crash').catch(()=>{});await crashed;
+ // Page.crash can stall without reporting the crash event on CI. Kill only
+ // renderers owned by this isolated browser, without an unload or graceful close.
+ const cdp=await browser.newBrowserCDPSession();
+ const {processInfo}=await cdp.send('SystemInfo.getProcessInfo');
+ const renderers=processInfo.filter(info=>info.type==='renderer');
+ assert.ok(renderers.length>0,'the fixture must have a live renderer to terminate');
+ const crashed=page.waitForEvent('crash',{timeout:15000});
+ for(const renderer of renderers)process.kill(renderer.id,'SIGKILL');
+ await crashed;
  await writeFile(process.env.INKISM_CRASH_MANIFEST,JSON.stringify(manifest),'utf8');
  console.log('PASS: '+scenario+'; acknowledged checkpoint; real renderer crash without unload; original preserved');
 }finally{release?.();await browser.close();}

@@ -33,11 +33,11 @@ export function TagChangeDialog(){
  const more=()=>void run(async()=>{if(!preview||preview.next_offset===null)return;const next=await tagChanges.preview({preview_id:preview.id,offset:preview.next_offset});setPreview({...next,items:[...preview.items,...next.items]});});
  return createPortal(<dialog ref={dialog} className="sharing-dialog tag-change-dialog" aria-label={t('태그 변경 미리보기와 기록')} onCancel={e=>{e.preventDefault();close();}}>
   <h2>{t('태그 변경 미리보기와 기록')}</h2>
-  <p>{t('보관함과 휴지통을 포함합니다. 잠긴 노트와 읽기 전용 노트는 제외합니다. 미리보기 이후 문서가 바뀌면 다시 확인해야 합니다.')}</p>
+  <p>{t('보관함과 지운 노트를 포함합니다. 잠긴 노트와 읽기 전용 노트는 제외합니다. 미리보기 이후 문서가 바뀌면 다시 확인해야 합니다.')}</p>
   {busy&&<p role="status">{t('불러오는 중…')}</p>}{error&&<p role="alert">{error}</p>}{success&&<p role="status">{success}</p>}
   {preview&&<section><h3>{preview.name} → {preview.replacement??t('태그 제거')}</h3><p>{t('변경 {changed}개 · 제외 {excluded}개 · 전체 {total}개',{changed:preview.eligible_count,excluded:preview.excluded_count,total:preview.total})}</p>
    {preview.default_tag.changes&&<p>{t('새 노트의 기본 태그도 함께 변경합니다.')}: {preview.default_tag.before??'—'} → {preview.default_tag.after??'—'}</p>}
-   <ul className="tag-change-items">{preview.items.map(item=><li key={item.id}><strong>{item.locked?t('잠긴 노트'):item.title||t('제목 없음')}</strong><span>{item.reason==='locked'?t('잠긴 노트'):item.reason==='readonly'?t('읽기 전용'):t('변경 대상')}{item.trashed?' · '+t('휴지통'):item.archived?' · '+t('보관함'):''}</span>{!item.locked&&<div>{item.tags.join(', ')} → {item.next_tags.join(', ')||'—'}</div>}</li>)}</ul>
+   <ul className="tag-change-items">{preview.items.map(item=><li key={item.id}><strong>{item.locked?t('잠긴 노트'):item.title||t('제목 없음')}</strong><span>{item.reason==='locked'?t('잠긴 노트'):item.reason==='readonly'?t('읽기 전용'):t('변경 대상')}{item.trashed?' · '+t('지운 노트'):item.archived?' · '+t('보관함'):''}</span>{!item.locked&&<div>{item.tags.join(', ')} → {item.next_tags.join(', ')||'—'}</div>}</li>)}</ul>
    {preview.next_offset!==null&&<button className="btn" disabled={busy} onClick={more}>{t('변경 대상 더 보기')}</button>}
    <button className="btn btn-primary" disabled={busy||(!preview.eligible_count&&!preview.default_tag.changes)} onClick={apply}>{t('확인한 태그 변경 적용')}</button>
   </section>}

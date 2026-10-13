@@ -10,7 +10,7 @@ import { sanitizeRichHtml } from "./sanitize";
 import type { DocumentSegment, DocumentSegmentPage } from "../types";
 import type { WindowPreview } from "./window-history";
 import type { BodySplice } from "./body-splice";
-import { projectSegment, inspectSegment, contextIdentity, rebaseSegmentIdentity } from "./rich-segment";
+import { projectSegment, inspectSegment, contextIdentifiable, contextIdentity, rebaseSegmentIdentity } from "./rich-segment";
 import { segmentPositionMap } from "./segment-selection";
 import {
   SegmentModelBuilder,
@@ -748,11 +748,31 @@ function documentSelectionOf(
 }
 /** Identities for touched blocks, including the ancestors of a bounded source
  * span. Their opening tokens are saved separately by contextIdentity. */
-function* identifyInput(transformed: BlockTransform, first: number, to: number): Generator<EditWorkStep, BlockTransform, unknown> {
+function* identifyInput(transformed: BlockTransform, first: number, from: number, to: number): Generator<EditWorkStep, BlockTransform, unknown> {
   if (first >= transformed.mapping.maps.length) return transformed;
-  const doc = yield* identifyTouchedBlocksWork(transformed.doc, transformed.mapping, { first, from: 0, to });
+  const doc = yield* identifyTouchedBlocksWork(transformed.doc, transformed.mapping, { first, from, to });
   if (doc === transformed.doc) return transformed;
   return { doc, selection: Selection.fromJSON(doc, transformed.selection.toJSON()), mapping: transformed.mapping };
+}
+/** Fold tag edits inside the prepared replacement into its unchanged prefix.
+ * Only edits before that whole range may be sent separately to storage. */
+function selectionPrefix(prepared: PreparedSelection, start: number, tags: BodySplice[]) {
+  let prefix = new TextDecoder().decode(encoder.encode(prepared.before).subarray(0, start - prepared.byteStart));
+  const outside: BodySplice[] = [];
+  let externalGrowth = 0;
+  for (const tag of tags) {
+    const relative = tag.start - prepared.byteStart - externalGrowth;
+    if (relative < 0) {
+      outside.push(tag);
+      externalGrowth += encoder.encode(tag.replacement).length - encoder.encode(tag.expected).length;
+    } else {
+      const bytes = encoder.encode(prefix), end = relative + encoder.encode(tag.expected).length;
+      if (new TextDecoder().decode(bytes.subarray(relative, end)) !== tag.expected)
+        throw new Error(t("블록 식별자를 붙일 위치를 찾지 못했습니다. 원문을 유지했습니다."));
+      prefix = new TextDecoder().decode(bytes.subarray(0, relative)) + tag.replacement + new TextDecoder().decode(bytes.subarray(end));
+    }
+  }
+  return { prefix, outside };
 }
 function* changeSelectionWork(
   prepared: PreparedSelection,
@@ -787,7 +807,7 @@ function* changeSelectionWork(
   };
   const mappedFrom = transformed.mapping.map(left.from, -1),
     mappedTo = transformed.mapping.map(right.to, 1);
-  transformed = yield* identifyInput(transformed, input, mappedTo);
+  if (contextIdentifiable(region)) transformed = yield* identifyInput(transformed, input, 0, mappedTo);
   const slice = transformed.doc.slice(mappedFrom, mappedTo, true);
   const textSelection = transformed.selection instanceof TextSelection;
   const nodeSelection = transformed.selection instanceof NodeSelection;
@@ -797,9 +817,10 @@ function* changeSelectionWork(
   else if (nodeSelection) ends = [transformed.selection.from, transformed.selection.to];
   const positions = ends.map((pos) => pos - mappedFrom + slice.openStart);
   const { projected, points, tags } = yield* projectRegion(prepared, transformed, region, slice, positions, sourceSelection);
+  const { prefix, outside } = selectionPrefix(prepared, start, tags);
   const old = encoder.encode(prepared.before),
     replacement =
-      new TextDecoder().decode(old.subarray(0, start - prepared.byteStart)) +
+      prefix +
       projected +
       new TextDecoder().decode(old.subarray(end - prepared.byteStart));
   if (encoder.encode(replacement).length > 20 * 1024 * 1024) throw new Error("Replacement exceeds 20 MiB");
@@ -833,7 +854,7 @@ function* changeSelectionWork(
   const documentSelection = documentSelectionOf(prepared, transformed, points, offscreen);
   return {
     start: rebased.byte_offset,
-    tags,
+    tags: outside,
     expected: prepared.before,
     replacement,
     count: transformed.doc.childCount,

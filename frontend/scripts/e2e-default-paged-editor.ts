@@ -93,7 +93,7 @@ try{
  const imported='<table data-unknown="keep"><tbody>'+Array.from({length:4000},()=>'<tr><td><p>가져온 표의 알 수 없는 속성</p></td></tr>').join('')+'</tbody></table>';
  const unsupported=await rpc('save',{note:{title:'미지원 표 보존 '+Date.now(),content:imported,content_format:'html'}});await rpc('wait_index');
  await page.goto(base+'/');await page.getByRole('button',{name:'노트 열기: '+unsupported.title,exact:true}).click();
- await page.locator('.window-error').waitFor();assert.equal((await rpc('get',{id:unsupported.id})).content,imported);
+ await ready();assert.equal((await rpc('get',{id:unsupported.id})).content,imported);
  await page.getByRole('button',{name:'HTML',exact:true}).click();await page.locator('.cm-content').waitFor();
  assert.equal((await rpc('get',{id:unsupported.id})).content,imported);
  // Small rich documents and explicit source editing retain their existing modes.

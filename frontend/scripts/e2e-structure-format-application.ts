@@ -28,14 +28,15 @@ const saved=()=>waitSaved(page);
 const focus=()=>editor.evaluate((el:any)=>el.editor.view.focus());
 const command=name=>editor.evaluate((el:any,name)=>el.editor.chain().focus()[name]().run(),name);
 const body=async id=>(await rpc('get',{id})).content;
+const stableIds=html=>{let i=0;return html.replace(/ id="ink-block-[0-9a-f-]{36}"/g,()=>` id="generated-${i++}"`);};
 const expectBody=async(id,expected,label)=>{
  let actual='';
  await waitForPredicate(async()=>{
   const error=await page.locator('.window-error').count()?await page.locator('.window-error').textContent():null;
   if(error)throw Error(label+': '+error);
-  actual=await body(id);return actual===expected;
+  actual=await body(id);return stableIds(actual)===stableIds(expected);
  },label+'; expected chars='+expected.length,15000);
- assert.ok(actual===expected,label);
+ assert.equal(stableIds(actual),stableIds(expected),label);
 };
 // Like expectBody, ignoring generated identities; then exactly `added` of them.
 const expectEdited=async(id,expected,added,label)=>{
@@ -43,7 +44,7 @@ const expectEdited=async(id,expected,added,label)=>{
  await waitForPredicate(async()=>{
   const error=await page.locator('.window-error').count()?await page.locator('.window-error').textContent():null;
   if(error)throw Error(label+': '+error);
-  actual=await body(id);return withoutBlockIds(actual)===expected;
+  actual=await body(id);return actual===expected;
  },label+'; expected chars='+expected.length,15000);
  return assertBlockBytes(actual,expected,{added,message:label});
 };
@@ -73,7 +74,7 @@ try{
    const actual=el.editor;
    // Keep the real node/mark extensions but omit our command interceptor,
    // window guard, history and UI plugins. Core native commands are unchanged.
-   const extensions=actual.extensionManager.extensions.filter(extension=>extension.type==='node'||extension.type==='mark');
+   const extensions=actual.extensionManager.extensions.filter(extension=>extension.type==='node'||extension.type==='mark'||extension.name==='blockIdentity');
    const native=new actual.constructor({extensions,content:source,parseOptions:{preserveWhitespace:'full'}});
    try{
     if(range){let start=0;for(let i=0;i<16;i++)start+=native.state.doc.child(i).nodeSize;native.commands.setTextSelection({from:start+10,to:native.state.doc.content.size-1});}
@@ -105,14 +106,14 @@ try{
   assert.ok(reads.length>0&&reads.every(input=>input.limit<=32),'bounded source reads');
   if(name==='toggleTaskList'&&!range){
    const checked=await editor.evaluate((el:any,model)=>{
-    const native=new el.editor.constructor({extensions:el.editor.extensionManager.extensions.filter(extension=>extension.type==='node'||extension.type==='mark'),content:model});
-    try{native.view.dispatch(native.state.tr.setNodeMarkup(1,undefined,{checked:true}));return native.getHTML();}
+    const native=new el.editor.constructor({extensions:el.editor.extensionManager.extensions.filter(extension=>extension.type==='node'||extension.type==='mark'||extension.name==='blockIdentity'),content:model,parseOptions:{preserveWhitespace:"full"}});
+    try{native.view.dispatch(native.state.tr.setNodeMarkup(1,undefined,{...native.state.doc.nodeAt(1).attrs,checked:true}));return native.getHTML();}
     finally{native.destroy();}
-   },oracle.model);
+   },await body(note.id));
    await editor.getByRole('checkbox').first().check();
    // The toggled item is the edited block: it and the list enclosing it
    // (opened in this internal window) gain identities, as in the editor.
-   await expectEdited(note.id,checked,2,'checkbox updates only the first task item');await saved();
+   await expectEdited(note.id,checked,0,'checkbox updates only the first task item');await saved();
    await historyKey(page,'undo');
    await expectBody(note.id,oracle.formatted,'checkbox undo preserves the other 999 items');await saved();
   }

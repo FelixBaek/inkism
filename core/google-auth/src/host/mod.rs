@@ -51,21 +51,70 @@ impl Identity {
     }
 }
 
+/// Masks a verified address for display: first character of the local part,
+/// `***`, then the domain (`f***@example.com`). The full address is never kept.
+/// Returns "" for anything that does not look like a single address.
+pub fn mask_email(email: &str) -> String {
+    let email = email.trim();
+    let Some((local, domain)) = email.split_once('@') else {
+        return String::new();
+    };
+    let Some(first) = local.chars().next() else {
+        return String::new();
+    };
+    let hint = format!("{first}***@{}", domain.to_ascii_lowercase());
+    if valid_hint(&hint) {
+        hint
+    } else {
+        String::new()
+    }
+}
+
+/// Only the masked form is accepted anywhere a hint is stored or shown.
+pub fn valid_hint(hint: &str) -> bool {
+    let Some((local, domain)) = hint.split_once('@') else {
+        return false;
+    };
+    let mut chars = local.chars();
+    let first = chars.next();
+    hint.len() <= 254
+        && first.is_some_and(|c| !c.is_whitespace() && !c.is_control() && c != '*')
+        && chars.as_str() == "***"
+        && !domain.is_empty()
+        && domain.contains('.')
+        && !domain.starts_with('.')
+        && domain
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+}
+
 /// Supplies verified Google claims plus the ephemeral ID token.
 pub trait Provider: Send + Sync {
     fn login(&self, ctx: &Context) -> Result<(Identity, String), BoxError>;
+    /// Like `login`, plus a masked address for display ("" when unknown).
+    fn login_with_hint(&self, ctx: &Context) -> Result<(Identity, String, String), BoxError> {
+        let (identity, token) = self.login(ctx)?;
+        Ok((identity, token, String::new()))
+    }
     fn cancel(&self);
 }
 
 impl Provider for auth::Client {
     fn login(&self, ctx: &Context) -> Result<(Identity, String), BoxError> {
+        let (identity, token, _) = self.login_with_hint(ctx)?;
+        Ok((identity, token))
+    }
+    fn login_with_hint(&self, ctx: &Context) -> Result<(Identity, String, String), BoxError> {
         let (identity, token) = self.login_with_id_token(ctx)?;
+        // Only the masked form leaves this function; the claim is dropped here.
+        let hint = if identity.email_verified { mask_email(&identity.email) } else { String::new() };
         Ok((
             Identity {
                 issuer: identity.issuer,
                 subject: identity.subject,
             },
             token,
+            hint,
         ))
     }
     fn cancel(&self) {
@@ -78,6 +127,19 @@ impl Provider for auth::Client {
 pub trait Store: Send + Sync {
     fn load(&self) -> Result<Option<Identity>, HostError>;
     fn save(&self, identity: &Identity) -> Result<(), HostError>;
+    /// Masked address saved beside the binding; "" when absent or unreadable.
+    fn load_hint(&self) -> String {
+        String::new()
+    }
+    /// Best effort: the hint is display-only and never part of the policy.
+    fn save_hint(&self, _hint: &str) -> Result<(), HostError> {
+        Ok(())
+    }
+    /// Deletes the binding (and hint). Only `Controller::disable` calls it,
+    /// after re-authenticating the bound account.
+    fn remove(&self) -> Result<(), HostError> {
+        Err(HostError::Unavailable)
+    }
 }
 
 /// The part of the host bridge's session gate the controller drives. The
@@ -116,6 +178,9 @@ pub struct SecurityStatus {
     pub pending: bool,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub recovery_error: String,
+    /// Masked bound account (`f***@example.com`); never the full address.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub account_hint: String,
 }
 
 /// Host recovery hook: receives the ephemeral ID token, returns a warning.
@@ -138,6 +203,7 @@ struct State {
     gate: Option<Arc<dyn SessionGate>>,
     recovery: Option<RecoveryFn>,
     recovery_error: String,
+    email_hint: String,
 }
 
 impl Controller {
@@ -145,7 +211,10 @@ impl Controller {
         let mut state = State::default();
         if let Some(store) = &store {
             match store.load() {
-                Ok(Some(binding)) => (state.binding, state.configured) = (binding, true),
+                Ok(Some(binding)) => {
+                    (state.binding, state.configured) = (binding, true);
+                    state.email_hint = Some(store.load_hint()).filter(|h| valid_hint(h)).unwrap_or_default();
+                }
                 Ok(None) => {}
                 Err(_) => (state.configured, state.policy_failed) = (true, true),
             }
@@ -194,6 +263,7 @@ impl Controller {
             setup_required: !available,
             pending: s.pending,
             recovery_error: s.recovery_error.clone(),
+            account_hint: if s.configured { s.email_hint.clone() } else { String::new() },
         };
         let gate = s.gate.clone();
         drop(s);
@@ -246,6 +316,7 @@ impl Controller {
         ctx: &Context,
         generation: u64,
         identity: Identity,
+        hint: &str,
     ) -> Result<(), HostError> {
         if !identity.valid() {
             return Err(HostError::Account);
@@ -283,6 +354,9 @@ impl Controller {
         }
         s.binding = identity;
         s.configured = true;
+        if valid_hint(hint) && store.save_hint(hint).is_ok() {
+            s.email_hint = hint.to_owned();
+        }
         Ok(())
     }
 
@@ -293,14 +367,83 @@ impl Controller {
         ctx: &Context,
         generation: u64,
         identity: Identity,
+        hint: &str,
     ) -> Result<(Arc<dyn SessionGate>, Option<RecoveryFn>), HostError> {
         let mut s = self.lock_state();
         if ctx.is_done() || generation != s.generation {
             return Err(HostError::Cancelled);
         }
-        self.bind_account(&mut s, ctx, generation, identity)?;
+        self.bind_account(&mut s, ctx, generation, identity, hint)?;
         let gate = s.gate.clone().ok_or(HostError::Unavailable)?;
         Ok((gate, s.recovery.clone()))
+    }
+
+    /// Turns the lock off. There is no path without a fresh Google login: the
+    /// re-authenticated issuer and subject must match the stored binding, and
+    /// the app must already be unlocked. Any failure keeps the lock configured.
+    pub fn disable(&self, parent: &Context) -> Result<(), HostError> {
+        let (ctx, generation, provider) = {
+            let mut s = self.lock_state();
+            if s.pending {
+                return Err(HostError::Busy);
+            }
+            if s.policy_failed {
+                return Err(HostError::Policy);
+            }
+            if !s.configured || !s.gate.as_ref().is_some_and(|g| !g.is_locked()) {
+                return Err(HostError::Unavailable);
+            }
+            let provider = match (&self.provider, &self.store) {
+                (Some(p), Some(_)) => p.clone(),
+                _ => return Err(HostError::Unavailable),
+            };
+            let ctx = parent.child();
+            s.cancel = Some(ctx.clone());
+            s.pending = true;
+            s.generation += 1;
+            (ctx, s.generation, provider)
+        };
+        let result = self.run_disable(&ctx, generation, provider.as_ref());
+        ctx.cancel();
+        let mut s = self.lock_state();
+        s.pending = false;
+        s.cancel = None;
+        result
+    }
+
+    fn run_disable(&self, ctx: &Context, generation: u64, provider: &dyn Provider) -> Result<(), HostError> {
+        let identity = match provider.login_with_hint(ctx) {
+            Ok((identity, token, _)) => {
+                drop(zeroize::Zeroizing::new(token));
+                identity
+            }
+            Err(_) if ctx.is_done() => return Err(HostError::Cancelled),
+            Err(_) => {
+                return Err(HostError::Failed(
+                    "Google 인증을 완료하지 못했습니다. 연결을 확인하고 다시 시도해 주세요",
+                ))
+            }
+        };
+        let mut s = self.lock_state();
+        if ctx.is_done() || generation != s.generation {
+            return Err(HostError::Cancelled);
+        }
+        if !identity.valid() || !s.configured || identity != s.binding {
+            return Err(HostError::Account);
+        }
+        if !s.gate.as_ref().is_some_and(|g| !g.is_locked()) {
+            return Err(HostError::Unavailable);
+        }
+        let store = self.store.as_ref().ok_or(HostError::Unavailable)?;
+        if store.remove().is_err() {
+            // Whatever is left on disk still protects the app on next start.
+            return Err(HostError::Failed("Google 계정 보호 설정을 지우지 못했습니다. 잠금은 그대로 유지됩니다"));
+        }
+        s.binding = Identity::default();
+        s.configured = false;
+        s.email_hint.clear();
+        s.recovery_error.clear();
+        Ok(())
     }
 
     pub fn login(&self, parent: &Context) -> Result<(), HostError> {
@@ -336,7 +479,7 @@ impl Controller {
         generation: u64,
         provider: &dyn Provider,
     ) -> Result<(), HostError> {
-        let (identity, token) = match provider.login(ctx) {
+        let (identity, token, hint) = match provider.login_with_hint(ctx) {
             Ok(v) => v,
             Err(_) if ctx.is_done() => return Err(HostError::Cancelled),
             Err(_) => {
@@ -346,7 +489,7 @@ impl Controller {
             }
         };
         let token = zeroize::Zeroizing::new(token);
-        let (gate, recovery) = self.accept_identity(ctx, generation, identity)?;
+        let (gate, recovery) = self.accept_identity(ctx, generation, identity, &hint)?;
         let mut warning = String::new();
         let mut prepare = |ctx: &Context| -> Result<(), BoxError> {
             if let Some(recovery) = &recovery {

@@ -1,7 +1,7 @@
 .mindbox-attachment {
   margin: 12px 0;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 0;
 }
 .tiptap-prose .mindbox-attachment a {
   display: flex;
@@ -15,7 +15,7 @@
   background: var(--hover);
 }
 .tiptap-prose .mindbox-attachment a:focus-visible {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 .attachment-symbol {
@@ -32,7 +32,7 @@
   flex: none;
 }
 .mindbox-attachment.ProseMirror-selectednode {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--accent-text);
 }
 .attachment-progress {
   display: flex;
@@ -48,7 +48,7 @@
   max-height: 480px;
   margin: 0 auto;
   object-fit: contain;
-  border-radius: 6px 6px 0 0;
+  border-radius: 0;
 }
 
 .attachment-preview-unavailable {

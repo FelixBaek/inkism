@@ -24,10 +24,11 @@ try{
   }
   await route.continue();
  });
- const open=async()=>{await page.getByRole('button',{name:'기기 동기화',exact:true}).click();await page.getByRole('dialog',{name:'기기 동기화',exact:true}).waitFor();};
- await page.goto(base);await page.getByRole('button',{name:'설정 열기',exact:true}).click();await page.getByRole('button',{name:'동기화',exact:true}).click();await open();
- for(const deadline=Date.now()+10000;requests<4;await page.waitForTimeout(20))assert.ok(Date.now()<deadline,'preview requests began');
- await page.getByRole('dialog',{name:'기기 동기화',exact:true}).getByRole('button',{name:'동기화 설정 닫기',exact:true}).click();
+ const open=async()=>{await page.getByRole('button',{name:'설정 열기',exact:true}).click();await page.locator('.settings-nav').getByRole('button',{name:'동기화',exact:true}).click();await page.locator('.sync-settings').waitFor();};
+ await page.goto(base);await open();
+ const deadline=Date.now()+10000;
+ while(requests<4){assert.ok(Date.now()<deadline,'preview requests began');await page.waitForTimeout(20);}
+ await page.getByRole('button',{name:'설정 닫기',exact:true}).click();
  await page.waitForTimeout(1300);assert.equal(requests,4,'closing stops queued title reads');assert.equal(active,0);
  phase='complete';requests=0;peak=0;await open();
  await page.locator('.sync-held-list').getByText('Title waiting-11',{exact:true}).waitFor();

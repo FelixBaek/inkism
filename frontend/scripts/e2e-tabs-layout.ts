@@ -1,5 +1,7 @@
 import {chromium} from './browser-env.ts';
 import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48161';
 const rpc=async(op,args={})=>{const r=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const v=await r.json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
 const notes=[];
@@ -10,6 +12,7 @@ const p=await b.newPage({viewport:{width:1440,height:900}}),errors=[];p.on('page
 async function frame(label,mobile=false){
  const data=await p.evaluate(()=>({x:scrollX,sw:document.documentElement.scrollWidth,w:innerWidth,boxes:Object.fromEntries(['.sidebar','.note-list','.editor-pane','.note-tabs'].map(s=>{const e=document.querySelector(s),r=e.getBoundingClientRect();return[s,{x:r.x,w:r.width,y:r.y}]}))}));
  assert.equal(data.x,0,label+JSON.stringify(data));assert.equal(data.sw,data.w,label+' overflow '+JSON.stringify(data));
+ if(mobile)return; // 좁은 화면은 탭 줄 없이 머리줄 하나만 둔다(mobile.css).
  const bar=await p.locator('.workspace-topbar').boundingBox(),editor=await p.locator('.editor-pane').boundingBox(),tabs=await p.locator('.note-tabs').boundingBox();
  if(!mobile){assert.equal(data.boxes['.sidebar'].x,0,label);assert.equal(data.boxes['.note-list'].x,data.boxes['.sidebar'].w,label);assert.equal(editor.x,data.boxes['.sidebar'].w+data.boxes['.note-list'].w,label);}
  assert.equal(bar.x,editor.x,label);assert.equal(bar.width,editor.width,label);
@@ -30,6 +33,6 @@ try{
  }
  await p.reload();await p.getByLabel('노트 제목',{exact:true}).waitFor();await frame('reload');
  await p.setViewportSize({width:412,height:915});await frame('mobile',true);await p.setViewportSize({width:1440,height:900});await frame('desktop resize');
- await p.screenshot({path:process.env.INKISM_LAYOUT_SCREENSHOT||'/tmp/inkism-frontend-20261004/layout-fixed.png'});
+ await p.screenshot({path:process.env.INKISM_LAYOUT_SCREENSHOT||path.join(os.tmpdir(),'inkism-frontend-20261004','layout-fixed.png')});
  assert.deepEqual(errors,[]);console.log('PASS: 18 tabs, delayed loading, first/last navigation, keyboard focus, reload and mobile/desktop resize preserve frame and internal tab scrolling');
 }finally{await b.close();}

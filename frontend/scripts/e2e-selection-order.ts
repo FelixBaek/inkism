@@ -37,6 +37,8 @@ try {
  const latest=await rpc('get',{id:a.id});await rpc('save',{note:{id:a.id,revision:latest.revision,content:'<p>원격 원문</p>',text:'원격 원문'}});
  await source.click();await page.keyboard.press('Control+End');await page.keyboard.insertText('<p>로컬</p>');await page.keyboard.press('Control+s');
  await page.getByRole('button',{name:'서버 버전으로 교체',exact:true}).waitFor();
+ // The conflict dialog is modal: close it and keep typing; the next autosave hits the same conflict and reopens it.
+ await page.getByRole('button',{name:'대화상자 닫기',exact:true}).click();await page.getByRole('button',{name:'서버 버전으로 교체',exact:true}).waitFor({state:'hidden'});
  await source.click();await page.keyboard.insertText('버릴 입력');await page.getByRole('button',{name:'서버 버전으로 교체',exact:true}).click();
  await page.waitForFunction(()=>document.querySelector('.cm-content')?.textContent==='<p>원격 원문</p>');
  assert.equal((await rpc('get',{id:a.id})).content,'<p>원격 원문</p>');

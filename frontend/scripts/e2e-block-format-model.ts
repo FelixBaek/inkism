@@ -96,7 +96,7 @@ try{
     }
     const changed=await m.changeSelectionAsync(p,operation);
     // Independent native Tiptap command on the complete test-only document.
-    const native=new Editor({extensions:contentExtensions({trailingNode:false}),content:whole,parseOptions:{preserveWhitespace:'full'}});
+    const native=new Editor({extensions:contentExtensions({trailingNode:false,automaticIds:false}),content:whole,parseOptions:{preserveWhitespace:'full'}});
     const map=segmentPositionMap({ordinal:0,byte_offset:0,source:whole,start_context:[],end_context:[]},native.schema);
     const from=map.position(a.byte,a.within),to=map.position(b.byte,b.within);
     native.view.dispatch(native.state.tr.setSelection(TextSelection.between(native.state.doc.resolve(reverse?to:from),native.state.doc.resolve(reverse?from:to))));

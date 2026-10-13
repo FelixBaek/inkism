@@ -28,9 +28,11 @@ pub mod links;
 pub mod knowledge;
 mod redirect_backup;
 pub mod model;
+pub mod notebook_counts;
 pub mod notebook_cover;
 pub mod notebook_membership;
 pub mod notebook_trash;
+pub mod trash_retention;
 pub mod ops_backup;
 pub mod ops_meta;
 pub mod tag_changes;
@@ -58,6 +60,7 @@ pub mod resources;
 
 
 pub mod named_versions;
+pub mod history_changes;
 
 pub mod connection_index;
 

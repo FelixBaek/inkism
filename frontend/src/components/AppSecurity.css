@@ -8,32 +8,42 @@
   color: var(--text);
 }
 .security-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
   width: min(100%, 440px);
-  padding: 24px;
+  padding: 32px;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--canvas);
-  text-align: center;
+  background: var(--raised);
+  text-align: left;
 }
 .security-card h1 {
-  font-size: 24px;
-  margin: 12px 0;
+  margin: 0;
+  font-size: var(--fs-heading);
+  font-weight: 500;
+  letter-spacing: -0.02em;
 }
 .security-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-caption);
   line-height: 1.6;
 }
 .security-card [role="alert"] {
   color: var(--danger);
 }
-
-.security-card > .btn {
-  margin: 4px;
+.security-card .btn {
+  border-radius: 0;
+}
+.security-card .btn-primary {
+  align-self: stretch;
+  justify-content: center;
+  min-height: 36px;
 }
 .security-notice {
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
+  padding: 10px;
+  background: var(--hover);
   text-align: left;
 }
 .security-notice p,
@@ -58,4 +68,9 @@
 }
 .security-setup-dialog [role="alert"] {
   color: var(--danger);
+}
+.security-countdown {
+  align-self: center;
+  color: var(--faint);
+  font-size: var(--fs-small);
 }

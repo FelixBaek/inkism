@@ -1,16 +1,18 @@
+import {chromium} from './browser-env.ts';import {libraryTool} from './library-tools.ts';
 import assert from 'node:assert/strict';
-import {chromium} from './browser-env.ts';
+
 const base=process.env.INKISM_URL||'http://127.0.0.1:49320';
 const rpc=async(op:string,args={})=>{const res=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const env=await res.json();assert.equal(env.ok,true,JSON.stringify(env));return env.data;};
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors:string[]=[];
 page.on('pageerror',e=>errors.push(e.message));await page.addInitScript(()=>{localStorage.setItem('inkism.lang','ko');localStorage.setItem('inkism.inspector','false');});
 const close=()=>page.getByRole('dialog',{name:'지식 도구',exact:true}).getByRole('button',{name:'닫기',exact:true}).click();
+const closeGraph=()=>page.getByRole('button',{name:'관계 그래프 닫기',exact:true}).click();
 try{
  const target=await rpc('save',{note:{title:'Target '+Date.now(),content:'# Alpha\n\nReferenced content\n\n## Detail\n\nBlock text ^piece\n\n# Other\n\nExcluded section',content_format:'markdown'}});
  const original=await rpc('save',{note:{title:'Knowledge '+Date.now(),content:'<h1>첫 제목</h1><p>Original</p><h2>둘째 제목</h2><p>Text</p>',content_format:'html'}});
  await rpc('workspace_set',{ids:[original.id],active:original.id,locations:{}});await page.goto(base);await page.locator('.tiptap').waitFor();
- await page.getByRole('button',{name:'속성과 노트 연결',exact:true}).click();
+ await libraryTool(page,'속성과 노트 연결');
  await page.getByRole('textbox',{name:'별칭 (쉼표로 구분)',exact:true}).pressSequentially('alias-one, alias-two');
  await page.getByRole('button',{name:'속성 추가',exact:true}).click();await page.getByRole('textbox',{name:'속성 이름',exact:true}).fill('Score');await page.getByRole('combobox',{name:'속성 종류',exact:true}).selectOption('number');await page.getByRole('spinbutton',{name:'속성 값',exact:true}).fill('42');
  await page.getByRole('button',{name:'속성 저장',exact:true}).click();await page.getByRole('dialog',{name:'지식 도구',exact:true}).getByText('저장됨',{exact:true}).waitFor();
@@ -20,15 +22,15 @@ try{
  const changedTarget=await rpc('save',{note:{...target,content:target.content.replace('Referenced content','Updated source')}});await page.getByRole('dialog',{name:'지식 도구',exact:true}).getByRole('button',{name:'참조 새로고침',exact:true}).click();await page.getByRole('dialog',{name:'지식 도구',exact:true}).getByLabel('참조한 노트 내용',{exact:true}).getByText('Updated source',{exact:true}).waitFor();
  await close();
  const preserved=await rpc('get',{id:original.id});await page.locator('.inline-note-embed').first().waitFor();assert.match(await page.locator('.inline-note-embed').first().innerText(),/Referenced content|Updated source/);await page.locator('.inline-note-embed').getByRole('button',{name:'참조 새로고침',exact:true}).click();await page.locator('.inline-note-embed').getByText('Updated source',{exact:true}).waitFor();await page.waitForTimeout(300);assert.deepEqual(await rpc('get',{id:original.id}),preserved,'inline preview mutated canonical body');
- await page.getByRole('button',{name:'노트 모아보기',exact:true}).click();await page.getByRole('textbox',{name:'보기 이름',exact:true}).fill('All notes');await page.getByRole('button',{name:'보기 저장',exact:true}).click();await page.getByRole('combobox',{name:'저장한 보기',exact:true}).locator('option').filter({hasText:'All notes'}).waitFor({state:'attached'});
- await page.getByRole('combobox',{name:'필터 속성',exact:true}).selectOption('Score');await page.getByRole('combobox',{name:'필터 조건',exact:true}).selectOption('gt');await page.getByRole('textbox',{name:'필터 값',exact:true}).fill('40');assert.equal(await page.locator('.knowledge-table tbody tr').count(),1);await page.getByRole('button',{name:'보기 저장',exact:true}).click();await close();
- await page.getByRole('button',{name:'관계 그래프',exact:true}).click();await page.getByRole('checkbox',{name:'현재 노트 주변',exact:true}).check();
+ await libraryTool(page,'노트 모아보기');await page.getByRole('textbox',{name:'보기 이름',exact:true}).fill('All notes');await page.getByRole('button',{name:'보기 저장',exact:true}).click();await page.getByRole('combobox',{name:'저장한 보기',exact:true}).locator('option').filter({hasText:'All notes'}).waitFor({state:'attached'});
+ await page.getByRole('button',{name:'필터',exact:true}).click();await page.getByRole('combobox',{name:'필터 속성',exact:true}).selectOption('Score');await page.getByRole('combobox',{name:'필터 조건',exact:true}).selectOption('gt');await page.getByRole('textbox',{name:'필터 값',exact:true}).fill('40');assert.equal(await page.locator('.knowledge-table tbody tr').count(),1);await page.getByRole('button',{name:'보기 저장',exact:true}).click();await page.getByRole('region',{name:'노트 모아보기',exact:true}).getByRole('button',{name:'닫기',exact:true}).click();
+ await page.getByRole('button',{name:'관계 그래프',exact:true}).first().click();await page.getByRole('combobox',{name:'표시 범위',exact:true}).selectOption('local');
  // Indexing is asynchronous; explicitly refresh until the saved link is indexed.
  for(let i=0;i<20&&!await page.locator('.note-graph line').count();i++){await page.waitForTimeout(150);await page.getByRole('button',{name:'새로고침',exact:true}).click();}
- assert.ok(await page.locator('.note-graph line').count()>0);assert.equal(await page.locator('.note-graph [data-node]').count(),2);await close();
- await page.getByRole('button',{name:'목차',exact:true}).click();await page.getByRole('dialog',{name:'목차',exact:true}).getByRole('button',{name:/둘째 제목/}).click();assert.equal(await page.getByRole('dialog',{name:'목차',exact:true}).isVisible(),false);
+ assert.ok(await page.locator('.note-graph line').count()>0);assert.equal(await page.locator('.note-graph [data-node]').count(),2);await closeGraph();
+ await libraryTool(page,'목차');await page.getByRole('dialog',{name:'목차',exact:true}).getByRole('button',{name:/둘째 제목/}).click();assert.equal(await page.getByRole('dialog',{name:'목차',exact:true}).isVisible(),false);
  await page.keyboard.press('Control+o');await page.getByRole('combobox',{name:'노트 제목 검색',exact:true}).fill(target.title);await page.getByRole('dialog',{name:'빠른 전환',exact:true}).getByRole('option',{name:target.title,exact:true}).click();await page.waitForFunction(title=>(document.querySelector('.title-input') as HTMLInputElement)?.value===title,target.title);
- await page.getByRole('button',{name:'일일 노트',exact:true}).click();await page.waitForTimeout(300);const daily1=await rpc('list',{view:'all',limit:100});await page.getByRole('button',{name:'일일 노트',exact:true}).click();await page.waitForTimeout(300);const daily2=await rpc('list',{view:'all',limit:100});assert.equal(daily1.items.length,daily2.items.length,'daily action duplicated note');
- await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'관계 그래프',exact:true}).click();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await close();
+ await libraryTool(page,'일일 노트');await page.waitForTimeout(300);const daily1=await rpc('list',{view:'all',limit:100});await libraryTool(page,'일일 노트');await page.waitForTimeout(300);const daily2=await rpc('list',{view:'all',limit:100});assert.equal(daily1.items.length,daily2.items.length,'daily action duplicated note');
+ await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'관계 그래프',exact:true}).first().click();await page.locator('.graph-screen').waitFor();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await closeGraph();
  assert.deepEqual(errors,[]);console.log('PASS knowledge UI: aliases/properties preserve source, live section embed, saved numeric views, actual graph edges, heading navigation, keyboard quick switch, idempotent daily note, mobile width');
 }finally{await browser.close();}

@@ -64,11 +64,11 @@ export interface DialogPromptOptions extends DialogConfirmOptions {
   initial?: string;
   withColor?: boolean;
   initialColor?: string;
-  /** 노트북 표지 사진 고르기(Unsplash·파일). 결과의 cover: 없음 = null. */
+  /** 폴더 표지 사진 고르기(Unsplash·파일). 결과의 cover: 없음 = null. */
   withCover?: boolean;
   initialCover?: NotebookCover | null;
   placeholder?: string;
-  /** 노트북 설명 입력란. 결과의 description: 빈 값 = "". */
+  /** 폴더 설명 입력란. 결과의 description: 빈 값 = "". */
   withDescription?: boolean;
   initialDescription?: string;
   /** 빈 값 제출 허용(예: 링크 제거). */
@@ -174,8 +174,9 @@ export interface StoreValue {
   restoreSelected: () => Promise<void>;
   deleteSelectedForever: () => Promise<void>;
   quickRestore: (id: string) => Promise<void>;
-  quickDelete: (id: string) => Promise<void>;
-  /** 휴지통 비우기: 휴지통의 노트·노트북을 모두 영구 삭제(확인 대화상자). */
+  /** confirmed=true: 호출한 쪽이 이미 확인을 받았다(여러 노트 한꺼번에 삭제). */
+  quickDelete: (id: string, confirmed?: boolean) => Promise<void>;
+  /** 지운 노트 비우기: 지운 노트·폴더를 모두 영구 삭제(확인 대화상자). */
   emptyTrash: () => Promise<void>;
   restoreVersion: (historyId: string) => Promise<void>;
   // 색인/역링크
@@ -247,9 +248,9 @@ export function viewTitle(view: View): string {
     case "archive":
       return t("보관함");
     case "trash":
-      return t("휴지통");
+      return t("지운 노트");
     case "notebook":
-      return t("노트북"); // 사이드바에서 실제 이름을 전달받아 대체
+      return t("폴더"); // 사이드바에서 실제 이름을 전달받아 대체
     case "tag":
       return `#${view.name}`;
   }
@@ -440,7 +441,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
-  // 원본처럼 노트북/태그 밖의 새 노트에 쓴다. 이미 만든 초안은 바꾸지 않는다.
+  // 원본처럼 폴더/태그 밖의 새 노트에 쓴다. 이미 만든 초안은 바꾸지 않는다.
   const [defaults, setDefaults] = useState<Defaults>({ notebook_id: null, tag: null });
   const defaultsRef = useRef<Defaults | null>(null);
   const [tags, setTags] = useState<TagCount[]>([]);
@@ -1779,8 +1780,8 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
   );
 
   const quickDelete = useCallback(
-    async (id: string) => {
-      const ok = await confirm({
+    async (id: string, confirmed = false) => {
+      const ok = confirmed || await confirm({
         title: t("영구 삭제"),
         message: t("이 노트를 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다."),
         confirmLabel: t("영구 삭제"),
@@ -1987,15 +1988,15 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
   );
   const removeTag = useCallback(async (name:string)=>{requestTagChange({name,replacement:null});},[]);
 
-  // ---------- 노트북 관리 ----------
+  // ---------- 폴더 관리 ----------
   const addNotebook = useCallback(
     async (parent?: Notebook) => {
       const r = await prompt({
-        title: parent ? t("하위 노트북 만들기") : t("새 노트북"),
+        title: parent ? t("하위 폴더 만들기") : t("새 폴더"),
         message: parent
-          ? t('"{name}" 안에 만들 노트북 이름을 입력하세요.', { name: parent.name })
-          : t("노트북 이름을 입력하세요."),
-        label: t("노트북 이름"),
+          ? t('"{name}" 안에 만들 폴더 이름을 입력하세요.', { name: parent.name })
+          : t("폴더 이름을 입력하세요."),
+        label: t("폴더 이름"),
         withColor: true,
         withDescription: true,
         confirmLabel: t("만들기"),
@@ -2010,7 +2011,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
         });
         await refreshMeta();
       } catch (e) {
-        await showError(t("노트북 만들기 실패"), e instanceof Error ? e.message : t("알 수 없는 오류"));
+        await showError(t("폴더 만들기 실패"), e instanceof Error ? e.message : t("알 수 없는 오류"));
       }
     },
     [prompt, refreshMeta, showError],
@@ -2019,9 +2020,9 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
   const renameNotebook = useCallback(
     async (nb: Notebook) => {
       const r = await prompt({
-        title: t("노트북 이름 변경"),
+        title: t("폴더 이름 변경"),
         message: t("새 이름을 입력하세요."),
-        label: t("노트북 이름"),
+        label: t("폴더 이름"),
         initial: nb.name,
         withColor: true,
         initialColor: nb.color,
@@ -2053,8 +2054,8 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
       const ok =
         confirmed ||
         (await confirm({
-          title: t("노트북 삭제"),
-          message: t('"{name}" 노트북을 삭제할까요? 노트는 삭제되지 않습니다.', { name: nb.name }),
+          title: t("폴더 삭제"),
+          message: t('"{name}" 폴더를 삭제할까요? 노트는 삭제되지 않습니다.', { name: nb.name }),
           confirmLabel: t("삭제"),
           danger: true,
         }));
@@ -2086,7 +2087,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
         }
         await refreshMeta();
       } catch (e) {
-        void showError(t("노트북 삭제 실패"), e instanceof Error ? e.message : t("알 수 없는 오류"));
+        void showError(t("폴더 삭제 실패"), e instanceof Error ? e.message : t("알 수 없는 오류"));
       } finally {
         savingRef.current = false;
         pendingSaveRef.current = false;
@@ -2099,9 +2100,9 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
 
   const emptyTrash = useCallback(async () => {
     const ok = await confirm({
-      title: t("휴지통 비우기"),
-      message: t("휴지통의 모든 노트와 노트북을 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다."),
-      confirmLabel: t("휴지통 비우기"),
+      title: t("지운 노트 모두 비우기"),
+      message: t("지운 노트와 폴더를 모두 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다."),
+      confirmLabel: t("지운 노트 모두 비우기"),
       danger: true,
     });
     if (!ok) return;
@@ -2127,10 +2128,10 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
           }
         }
       }
-      // 노트북 휴지통(엔진 schema 13): 하위 휴지통 노트북은 delete_notebook이 함께 지운다.
+      // 지운 폴더(엔진 schema 13): 하위의 지운 폴더는 delete_notebook이 함께 지운다.
       for (const nb of await rpc<{ id: string; name: string }[]>("trashed_notebooks")) await removeNotebook(nb, true);
     } catch (e) {
-      await showError(t("휴지통 비우기 실패"), e instanceof Error ? e.message : t("알 수 없는 오류"));
+      await showError(t("지운 노트 비우기 실패"), e instanceof Error ? e.message : t("알 수 없는 오류"));
     } finally {
       bumpList();
       void refreshMeta();

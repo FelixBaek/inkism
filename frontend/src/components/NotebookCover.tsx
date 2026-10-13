@@ -33,7 +33,7 @@ export function CoverCredit({ cover, className = "" }: Readonly<{ cover: Noteboo
   );
 }
 
-/** 노트북 머리말 위 배너(Notion식): object-fit cover + 아래쪽 바탕색 그라데이션. */
+/** 폴더 머리말 위 배너(Notion식): object-fit cover + 아래쪽 바탕색 그라데이션. */
 export function CoverBanner({ cover }: Readonly<{ cover: NotebookCover }>) {
   const [broken, setBroken] = useState(false);
   useEffect(() => setBroken(false), [cover.url]);
@@ -46,7 +46,7 @@ export function CoverBanner({ cover }: Readonly<{ cover: NotebookCover }>) {
   );
 }
 
-/** 노트북 고치기 대화상자의 "표지 사진" 칸: Unsplash 검색, 파일, 빼기. */
+/** 폴더 고치기 대화상자의 "표지 사진" 칸: Unsplash 검색, 파일, 빼기. */
 export function CoverPicker({
   value,
   onChange,

@@ -1,0 +1,158 @@
+/* 명령창: 대화상자와 같은 nocturne 틀(모서리 0, 1px border/strong, 그림자 없음, 38% 검정 막) */
+.command-palette {
+  position: fixed;
+  margin: 48px auto auto;
+  padding: 0;
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100dvh - 96px);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: var(--raised);
+  color: var(--text);
+  overflow: hidden;
+}
+.command-palette::backdrop {
+  background: var(--scrim);
+}
+.command-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 10px 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+.command-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--fs-body);
+  outline: 0;
+}
+.command-search input::placeholder {
+  color: var(--faint);
+}
+.command-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.command-filters .command-clear {
+  min-height: 28px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 10px;
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+.command-filters .command-clear:hover:not(:disabled) {
+  background: var(--hover);
+}
+.command-filters .command-clear:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.command-results {
+  height: 440px;
+  max-height: calc(100dvh - 240px);
+  overflow-y: auto;
+  padding: 4px;
+  scrollbar-width: thin;
+}
+.command-results > p {
+  font-size: var(--fs-small);
+  color: var(--faint);
+  margin: 8px 12px;
+}
+.command-results > p span {
+  max-width: 60%;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.command-results [role="option"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: var(--fs-caption);
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+}
+.command-results [role="option"] > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.command-results [role="option"] > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.command-results [role="option"].is-selected {
+  background: var(--active);
+}
+.command-results [aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+.command-back {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: var(--fs-small);
+  color: var(--muted);
+  cursor: pointer;
+}
+.command-palette > footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  min-height: 40px;
+  border-top: 1px solid var(--border);
+}
+.command-palette > footer button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: transparent;
+  border: 0;
+  font-size: var(--fs-small);
+  color: var(--muted);
+  cursor: pointer;
+}
+.command-palette > footer button:hover:not(:disabled) {
+  color: var(--text);
+}
+.command-palette > footer button:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+@media (max-width: 760px) {
+  .command-filters button,
+  .command-palette > footer button {
+    min-height: 44px;
+  }
+  .command-results {
+    max-height: calc(100dvh - 310px);
+  }
+}

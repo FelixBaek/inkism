@@ -1,6 +1,7 @@
+import {chromium} from './browser-env.ts';import {libraryTool} from './library-tools.ts';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {chromium} from './browser-env.ts';
+
 const base=process.env.INKISM_URL!;
 const rpc=async(op:string,args:Record<string,unknown>={})=>{const r=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const v=await r.json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
@@ -9,7 +10,7 @@ await page.addInitScript(()=>{localStorage.setItem('inkism.lang','ko');localStor
 const note=await rpc('save',{note:{title:'Canvas group fixture',content:'<p>canonical untouched</p>',content_format:'html'}});await rpc('workspace_set',{ids:[note.id],active:note.id,locations:{}});
 const previousWorkspace=await rpc('workspace_tools_get');await rpc('workspace_tools_set',{canvas:{version:1,nodes:[],edges:[]},expected_updated_at:{workspace_canvas:previousWorkspace.canvas.updated_at}});
 try{
- await page.goto(base);await page.locator('.tiptap').waitFor();await page.getByRole('button',{name:'캔버스',exact:true}).click();
+ await page.goto(base);await page.locator('.tiptap').waitFor();await libraryTool(page,'캔버스');
  const dialog=page.getByRole('dialog',{name:'라이브러리 도구',exact:true});const board=dialog.locator('.canvas-board');
  await board.getByRole('button',{name:'그룹 추가',exact:true}).click();assert.equal(await board.locator('.canvas-group').count(),1);
  await board.getByRole('button',{name:'실행 취소',exact:true}).click();assert.equal(await board.locator('.canvas-group').count(),0);
@@ -34,7 +35,7 @@ try{
  const save=async()=>{const response=page.waitForResponse(r=>r.url().endsWith('/api/rpc')&&r.request().postDataJSON()?.op==='workspace_tools_set');await dialog.getByRole('button',{name:'작업공간 저장',exact:true}).click();assert.equal((await(await response).json()).ok,true);await dialog.getByText('저장됨',{exact:true}).waitFor();};
  await save();const stored=(await rpc('workspace_tools_get')).canvas.value;assert.deepEqual(stored.nodes.map(n=>n.id),['g','nested','child','partial','outside']);assert.equal(stored.nodes[0].label,'Project');assert.equal(stored.nodes[0].width,700);assert.equal(stored.nodes[0].height,500);assert.equal(stored.nodes[0].background,'assets/grid.png');assert.equal(stored.nodes[0].backgroundStyle,'ratio');assert.equal(stored.edges.length,1);
  const download=page.waitForEvent('download');await board.getByRole('button',{name:'내보내기',exact:true}).click();const path=await(await download).path();const exported=JSON.parse(await readFile(path!,'utf8'));assert.equal(exported.nodes[0].type,'group');assert.equal(exported.nodes[0].label,'Project');assert.equal(exported.nodes[0].backgroundStyle,'ratio');assert.deepEqual(exported.nodes.map(n=>n.id),fixture.nodes.map(n=>n.id));
- await dialog.getByRole('button',{name:'닫기',exact:true}).click();await page.reload();await page.locator('.tiptap').waitFor();await page.getByRole('button',{name:'캔버스',exact:true}).click();await group.waitFor();assert.equal(await group.locator(':scope > strong').textContent(),'▱ Project');assert.equal(await group.evaluate(n=>(n as HTMLElement).style.width),'700px');assert.deepEqual((await rpc('workspace_tools_get')).canvas.value,stored);assert.equal((await rpc('get',{id:note.id})).content,'<p>canonical untouched</p>');assert.deepEqual(errors,[]);
+ await dialog.getByRole('button',{name:'닫기',exact:true}).click();await page.reload();await page.locator('.tiptap').waitFor();await libraryTool(page,'캔버스');await group.waitFor();assert.equal(await group.locator(':scope > strong').textContent(),'▱ Project');assert.equal(await group.evaluate(n=>(n as HTMLElement).style.width),'700px');assert.deepEqual((await rpc('workspace_tools_get')).canvas.value,stored);assert.equal((await rpc('get',{id:note.id})).content,'<p>canonical untouched</p>');assert.deepEqual(errors,[]);
  // Upload through the existing file-card flow, then use its actual local UUID
  // for a group background; all three render styles must stay local and load.
  await board.locator('input[type="file"]').first().setInputFiles({name:'pixel.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a/mkAAAAASUVORK5CYII=','base64')});

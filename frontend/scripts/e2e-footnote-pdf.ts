@@ -1,3 +1,4 @@
+import {libraryTool} from "./library-tools.ts";
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -23,7 +24,7 @@ try{
  const open=async(note:any)=>{
   await page.goto('about:blank');await rpc('workspace_set',{ids:[note.id],active:note.id,locations:{}});
   await page.goto(base);await page.locator('.tiptap, .cm-content').first().waitFor();
-  await page.getByRole('button',{name:'PDF·각주',exact:true}).click();await dialog.waitFor();
+  await libraryTool(page,'PDF·각주');await dialog.waitFor();
  };
  const exact=async(note:any,source:string)=>assert.equal((await rpc('get',{id:note.id})).content,source);
  const pdf=async(note:any,name:string,source:string,expected:string[])=>{
@@ -81,7 +82,7 @@ try{
  await page.getByRole('button',{name:'최근 전체 바꾸기 취소',exact:true}).click();await saves.saved();await exact(note,original);
  await page.getByRole('button',{name:'전체 바꾸기 다시 적용',exact:true}).click();await saves.saved();await exact(note,arranged);
  await page.getByRole('button',{name:'최근 전체 바꾸기 취소',exact:true}).click();await saves.saved();await exact(note,original);
- await page.getByRole('button',{name:'PDF·각주',exact:true}).click();
+ await libraryTool(page,'PDF·각주');
  await dialog.getByRole('textbox',{name:'각주 이름',exact:true}).fill('c');await dialog.getByRole('textbox',{name:'각주 내용',exact:true}).fill('Gamma first\nsecond');
  await dialog.getByRole('button',{name:'추가',exact:true}).click();await saves.saved();
  const added=original+'<p><sup><a href="#fn-c">c</a></sup></p><p id="fn-c"><sup>c</sup> Gamma first<br>second</p>';await exact(note,added);

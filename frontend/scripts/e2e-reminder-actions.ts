@@ -52,7 +52,9 @@ try {
   if(lazy){
    // Already on the last block. Ctrl+End would begin another asynchronous
    // window navigation, which is unrelated to the held reminder response.
-   await editor.locator('p').last().click();await page.keyboard.press('End');
+   // The open reminder toast covers the lower-right portion of a wide paragraph.
+   // Click its unobscured leading edge; keep the pending reminder visible.
+   await editor.locator('p').last().click({position:{x:4,y:4}});await page.keyboard.press('End');
    await page.waitForFunction(()=>{const e=document.querySelector<any>('.tiptap-prose')?.editor;return e?.state.selection.empty && e.state.selection.head===e.state.doc.content.size-1;});
   }else{await editor.click();await page.keyboard.press('Control+End');}
   await page.keyboard.insertText(text);

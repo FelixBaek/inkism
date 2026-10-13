@@ -500,3 +500,30 @@ fn collection_card_settings_survive_database_restart() {
     config["op"]=json!("knowledge_settings_set");config["views"]=json!([{"id":"cover-view","name":"Covers","layout":"cards","filter":{"property":"","operator":"contains","value":""},"sort":{"property":"$title","direction":"asc"},"card":{"cover_property":"Image","visible_properties":["Score"]}}]);
     let saved=ok(e.execute(config));drop(e);let reopened=db.open();let loaded=ok(reopened.execute(json!({"op":"knowledge_settings_get"})));assert_eq!(loaded["views"],saved["views"]);
 }
+
+#[test]
+fn note_cover_is_validated_canonical_and_survives_other_updates() {
+    let db = Db::new();
+    let e = db.open();
+    let n = note(&e, "Cover", "body");
+    let meta = ok(e.execute(json!({"op":"knowledge_get","id":n["id"]})));
+    let cover = json!({"kind":"unsplash","url":"https://images.unsplash.com/photo-1?w=1600","thumb":"https://images.unsplash.com/photo-1?w=400","author":"Ink Maker","author_url":"https://unsplash.com/@ink","unsplash_id":"abc_1"});
+    let saved = ok(e.execute(json!({"op":"knowledge_set","id":n["id"],"revision":n["revision"],"version":meta["version"],"document":{"cover":cover}})));
+    assert_eq!(saved["document"]["cover"], cover);
+    // Aliases-only updates (older clients) keep the cover.
+    let saved = ok(e.execute(json!({"op":"knowledge_set","id":n["id"],"revision":n["revision"],"version":saved["version"],"aliases":["c"]})));
+    assert_eq!(saved["document"]["cover"], cover);
+    // Hostile or non-canonical covers are refused and leave the stored value alone.
+    for bad in [
+        json!({"kind":"unsplash","url":"https://evil.example/x.png","thumb":"https://evil.example/x.png","author":"a","author_url":"https://unsplash.com/@a","unsplash_id":"x"}),
+        json!({"kind":"attachment","url":"/api/attachments/not-a-uuid"}),
+        json!({"kind":"attachment","url":"/api/attachments/12345678-1234-1234-1234-123456789012","extra":"dropped"}),
+        json!("https://images.unsplash.com/photo-1"),
+    ] {
+        assert_eq!(e.execute(json!({"op":"knowledge_set","id":n["id"],"revision":n["revision"],"version":saved["version"],"document":{"cover":bad}}))["ok"], false);
+    }
+    assert_eq!(ok(e.execute(json!({"op":"knowledge_get","id":n["id"]})))["document"]["cover"], cover);
+    // null removes the cover.
+    let cleared = ok(e.execute(json!({"op":"knowledge_set","id":n["id"],"revision":n["revision"],"version":saved["version"],"document":{"cover":null}})));
+    assert!(cleared["document"]["cover"].is_null());
+}

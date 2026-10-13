@@ -7,15 +7,17 @@
 }
 .note-inspector {
   position: relative;
-  flex: 0 0 320px;
-  width: 320px;
+  flex: 0 0 300px;
+  width: 300px;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--border);
-  background: var(--canvas);
+  background: var(--raised);
   color: var(--text);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
 }
 .inspector-resize {
   position: absolute;
@@ -35,51 +37,102 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px 8px 20px;
-  min-height: 48px;
+  gap: 6px;
+  height: 40px;
+  padding: 0 2px 0 8px;
   border-bottom: 1px solid var(--border);
 }
 .note-inspector h2 {
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
   font-weight: 500;
-  color: var(--muted);
+  color: var(--text);
   margin: 0;
+}
+.note-inspector > header .icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 0;
 }
 .inspector-scroll {
   flex: 1;
   overflow: auto;
-  padding: 0 20px 20px;
 }
+/* 편집기 제목과 겹치므로 화면에는 숨기고 보조기술용 문맥으로만 둔다. */
 .inspector-note-title {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  overflow-wrap: anywhere;
-  margin: 16px 0 12px;
+  display: none;
 }
 .note-inspector section {
-  padding: 16px 0;
-  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.note-inspector section section {
+  padding: 0;
+  border: 0;
 }
 .note-inspector h3 {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 0 8px;
-  font-size: 12px;
+  margin: 0;
+  font-size: var(--fs-caption);
   font-weight: 500;
+  color: var(--text);
+}
+.inspector-count {
+  color: var(--faint);
+  font-weight: 400;
+}
+.note-inspector .btn {
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--hover);
+  color: var(--text);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+}
+.note-inspector .btn:hover:not(:disabled) {
+  background: var(--active);
+}
+.note-inspector .btn-primary {
+  border-color: var(--green);
+  background: var(--green);
+  color: var(--on-accent);
+}
+.note-inspector .btn-primary:hover:not(:disabled) {
+  background: var(--green-hover);
+}
+.note-inspector .btn-ghost {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--muted);
 }
-.note-inspector h3 svg {
-  color: var(--faint);
+.note-inspector .btn-ghost:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+.inspector-wide {
+  width: 100%;
+}
+.inspector-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
 }
 .inspector-toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 34px;
-  font-size: 12.5px;
-  color: var(--muted);
+  min-height: 30px;
+  font-size: var(--fs-caption);
+  color: var(--text);
   cursor: pointer;
 }
 .inspector-toggle span {
@@ -88,7 +141,7 @@
   gap: 8px;
 }
 .inspector-toggle span svg {
-  color: var(--faint);
+  color: var(--muted);
 }
 /* 체크박스를 30×18 스위치로 그린다. 역할·키보드 동작은 checkbox 그대로다. */
 .inspector-toggle input {
@@ -137,76 +190,172 @@
     transition: none;
   }
 }
+.note-inspector h3.inspector-notebooks-heading {
+  margin-top: 4px;
+  font-size: var(--fs-small);
+  font-weight: 400;
+  color: var(--muted);
+}
+.inspector-notebook {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  background: var(--hover);
+  color: var(--text);
+  font-size: var(--fs-caption);
+  text-align: left;
+  cursor: pointer;
+}
 .inspector-times {
-  margin: 12px 0 0;
-  font-size: 12.5px;
+  margin: 0;
+  font-size: var(--fs-small);
 }
 .inspector-times div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 8px 0;
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 10px;
+  padding: 4px 0;
 }
 .inspector-times dt {
   color: var(--muted);
 }
 .inspector-times dd {
   margin: 0;
-  text-align: right;
   overflow-wrap: anywhere;
 }
 .inspector-hint {
   color: var(--faint);
-  font-size: 12px;
-  line-height: 1.55;
-  margin: 8px 0;
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  margin: 0;
+}
+.inspector-note {
+  margin: 0;
+  padding: 10px;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: var(--fs-small);
 }
 .inspector-list,
 .inspector-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   list-style: none;
   padding: 0;
-  margin: 0 0 10px;
+  margin: 0;
+}
+.inspector-list li > .inspector-hint {
+  padding: 0 6px 4px 30px;
+  overflow-wrap: anywhere;
 }
 .inspector-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  text-align: left;
+  padding: 6px;
   border: 0;
   background: transparent;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm);
   color: var(--text);
   font: inherit;
-  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
   overflow-wrap: anywhere;
   cursor: pointer;
 }
-.inspector-list button:hover {
+.inspector-list button svg {
+  flex: none;
+  color: var(--muted);
+}
+.inspector-list button:hover,
+.inspector-history-list button:hover {
   background: var(--hover);
 }
-.inspector-history-list li {
-  display: flex;
+.inspector-history-list button {
+  display: grid;
+  grid-template-columns: auto 1fr;
   align-items: center;
-  gap: 6px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.inspector-history-list li > div {
-  flex: 1;
-  min-width: 0;
+.inspector-history-list button[aria-pressed="true"] {
+  background: var(--active);
+}
+.inspector-history-list time {
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: var(--fs-small);
 }
 .inspector-history-list span {
-  display: block;
-  font-size: 12.5px;
-  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.inspector-history-list time {
-  display: block;
-  color: var(--faint);
-  font-size: 11.5px;
-  margin-top: 2px;
+/* 별칭·사용자 속성: 좁은 패널에서는 이름·종류 한 줄, 값은 아래 한 줄로 쌓는다. */
+.inspector-properties .knowledge-properties > fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.inspector-properties label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+.inspector-properties :is(input:not([type="checkbox"]), select) {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--hover);
+  color: var(--text);
+  font-size: var(--fs-caption);
+}
+.inspector-properties .knowledge-property-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.inspector-properties .knowledge-property {
+  display: grid;
+  grid-template-columns: 1fr 96px 30px;
+  gap: 6px;
+  align-items: center;
+}
+.inspector-properties .knowledge-property > :nth-child(3) {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+.inspector-properties .knowledge-property > .btn {
+  grid-column: 3;
+  grid-row: 1;
+  padding: 0;
+  color: var(--danger);
+}
+.inspector-properties .knowledge-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 0;
+}
+.inspector-properties .knowledge-row output,
+.inspector-properties [role="status"] {
+  color: var(--muted);
+  font-size: var(--fs-small);
 }
 .inspector-toggle-button {
   display: inline-flex;
@@ -284,4 +433,50 @@
   .toolbar-insert-group {
     flex-wrap: nowrap;
   }
+}
+.inspector-properties select[multiple] {
+  height: auto;
+  min-height: 64px;
+  padding: 4px;
+}
+.inspector-properties .property-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inspector-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.note-connections-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.note-connections-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+.note-connections-form :is(input, select) {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--hover);
+  color: var(--text);
+  font-size: var(--fs-caption);
+}
+.note-connections-form .btn[aria-pressed="true"] {
+  background: var(--active);
+  color: var(--accent-text);
+}
+.note-connections-form [role="alert"] {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-small);
 }

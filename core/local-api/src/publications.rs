@@ -23,6 +23,8 @@ struct Input {
     password: Option<String>,
     hosts: Vec<String>,
     pages: Option<Vec<PageInput>>,
+    /// Use the library's saved sync relay token instead of a typed one.
+    use_sync_token: bool,
     #[serde(skip)]
     wiki_ids: Vec<String>,
 }
@@ -45,6 +47,7 @@ fn decode(body: &[u8]) -> Result<Input, Response> {
     }
     let mut values = serde_json::Deserializer::from_slice(body).into_iter::<Input>();
     let input = match values.next() {
+        Some(Ok(i)) if i.use_sync_token && i.token.is_empty() => i,
         Some(Ok(i)) if (32..=1024).contains(&i.token.len()) && !i.token.contains(['\r', '\n']) => i,
         _ => return Err(bad()),
     };
@@ -57,6 +60,17 @@ fn decode(body: &[u8]) -> Result<Input, Response> {
 fn call(h: &Handler, deadline: Instant, request: &Value) -> crate::Result<Value> {
     let raw = h.engine()?.call(deadline, &serde_json::to_vec(request)?)?;
     Ok(serde_json::from_slice(&raw)?)
+}
+
+/// The sync token saved with the configured relay. Host-only engine op; the
+/// renderer never sees it, it only goes into this request's Authorization.
+fn saved_token(h: &Handler, deadline: Instant) -> Result<String, Response> {
+    let reply = call(h, deadline, &json!({"op": "sync_relay_token"}))
+        .map_err(|_| Response::fail(503, "relay configuration unavailable"))?;
+    match reply["data"]["token"].as_str() {
+        Some(t) if reply["ok"] == true && (32..=1024).contains(&t.len()) && !t.contains(['\r', '\n']) => Ok(t.to_owned()),
+        _ => Err(Response::fail(400, "no saved sync token; enter the relay token")),
+    }
 }
 
 /// The library's configured relay origin, without a trailing slash.
@@ -284,10 +298,34 @@ pub(crate) fn serve(h: &Handler, r: &Request) -> Response {
     }
 }
 
+fn publication_response_body(response: reqwest::blocking::Response) -> Result<Vec<u8>, Response> {
+    let status = response.status().as_u16();
+    let mut data = Vec::new();
+    let limit = inkism_web_content::MAX_BYTES;
+    if response
+        .take(limit as u64 + 1)
+        .read_to_end(&mut data)
+        .is_err()
+        || data.len() > limit
+    {
+        return Err(Response::fail(502, "invalid relay response"));
+    }
+    if !(200..=299).contains(&status) {
+        return Err(Response::fail(
+            502,
+            format!("relay rejected publication action (HTTP {status})"),
+        ));
+    }
+    Ok(data)
+}
+
 fn publish(h: &Handler, r: &Request) -> Result<Response, Response> {
-    let input = decode(&r.body)?;
+    let mut input = decode(&r.body)?;
     let deadline = Instant::now() + Duration::from_secs(30);
     let base = relay(h, deadline)?;
+    if input.use_sync_token {
+        input.token = saved_token(h, deadline)?;
+    }
     let (method, endpoint, body) = action(h, deadline, &input, format!("{base}/v1/publications"))?;
     let client = reqwest::blocking::Client::builder()
         .no_proxy()
@@ -308,23 +346,7 @@ fn publish(h: &Handler, r: &Request) -> Result<Response, Response> {
                 "relay unavailable; check the published list before retrying",
             )
         })?;
-    let status = response.status().as_u16();
-    let mut data = Vec::new();
-    let limit = inkism_web_content::MAX_BYTES;
-    if response
-        .take(limit as u64 + 1)
-        .read_to_end(&mut data)
-        .is_err()
-        || data.len() > limit
-    {
-        return Err(Response::fail(502, "invalid relay response"));
-    }
-    if !(200..=299).contains(&status) {
-        return Err(Response::fail(
-            502,
-            format!("relay rejected publication action (HTTP {status})"),
-        ));
-    }
+    let data = publication_response_body(response)?;
     if delete {
         return Ok(Response::json(200, &json!({"ok": true})));
     }
@@ -437,6 +459,42 @@ mod tests {
                 400
             );
         }
+    }
+
+    #[test]
+    fn saved_sync_token_authorizes_publish_without_reaching_renderer() {
+        struct Saved(String);
+        impl Engine for Saved {
+            fn call(&self, _: Deadline, raw: &[u8]) -> crate::Result<Vec<u8>> {
+                let q: Value = serde_json::from_slice(raw)?;
+                let v = match q["op"].as_str() {
+                    Some("sync_status") => json!({"ok":true,"data":{"configured":true,"server_url":self.0}}),
+                    Some("sync_relay_token") => json!({"ok":true,"data":{"token":"saved".repeat(8)}}),
+                    _ => json!({"ok":true,"data":{"id":"note-id","revision":1,"title":"note","html":"<p>snapshot</p>","trashed":false,"readonly":false,"locked":false}}),
+                };
+                Ok(serde_json::to_vec(&v)?)
+            }
+        }
+        let auth = Arc::new(Mutex::new(String::new()));
+        let log = Arc::clone(&auth);
+        let target = mock::serve(move |hit| {
+            if hit.path() == "/v1/publications" {
+                *log.lock().unwrap() = hit.header("authorization").to_string();
+            }
+            mock::Reply {
+                status: 200,
+                headers: vec![("Content-Type".into(), "application/json".into())],
+                body: format!(r#"{{"id":"{}","hosts":[]}}"#, "a".repeat(64)).into_bytes(),
+            }
+        });
+        let h = Handler { engine: Some(Arc::new(Saved(target.clone()))), ..Default::default() };
+        let post = |body: &str| serve(&h, &Request { method: "POST".into(), path: "/api/publications".into(), query: None, headers: vec![], host: "wails.localhost".into(), body: body.as_bytes().to_vec() });
+        let out = post(r#"{"action":"publish","note_id":"note-id","token":"","use_sync_token":true,"days":7,"revision":1}"#);
+        assert_eq!(out.status, 200, "{}", String::from_utf8_lossy(&out.body));
+        assert_eq!(*auth.lock().unwrap(), format!("Bearer {}", "saved".repeat(8)));
+        assert!(!String::from_utf8_lossy(&out.body).contains("savedsaved"), "token echoed to renderer");
+        // An empty token without the saved-token choice is still rejected.
+        assert_eq!(post(r#"{"action":"publish","note_id":"note-id","token":"","days":7,"revision":1}"#).status, 400);
     }
 
     #[test]

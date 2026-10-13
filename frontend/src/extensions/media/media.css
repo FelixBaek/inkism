@@ -10,7 +10,7 @@
   white-space: normal;
 }
 .tiptap-prose .media-block.ProseMirror-selectednode {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 .media-block :where(button) {
@@ -22,7 +22,7 @@
   opacity: 0.55;
 }
 .media-block :focus-visible {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 
@@ -55,7 +55,7 @@
   font: inherit;
   font-size: 13px;
   color: var(--text);
-  background: var(--surface);
+  background: var(--raised);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
@@ -317,7 +317,7 @@ input.media-caption-title:focus {
   display: flex;
   padding: 2px;
   border-radius: 5px;
-  background: var(--surface);
+  background: var(--raised);
 }
 .media-segment button {
   padding: 2px 8px;
@@ -367,7 +367,7 @@ input.media-caption-title:focus {
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--text);
-  background: var(--surface);
+  background: var(--raised);
   border: 0;
 }
 .diagram-code:focus {
@@ -485,8 +485,8 @@ input.media-caption-title:focus {
 }
 
 .diagram-actions { display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; }
-.diagram-dialog { width:min(94vw,1200px); height:min(90vh,900px); padding:16px; border:1px solid var(--border); border-radius:12px; background:var(--surface); color:var(--text); }
-.diagram-dialog::backdrop { background:rgb(0 0 0 / .4); }
+.diagram-dialog { width:min(94vw,1200px); height:min(90vh,900px); padding:16px; border:1px solid var(--border); border-radius:12px; background:var(--raised); color:var(--text); }
+.diagram-dialog::backdrop { background:var(--scrim); }
 .diagram-dialog header { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding-bottom:12px; }
 .diagram-dialog header strong { margin-right:auto; }
 .diagram-zoom-scroll { overflow:auto; height:calc(100% - 64px); border:1px solid var(--border); padding:16px; }

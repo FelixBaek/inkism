@@ -23,7 +23,7 @@ const html='<p><em>'+'P'.repeat(2*1024*1024)+'</em></p>';
 const body=async id=>(await rpc('get',{id})).content;
 let release;
 try{
- for(const kind of ['keys','worker-keys','composition-commit','composition-cancel']){
+ for(const kind of ['keys','worker-keys','native-worker-keys','composition-commit','composition-cancel']){
   const follow=kind.endsWith('keys')?'LATE1한글😀LATE2':kind==='composition-commit'?'확정😀':'',note=await rpc('save',{note:{title:'yield '+kind+' '+Date.now(),content:original,content_format:'html'}});await rpc('wait_index');
   await page.goto(base+'/?virtual=1'+(process.env.INKISM_LAZY==='0'?'':'&lazy=1'));await page.getByRole('button',{name:'노트 열기: '+note.title,exact:true}).click();await ready();
   await editor.evaluate((el:any)=>el.editor.view.focus());await page.keyboard.press('Control+a');await page.locator('.document-selection-status').waitFor();
@@ -48,6 +48,25 @@ try{
    const create=document.createElement,view=el.editor.view,text=Object.getOwnPropertyDescriptor(Node.prototype,'textContent');
    const report:any=(window as any).yieldInput={divs:0,events:[],restored:false};
    const record=label=>report.events.push({label,pending:!!document.querySelector('.document-selection-status'),divs:report.divs});
+   if(kind==='native-worker-keys'){
+    const Native=window.Worker;report.starts=0;report.released=false;report.deliveries=[];
+    window.Worker=class extends Native {
+     constructor(url,options){
+      super(url,options);
+      if(!String(url).includes('source-segments.worker'))return;
+      let handler;
+      Object.defineProperty(this,'onmessage',{get:()=>handler,set:value=>{handler=value;}});
+      this.addEventListener('message',event=>{
+       const deliver=()=>handler?.call(this,event);
+       if(report.released)deliver();else report.deliveries.push(deliver);
+      });
+      const post=this.postMessage.bind(this);
+      this.postMessage=(...args)=>{report.starts++;return post(...args);};
+     }
+    };
+    report.restore=()=>{window.Worker=Native;report.restored=true;};
+    return;
+   }
    if(kind==='worker-keys'){
     const post=Worker.prototype.postMessage,terminate=Worker.prototype.terminate,active=new Set();report.starts=0;
     Worker.prototype.postMessage=function(...args){
@@ -92,11 +111,24 @@ try{
    report.restore=()=>{document.createElement=create;report.restored=true;};
   },kind);
   release();release=null;
+  if(kind==='native-worker-keys'){
+   await page.waitForFunction(()=>(window as any).yieldInput.starts>0);
+   // Native browser input while an actual awaited worker response is held.
+   await page.keyboard.insertText('LATE1한글😀');
+   await page.evaluate(()=>(window as any).yieldInput.events.push({label:'first',pending:!!document.querySelector('.document-selection-status')}));
+   await page.keyboard.type('LATE2');
+   await page.evaluate(()=>{
+    const report=(window as any).yieldInput;
+    report.events.push({label:'second',pending:!!document.querySelector('.document-selection-status')});
+    report.released=true;for(const deliver of report.deliveries.splice(0))deliver();
+   });
+  }
   await page.waitForFunction(()=>(window as any).yieldInput?.events.length===2);
   await page.waitForFunction(()=>!document.querySelector('.document-selection-status')&&!document.querySelector('.window-error'));await saved();
   const report=await page.evaluate(()=>{(window as any).yieldInput.restore();return {events:(window as any).yieldInput.events,divs:(window as any).yieldInput.divs,starts:(window as any).yieldInput.starts};});
   assert.ok(report.events.every(e=>e.pending),'late input must land while calculation is still pending');
   if(kind==='worker-keys')assert.ok(report.events[0].inflight&&report.starts>=2,'actual in-flight Worker must be superseded and restarted');
+  else if(kind==='native-worker-keys')assert.ok(report.starts>=2,'native typing must invalidate and restart the awaited calculation');
   else assert.ok(report.events.every(e=>e.divs>=12),'late input must follow real serialization work');
   const ids=assertBlockBytes(await body(note.id),expected,{added:blocks(expected),message:'native model exact result preserves accepted late input and drops canceled composition'});
   assert.ok((await editor.textContent()).length<40000);assert.ok(await page.locator('*').count()<1500);

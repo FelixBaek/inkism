@@ -83,7 +83,7 @@ try{
    let cancelled=false;const guarded=await prepareBoundary(point,direction,{...source,check:()=>{if(cancelled)throw Error('cancelled');}});cancelled=true;
    await reject(()=>changeBoundary(guarded,direction),'cancelled edit');
    f.note=note;f.body=body;f.result=changed;f.direction=direction;f.nativeSpace=selectedAtom&&repeat===2&&direction==='forward';
-   f.reference=new Editor({element:document.getElementById('reference'),extensions:contentExtensions({trailingNode:false}),content:body,parseOptions:{preserveWhitespace:'full'},injectCSS:false});
+   f.reference=new Editor({element:document.getElementById('reference'),extensions:contentExtensions({trailingNode:false,automaticIds:false}),content:body,parseOptions:{preserveWhitespace:'full'},injectCSS:false});
    const full=segmentPositionMap({ordinal:0,byte_offset:0,source:body,start_context:[],end_context:[]});
    if(selectedAtom){let at;f.reference.state.doc.descendants((node,pos)=>{if(node.type.name==='horizontalRule')at=pos;});f.reference.commands.setNodeSelection(at);}
    else f.reference.commands.setTextSelection(full.position(point.byte,point.within));f.reference.view.focus();
@@ -92,17 +92,23 @@ try{
   (window as any).boundaryFixture.verify=async()=>{
    const f=(window as any).boundaryFixture,changed=f.result,native=f.reference.getHTML();
    if(!changed){eq(native,f.body,'native no-op');return {changed:false};}
-   const encoder=new TextEncoder(),decoder=new TextDecoder(),bytes=encoder.encode(f.body),end=changed.start+encoder.encode(changed.expected).length;
-   eq(decoder.decode(bytes.subarray(changed.start,end)),changed.expected,'exact expected span');
-   const expected=decoder.decode(bytes.subarray(0,changed.start))+changed.replacement+decoder.decode(bytes.subarray(end));
-   const canonical=canonicalRichHTML(expected);
+   const encoder=new TextEncoder(),decoder=new TextDecoder();let bytes=encoder.encode(f.body);
+   const edits=[...changed.tags,{start:changed.start,expected:changed.expected,replacement:changed.replacement}];
+   for(const edit of edits){
+    const end=edit.start+encoder.encode(edit.expected).length;
+    eq(decoder.decode(bytes.subarray(edit.start,end)),edit.expected,'exact expected span');
+    bytes=encoder.encode(decoder.decode(bytes.subarray(0,edit.start))+edit.replacement+decoder.decode(bytes.subarray(end)));
+   }
+   const expected=decoder.decode(bytes),ids=[...expected.matchAll(/ id="(ink-block-[0-9a-f-]{36})"/g)];
+   eq(new Set(ids.map(v=>v[1])).size,ids.length,'unique block identities');
+   const canonical=canonicalRichHTML(expected.replace(/ id="ink-block-[0-9a-f-]{36}"/g,''));
    if(canonical!==native){let at=0;while(canonical[at]===native[at]&&at<Math.min(canonical.length,native.length))at++;console.log('native mismatch',at,canonical.slice(at-35,at+55),native.slice(at-35,at+55),f.reference.state.selection.toJSON());}
    // Blink's second native Delete after a selected HR may rewrite a newly
    // leading ASCII space to NBSP. Keep the original source space in the model
    // and expose this one serialization difference instead of hiding it.
    const browserWhitespace=f.nativeSpace&&canonical!==native;
    eq(canonical,browserWhitespace?native.replace('<p>&nbsp;','<p> '):native,'whole native command equivalence (declared leading-space DOM rewrite)');
-   if(changed.expected!==changed.replacement)await (window as any).segmentRPC({op:'document_splice_html',id:f.note.id,revision:1,content:{start:changed.start,expected:changed.expected,replacement:changed.replacement}});
+   if(changed.tags.length||changed.expected!==changed.replacement)await (window as any).segmentRPC({op:'document_splice_html',id:f.note.id,revision:1,edits});
    const saved=await (window as any).segmentRPC({op:'get',id:f.note.id});eq(saved.content,expected,'saved exact outside bytes');
    if(encoder.encode(changed.afterPreview.raw).length>65536)throw Error('unbounded preview');
    if(changed.selection.type==='node'){

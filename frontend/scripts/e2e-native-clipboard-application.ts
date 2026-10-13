@@ -67,10 +67,10 @@ try{
   await page.keyboard.type('FOLLOW',{delay:2});await page.keyboard.insertText('한글😀');await bounded();assert.ok(await body(note.id)===original,'raw clipboard and subsequent input remain provisional');
   release();release=null;await settled();const actual=await body(note.id);
   const untouched=original.slice(0,original.indexOf(first==='paragraph'?'</strong>':'</code>')-1);
-  assert.ok(actual.startsWith(untouched),'exact source bytes before the selected character, including original ancestor attributes');
+  assert.ok(withoutBlockIds(actual).startsWith(untouched),'exact source bytes before the selected character, including original ancestor attributes');
   // Blocks the paste created after the giant first block gain identities. The
-  // giant block opens before this bounded selection's source and stays as is.
-  const added=(expected.match(/<(p|pre)[ >]/g)??[]).length-1;
+  // giant block also receives an ID through its exact outside opening-tag splice.
+  const added=(expected.match(/<(p|pre)[ >]/g)??[]).length;
   if(withoutBlockIds(actual)!==expected){let at=0;while(at<Math.min(actual.length,expected.length)&&actual[at]===expected[at])at++;console.log('DIFF',{label,at,actualLength:actual.length,expectedLength:expected.length,actual:actual.slice(Math.max(0,at-60),at+150),expected:expected.slice(Math.max(0,at-60),at+150)});}
   const ids=assertBlockBytes(actual,expected,{added,message:label+' exact real-context native clipboard and follow-up'});await bounded();await page.unroute('**/api/rpc');
   await page.reload();await ready();await historyKey(page,'undo');await saved();assert.equal(await body(note.id),original,'restart undo original');

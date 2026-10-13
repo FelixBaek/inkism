@@ -53,7 +53,8 @@ try {
   if(missing){
    await page.getByText('편집 기준 버전이 이력에 없습니다.',{exact:false}).waitFor();
    let requests=0;
-   const count=()=>requests++;
+   // Background panels (backlinks, journal, inspector) may poll; only note reads/writes count.
+   const count=(r)=>{let op;try{op=r.postDataJSON()?.op;}catch{}if(r.url().includes('/api/export/')||['get','save','patch','revision_body'].includes(op)||String(op).startsWith('document_'))requests++;};
    page.on('request',count);
    const downloaded=page.waitForEvent('download');
    await page.getByRole('button',{name:'미저장 편집 파일로 보관',exact:true}).click();

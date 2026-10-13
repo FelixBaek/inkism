@@ -83,12 +83,15 @@ jobs:
           }
           cargo test --locked --manifest-path desktop-tauri/src-tauri/Cargo.toml
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      # These tests include a 500ms foreground-save latency bound. Keep unrelated
+      # test databases from competing for runner I/O; in-test worker/concurrency
+      # scenarios and every assertion still run unchanged.
       - name: Windows Rust storage tests
         if: matrix.group == 'storage'
-        run: cargo test --locked --manifest-path core/engine/Cargo.toml
+        run: cargo test --locked --manifest-path core/engine/Cargo.toml -- --test-threads=1
       - name: Windows encrypted storage tests
         if: ${{ !cancelled() && matrix.group == 'storage' }}
-        run: cargo test --locked --manifest-path core/engine/Cargo.toml --features encrypted-storage
+        run: cargo test --locked --manifest-path core/engine/Cargo.toml --features encrypted-storage -- --test-threads=1
       - name: Windows Rust sync tests
         if: matrix.group == 'runtime'
         run: cargo test --locked --manifest-path core/sync-core/Cargo.toml

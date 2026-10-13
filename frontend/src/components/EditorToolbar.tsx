@@ -12,7 +12,9 @@ import {
   ClearFormatting,
   DirectionLtr,
   DirectionRtl,
+  Eye,
   Highlighter,
+  Image as ImageIcon,
   InlineCode,
   Italic,
   Link2,
@@ -39,6 +41,9 @@ import { AttachmentButton } from "./AttachmentButton";
 import { MathTools } from "./MathTools";
 import { IconButton } from "./IconButton";
 import { Popover } from "./toolbar/Popover";
+import { BlockInsertPanel } from "./toolbar/BlockInsertPanel";
+import { BLOCK_ITEMS } from "../extensions/block-items";
+import { PREVIEW_EVENT } from "./PreviewExport";
 import {
   AiMenu,
   AiResultView,
@@ -95,7 +100,7 @@ const ALIGNS = [
 const PIN_KEY = "inkism.toolbar.pinExtra";
 const DIR_TYPES = ["paragraph", "heading"];
 
-type PopName = "more" | "para" | "font" | "ol" | "ul" | "emoji" | "note" | "ai" | "aiResult" | ColorKind;
+type PopName = "more" | "para" | "font" | "ol" | "ul" | "emoji" | "note" | "insert" | "ai" | "aiResult" | ColorKind;
 interface Pop {
   name: PopName;
   anchor: HTMLElement;
@@ -430,8 +435,8 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
       </IconButton>
     </Group>
   );
-  const insertTools = (level: number) => (
-    <Group label={t("링크·이모지")}>
+  const linkTools = (level: number) => (
+    <>
       <IconButton
         label={t("링크")}
         active={editor.isActive("link")}
@@ -441,9 +446,13 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
         <Link2 size={16} aria-hidden />
       </IconButton>
       {popButton("note", level, t("노트 연결"), <NoteLink size={16} aria-hidden />)}
-      {popButton("emoji", level, t("이모지"), <Smile size={16} aria-hidden />)}
-    </Group>
+    </>
   );
+  const imageItem = BLOCK_ITEMS.find((item) => item.id === "image");
+  const insertImage = () => {
+    if (disabled || !imageItem) return;
+    void Promise.resolve(imageItem.run(editor));
+  };
   const AlignIcon = align[2];
   const blockTools = (
     <Group label={t("정렬·글 방향")}>
@@ -489,18 +498,18 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             className="tb-more"
           >
             {!pinExtra && <div className="tb-more-row">{extraTools(level + 1)}</div>}
-            {compact && (
-              <div className="tb-more-row">
-                {fontSize}
-                {select("font", level + 1, t("글꼴"), fontName)}
-                <Divider />
-                {insertTools(level + 1)}
-                <Divider />
-                {blockTools}
-                <Divider />
-                {clearTool}
-              </div>
-            )}
+            {/* Figma 도구줄에 자리가 없는 도구: 글자 크기·정렬·글 방향·서식 지우기·이모지 */}
+            <div className="tb-more-row">
+              {fontSize}
+              {compact && select("font", level + 1, t("글꼴"), fontName)}
+              <Divider />
+              {compact && linkTools(level + 1)}
+              {popButton("emoji", level + 1, t("이모지"), <Smile size={16} aria-hidden />)}
+              <Divider />
+              {blockTools}
+              <Divider />
+              {clearTool}
+            </div>
           </Popover>
         );
       case "highlight":
@@ -611,6 +620,12 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             </Suspense>
           </Popover>
         );
+      case "insert":
+        return (
+          <Popover key={pop.name} {...common} label={t("블록 삽입")} className="tb-pop-panel tb-insert-pop">
+            <BlockInsertPanel editor={editor} onClose={() => closeAt(level)} />
+          </Popover>
+        );
       case "note":
         return (
           <Popover key={pop.name} {...common} label={t("노트 연결")} className="tb-pop-panel">
@@ -687,14 +702,17 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
         role="toolbar"
         aria-label={t("서식 도구 모음")}
       >
+        {/* Figma 01 도구줄 순서: 본문 ▾ · B I U · 목록 · 연결·이미지·블록 삽입 · 미리보기 · 더보기 */}
+        <Group label={t("문단·글꼴")}>
+          {select("para", 0, t("문단 스타일"), PARAGRAPHS.find(([v]) => v === paraValue)?.[1] ?? t("제목 {level}",{level:paraValue}))}
+          {!compact && select("font", 0, t("글꼴"), fontName)}
+        </Group>
         <Group label={t("글자 모양")}>
           {markButton(t("굵게 (Ctrl+B)"), <Bold size={16} aria-hidden />, "bold", (c) => c.toggleBold())}
           {markButton(t("기울임 (Ctrl+I)"), <Italic size={16} aria-hidden />, "italic", (c) => c.toggleItalic())}
           {markButton(t("밑줄 (Ctrl+U)"), <UnderlineIcon size={16} aria-hidden />, "underline", (c) =>
             c.toggleUnderline(),
           )}
-          {!(pinExtra && !compact) &&
-            popButton("more", 0, t("서식 더보기"), <MoreVertical size={16} weight="bold" aria-hidden />)}
         </Group>
         {inlineExtra && (
           <>
@@ -702,18 +720,6 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             <Group label={t("서식 더보기")}>{extraTools(0)}</Group>
           </>
         )}
-        {!compact && (
-          <>
-            <Divider />
-            {fontSize}
-          </>
-        )}
-        <Divider />
-        <Group label={t("문단·글꼴")}>
-          {select("para", 0, t("문단 스타일"), PARAGRAPHS.find(([v]) => v === paraValue)?.[1] ?? t("제목 {level}",{level:paraValue}))}
-          {!compact && select("font", 0, t("글꼴"), fontName)}
-        </Group>
-        <Divider />
         <Group label={t("목록")}>
           {markButton(t("할 일 목록"), <TaskList size={16} aria-hidden />, "taskList", (c) => c.toggleTaskList())}
           {split(
@@ -735,17 +741,18 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             cmd((c) => c.toggleBulletList()),
           )}
         </Group>
-        {!compact && (
-          <>
-            <Divider />
-            {insertTools(0)}
-            <Divider />
-            {blockTools}
-            <Divider />
-            <Group label={t("서식 지우기")}>{clearTool}</Group>
-          </>
-        )}
-        <Divider />
+        <Group label={t("넣기")}>
+          {!compact && linkTools(0)}
+          <IconButton label={t("이미지")} disabled={disabled || !imageItem?.available(editor)} onClick={insertImage}>
+            <ImageIcon size={16} aria-hidden />
+          </IconButton>
+          {popButton("insert", 0, t("블록 삽입"), <Plus size={16} aria-hidden />)}
+          <IconButton label={t("미리보기")} onClick={() => window.dispatchEvent(new Event(PREVIEW_EVENT))}>
+            <Eye size={16} aria-hidden />
+          </IconButton>
+          {!(pinExtra && !compact) &&
+            popButton("more", 0, t("서식 더보기"), <MoreVertical size={16} weight="bold" aria-hidden />)}
+        </Group>
         <div className="tb-group" ref={aiGroup}>
           <button
             ref={aiButton}
