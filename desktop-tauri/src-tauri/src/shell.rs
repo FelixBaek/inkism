@@ -138,20 +138,7 @@ pub fn run(session: Session) -> local_api::Result<Option<PathBuf>> {
                     let builder = if cfg!(windows) { builder.data_directory(profile_dir(&root)) } else { builder };
                     let window = builder.build()?;
                     #[cfg(windows)]
-                    {
-                        let receiver = window.clone();
-                        // Only forward a note URL to the existing renderer. Its normal
-                        // save, library and Google-lock checks still decide navigation.
-                        let server = crate::note_link::Server::start(&database, move |link| {
-                            let Ok(payload) = serde_json::to_string(link) else { return false; };
-                            let script = format!("window.__inkismPendingNoteLink={payload};window.dispatchEvent(new CustomEvent('inkism-open-link',{{detail:{payload}}}))");
-                            let accepted = receiver.eval(&script).is_ok();
-                            if accepted { let _ = receiver.show(); let _ = receiver.unminimize(); let _ = receiver.set_focus(); }
-                            accepted
-                        });
-                        // IPC is optional: keep the normal app and exclusive lock if it fails.
-                        if let Ok(server) = server { *note_link_server.lock().unwrap() = Some(server); }
-                    }
+                    start_note_link_server(&window, &database, &note_link_server);
                     if !open.is_empty() {
                         let payload = serde_json::to_string(&open).unwrap_or_else(|_| "\"\"".into());
                         // The renderer may not have mounted its listeners yet;
@@ -196,6 +183,26 @@ pub fn run(session: Session) -> local_api::Result<Option<PathBuf>> {
     result?;
     let next = state.next_library.lock().unwrap_or_else(|p| p.into_inner()).take();
     Ok(next)
+}
+
+#[cfg(windows)]
+fn start_note_link_server(
+    window: &tauri::WebviewWindow,
+    database: &Path,
+    server_slot: &Mutex<Option<crate::note_link::Server>>,
+) {
+    let receiver = window.clone();
+    // Only forward a note URL to the existing renderer. Its normal
+    // save, library and Google-lock checks still decide navigation.
+    let server = crate::note_link::Server::start(database, move |link| {
+        let Ok(payload) = serde_json::to_string(link) else { return false; };
+        let script = format!("window.__inkismPendingNoteLink={payload};window.dispatchEvent(new CustomEvent('inkism-open-link',{{detail:{payload}}}))");
+        let accepted = receiver.eval(&script).is_ok();
+        if accepted { let _ = receiver.show(); let _ = receiver.unminimize(); let _ = receiver.set_focus(); }
+        accepted
+    });
+    // IPC is optional: keep the normal app and exclusive lock if it fails.
+    if let Ok(server) = server { *server_slot.lock().unwrap() = Some(server); }
 }
 
 fn on_window_event(window: &tauri::Window, event: &WindowEvent, state: &CloseState, security: Option<&Controller>) {
