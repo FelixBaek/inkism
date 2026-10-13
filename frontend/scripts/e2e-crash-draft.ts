@@ -1,7 +1,7 @@
-// Real React/Go/Rust checkpoint, killed renderer, then the Go fixture kills Rust.
+// Real renderer checkpoint, killed renderer, then the Rust fixture kills the engine.
 import assert from 'node:assert/strict';
 import {writeFile} from 'node:fs/promises';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 const base=process.env.INKISM_URL,scenario=process.env.INKISM_CRASH_SCENARIO;
 assert.ok(base && process.env.INKISM_CRASH_MANIFEST);
 const rpc=async(op,args={})=>{
@@ -79,7 +79,9 @@ try{
    // Both journal and ordinary save failed; no more input triggers the retry.
   }else if(scenario==='paged'){
    await page.locator('.tiptap-prose').evaluate((el: any,{text,offset})=>el.editor.chain().focus().setTextSelection(offset).insertContent(text).run(),{text:marker,offset:1+first.length});
-   expectedContent=original.content.replace('<p>','<p>'+first+marker);
+   const id=await page.locator('.tiptap-prose').evaluate((el:any)=>el.editor.state.doc.firstChild.attrs.id);
+   assert.match(id,/^ink-block-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,'edited block has an identity');
+   expectedContent=original.content.replace('<p>',`<p id="${id}">`+first+marker);
   }else{
    await sourceEditor.click();await page.keyboard.press('Control+End');await page.keyboard.insertText(marker);
    expectedContent+=marker;

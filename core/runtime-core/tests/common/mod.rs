@@ -1,9 +1,10 @@
-//! Test helper: launches the *actual* Go sync-relay binary once per test
-//! process, then a fresh relay instance per test (isolated bbolt DB + port).
+//! Test helper: launches the *actual* Rust sync-relay binary
+//! (`core/sync-relay`) once per test process, then a fresh relay instance per
+//! test (isolated SQLite DB + port).
 //!
 //! Set `INKISM_RELAY_BIN` to reuse a prebuilt relay, otherwise the helper
-//! builds `desktop/cmd/sync-relay` (repo root) with `go build` on first use. This is a real
-//! end-to-end path (HTTP relay, real ciphertext), not a Rust test double.
+//! builds `core/sync-relay` with cargo on first use. This is a real
+//! end-to-end path (HTTP relay, real ciphertext), not an in-process test double.
 
 #![allow(dead_code)]
 
@@ -14,12 +15,11 @@ use std::time::{Duration, Instant};
 
 pub const TOKEN: &str = "inkism-runtime-test-token-0123456789";
 
-fn project_root() -> PathBuf {
+fn relay_crate() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
+        .parent()
         .expect("crate lives in <repo>/core/<crate>")
-        .to_path_buf()
+        .join("sync-relay")
 }
 
 fn relay_binary() -> Option<PathBuf> {
@@ -31,19 +31,26 @@ fn relay_binary() -> Option<PathBuf> {
                 return Some(path);
             }
         }
-        let out = std::env::temp_dir().join(format!(
-            "inkism-sync-relay-{}{}",
-            std::process::id(),
-            std::env::consts::EXE_SUFFIX
-        ));
-        let status = Command::new("go")
+        let krate = relay_crate();
+        // A fixed target dir keeps the binary path predictable regardless of
+        // CARGO_TARGET_DIR and lets repeated test runs reuse the build.
+        let target = krate.join("target");
+        let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+        let status = Command::new(cargo)
             .arg("build")
-            .arg("-o")
-            .arg(&out)
-            .arg("./desktop/cmd/sync-relay")
-            .current_dir(project_root())
+            .arg("--locked")
+            .arg("--quiet")
+            .arg("--bin")
+            .arg("inkism-sync-relay")
+            .arg("--manifest-path")
+            .arg(krate.join("Cargo.toml"))
+            .arg("--target-dir")
+            .arg(&target)
             .status()
             .ok()?;
+        let out = target
+            .join("debug")
+            .join(format!("inkism-sync-relay{}", std::env::consts::EXE_SUFFIX));
         if status.success() && out.exists() {
             Some(out)
         } else {

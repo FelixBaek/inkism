@@ -1,0 +1,79 @@
+name: Android encrypted storage restart
+on:
+  # Register the workflow and exercise only this storage harness on its own branch.
+  push:
+    branches: ['codex/inkism-backend-completion']
+    paths:
+      - '.github/workflows/android-storage.yml'
+      - 'tools/scripts/android-storage-acceptance.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-storage-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  storage:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop-tauri/package-lock.json
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          toolchain: stable
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          packages: platform-tools
+      - name: Prepare API35 emulator and disposable KVM access
+        shell: bash
+        run: |
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'emulator' 'system-images;android-35;google_apis;x86_64'
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          rustup target add aarch64-linux-android
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+      - name: Verify storage oracle
+        run: python3 tools/scripts/android-storage-acceptance.py --self-test
+      - name: Build current-checkout Android APK and record provenance
+        shell: bash
+        run: |
+          npm --prefix frontend ci --ignore-scripts --no-audit --no-fund
+          npm --prefix frontend run build
+          npm --prefix desktop-tauri ci --ignore-scripts --no-audit --no-fund
+          node tools/platform-build.mjs android
+          python3 tools/scripts/android-storage-acceptance.py --record-build \
+            --apk desktop-tauri/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk \
+            --build-receipt "$RUNNER_TEMP/android-storage/build-receipt.json"
+      - name: Verify current-checkout encrypted storage across process restart
+        shell: bash
+        run: |
+          python3 tools/scripts/android-storage-acceptance.py --sdk "$ANDROID_HOME" \
+            --apk desktop-tauri/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk \
+            --build-receipt "$RUNNER_TEMP/android-storage/build-receipt.json" --output "$RUNNER_TEMP/android-storage"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: android-storage-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/android-storage/android-storage.json
+            ${{ runner.temp }}/android-storage/build-receipt.json
+            ${{ runner.temp }}/android-storage/apk-provenance.json
+            ${{ runner.temp }}/android-storage/emulator.log

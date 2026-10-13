@@ -1,4 +1,4 @@
-//! Ports of the Go relay tests (desktop/internal/relay/*_test.go).
+//! Ports of the original Go relay test suite.
 use super::*;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use base64::Engine;
@@ -136,8 +136,8 @@ async fn publication_share_roles_password_and_revoke() {
     let published = call(&r, "POST", "/v1/publications", &token, None, r#"{"title":"shared","html":"<p>copy</p>","days":7}"#).await;
     let publication = published.json()["id"].as_str().unwrap().to_owned();
     assert_eq!(published.code, 201);
-    let share = call(&r, "POST", "/v1/shares", &token, None, format!(r#"{{"publication_id":"{publication}","role":"editor","password":"secret"}}"#)).await;
-    assert_eq!(share.code, 201, "{}", share.text()); let sid = share.json()["id"].as_str().unwrap().to_owned(); assert_eq!(share.json()["role"], "editor");
+    let share = call(&r, "POST", "/v1/shares", &token, None, format!(r#"{{"publication_id":"{publication}","role":"viewer","password":"secret"}}"#)).await;
+    assert_eq!(share.code, 201, "{}", share.text()); let sid = share.json()["id"].as_str().unwrap().to_owned(); assert_eq!(share.json()["role"], "viewer");
     assert_eq!(call(&r, "GET", &format!("/p/{publication}"), "", None, "").await.code, 401, "password-protected publication bypass");
     assert_eq!(call(&r, "GET", &format!("/s/{sid}"), "", None, "").await.code, 401);
     let req = Request::builder().method("GET").uri(format!("/s/{sid}")).header("x-share-password", "secret"); let response = r.handle(req.body(Full::new(Bytes::new())).unwrap()).await; assert_eq!(response.status(), 200);
@@ -442,136 +442,71 @@ async fn recovery_startup_rejections_leave_stored_data_intact() {
     assert!(out.code == 200 && out.json()["key"] == encoded.as_str(), "recovery key lost after rejected startups: {}", out.text());
 }
 
-// ---- migration: a bbolt dump imports byte for byte and keeps sequences
+// ---- an old Go (bbolt) relay.db is refused byte for byte untouched
 
-#[tokio::test]
-async fn import_bolt_dump_keeps_values_and_sequences() {
+#[test]
+fn foreign_database_file_is_refused_unchanged() {
     let dir = TempDir::new();
-    let b = |s: &[u8]| STANDARD.encode(s);
-    let record = br#"{"seq":7,"id":"imported-record-01","blob":"x"}"#;
-    let dump = [
-        json!({"type": "bucket", "name": b(b"records"), "sequence": 9}),
-        json!({"type": "entry", "bucket": b(b"records"), "key": b(&7u64.to_be_bytes()), "value": b(record)}),
-        json!({"type": "bucket", "name": b(b"identities"), "sequence": 0}),
-        json!({"type": "entry", "bucket": b(b"identities"), "key": b(b"imported-record-01"), "value": b(&7u64.to_be_bytes())}),
-        json!({"type": "end", "buckets": 2, "entries": 2}),
-    ];
-    let path = dir.0.join("dump.jsonl");
-    std::fs::write(&path, dump.iter().map(|l| format!("{l}\n")).collect::<String>()).unwrap();
-    let mut s = Store::open(&dir.db()).unwrap();
-    assert_eq!(s.import_bolt_dump(&path).unwrap(), (2, 2));
-    assert!(s.import_bolt_dump(&path).is_err(), "import into a non-empty database");
-    drop(s);
-    let token = "i".repeat(32);
-    let r = Relay::open(dir.db(), &token).unwrap();
-    let out = call(&r, "GET", "/v1/changes", &token, None, "").await;
-    assert_eq!(out.json()["items"][0]["id"], "imported-record-01", "{}", out.text());
-    let out = call(&r, "POST", "/v1/changes", &token, None, r#"{"id":"after-import-0001","blob":"y"}"#).await;
-    assert!(out.text().contains(r#""seq":10"#), "sequence not continued: {}", out.text());
-
-    // A truncated dump is rejected and leaves nothing behind.
+    let mut bolt = vec![0u8; 4096];
+    bolt[16..20].copy_from_slice(&0xED0CDAEDu32.to_le_bytes());
+    std::fs::write(dir.db(), &bolt).unwrap();
+    let err = Store::open(&dir.db()).err().expect("bbolt file opened").to_string();
+    assert!(err.contains("not a SQLite database") && err.contains("6958e78"), "{err}");
+    assert_eq!(std::fs::read(dir.db()).unwrap(), bolt, "bbolt file was modified");
+    for suffix in ["-wal", "-shm"] {
+        assert!(!std::path::Path::new(&format!("{}{suffix}", dir.db().display())).exists());
+    }
+    // An existing SQLite relay.db still opens.
     let dir2 = TempDir::new();
-    let short = dir2.0.join("dump.jsonl");
-    std::fs::write(&short, format!("{}\n", dump[0])).unwrap();
-    let mut s = Store::open(&dir2.db()).unwrap();
-    assert!(s.import_bolt_dump(&short).is_err());
-    assert!(s.view(|tx| store::scan(tx, store::RECORDS, b"", 10)).unwrap().is_empty());
+    drop(Store::open(&dir2.db()).unwrap());
+    drop(Store::open(&dir2.db()).unwrap());
 }
 
 #[tokio::test]
 async fn sharing_wiki_password_roles_versions_domain_boundaries(){
-    async fn access(r:&Relay,method:&str,path:&str,password:&str,body:Value,host:&str)->Out{
-        let req=Request::builder().method(method).uri(path).header("host",host).header("accept","application/json").header("x-share-password",password).body(Full::new(Bytes::from(body.to_string()))).unwrap();
+    async fn access(r:&Relay,method:&str,path:&str,password:Option<&str>,body:Value,host:&str)->Out{
+        let mut req=Request::builder().method(method).uri(path).header("host",host).header("accept","application/json");
+        if let Some(password)=password {req=req.header("x-share-password",password);}
+        let req=req.body(Full::new(Bytes::from(body.to_string()))).unwrap();
         let res=r.handle(req).await;let(parts,body)=res.into_parts();Out{code:parts.status.as_u16(),headers:parts.headers,body:body.bytes().await.to_vec()}
     }
     let dir=TempDir::new();let token="a".repeat(32);let r=Relay::open(dir.db(),&token).unwrap();
-    let made=call(&r,"POST","/v1/publications",&token,None,json!({"title":"Home","html":"<p>Private copy</p>","password":"public-password","days":7,"pages":[{"id":"page1","title":"Child","html":"<p onclick='bad()'>child</p>"}]}).to_string()).await;
+    // Exercise real password hashing with disposable credentials, without
+    // embedding cryptographic values in the test source.
+    let public_password=URL_SAFE_NO_PAD.encode(random(24));
+    let viewer_password=URL_SAFE_NO_PAD.encode(random(24));
+    let editor_password=URL_SAFE_NO_PAD.encode(random(24));
+    let credentials=[&public_password,&viewer_password,&editor_password];
+    assert!(credentials.iter().all(|password|password.len()>=32));
+    assert_eq!(credentials.into_iter().collect::<std::collections::HashSet<_>>().len(),3);
+    let made=call(&r,"POST","/v1/publications",&token,None,json!({"title":"Home","html":"<p>Private copy</p>","password":public_password,"days":7,"pages":[{"id":"page1","title":"Child","html":"<p onclick='bad()'>child</p>"}]}).to_string()).await;
     assert_eq!(made.code,201,"{}",made.text());assert!(made.json().get("password_hash").is_none());let id=made.json()["id"].as_str().unwrap().to_owned();let path=format!("/p/{id}");
-    let locked=access(&r,"GET",&path,"",Value::Null,"localhost").await;assert_eq!(locked.code,401);assert!(locked.text().contains("id=\"password\""));assert!(!locked.text().contains("Private copy"));
-    let opened=access(&r,"GET",&path,"public-password",Value::Null,"localhost").await;assert_eq!(opened.code,200);assert_eq!(opened.json()["pages"][0]["html"],"<p>child</p>");assert!(opened.json().get("password_hash").is_none());
-    let viewer=call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":id,"role":"viewer","password":"v"}).to_string()).await;let vid=viewer.json()["id"].as_str().unwrap().to_owned();
-    assert_eq!(access(&r,"GET",&path,"public-password",Value::Null,"localhost").await.code,401,"old public link bypasses revocation");
-    assert_eq!(access(&r,"PUT",&format!("/s/{vid}"),"v",json!({"title":"bad","html":"bad","version":1}),"localhost").await.code,403);
-    let editor=call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":id,"role":"editor","password":"e"}).to_string()).await;let eid=editor.json()["id"].as_str().unwrap().to_owned();let ep=format!("/s/{eid}");
-    let edited=access(&r,"PUT",&ep,"e",json!({"title":"Edited","html":"<script>bad()</script><p>safe</p>","page_id":"page1","version":1}),"localhost").await;assert_eq!(edited.code,200,"{}",edited.text());
-    assert_eq!(access(&r,"PUT",&ep,"e",json!({"title":"stale","html":"stale","version":1}),"localhost").await.code,409);
-    assert_eq!(access(&r,"GET",&ep,"e",Value::Null,"localhost").await.json()["pages"][0]["html"],"<p>safe</p>");
+    let locked=access(&r,"GET",&path,None,Value::Null,"localhost").await;assert_eq!(locked.code,401);assert!(locked.text().contains("id=\"password\""));assert!(!locked.text().contains("Private copy"));
+    assert_eq!(access(&r,"GET",&path,Some(&viewer_password),Value::Null,"localhost").await.code,401,"wrong public password accepted");
+    let opened=access(&r,"GET",&path,Some(&public_password),Value::Null,"localhost").await;assert_eq!(opened.code,200);assert_eq!(opened.json()["pages"][0]["html"],"<p>child</p>");assert!(opened.json().get("password_hash").is_none());
+    let viewer=call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":id,"role":"viewer","password":viewer_password}).to_string()).await;let vid=viewer.json()["id"].as_str().unwrap().to_owned();
+    assert_eq!(access(&r,"GET",&path,Some(&public_password),Value::Null,"localhost").await.code,401,"old public link bypasses revocation");
+    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),Some(&public_password),Value::Null,"localhost").await.code,401,"wrong viewer password accepted");
+    // Invitations are read-only: no edits, no editor role, no owner snapshot read-back.
+    assert_eq!(access(&r,"PUT",&format!("/s/{vid}"),Some(&viewer_password),json!({"title":"bad","html":"bad","version":1}),"localhost").await.code,404);
+    assert_eq!(access(&r,"POST",&format!("/s/{vid}/session"),Some(&viewer_password),json!({"client_id":"client-aaaaaaaaaaaa","page_id":""}),"localhost").await.code,404);
+    assert_eq!(call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":id,"role":"editor","password":editor_password}).to_string()).await.code,400);
+    let seen=access(&r,"GET",&format!("/s/{vid}"),Some(&viewer_password),Value::Null,"localhost").await;assert_eq!(seen.json()["role"],"viewer");assert_eq!(seen.json()["pages"][0]["html"],"<p>child</p>");
     let owner_path=format!("/v1/publications/{id}");
-    assert_eq!(call(&r,"GET",&owner_path,"bad",None,"").await.code,401);
-    let snapshot=call(&r,"GET",&owner_path,&token,None,"").await;
-    assert_eq!(snapshot.code,200);assert_eq!(snapshot.json()["version"],2);assert_eq!(snapshot.json()["pages"][0]["html"],"<p>safe</p>");assert!(snapshot.json().get("password_hash").is_none());
-    assert_eq!(call(&r,"DELETE",&format!("/v1/shares/{eid}"),&token,None,"").await.code,204);
-    assert_eq!(access(&r,"PUT",&ep,"e",json!({"title":"bad","html":"bad","version":2}),"localhost").await.code,404);
+    assert_eq!(call(&r,"GET",&owner_path,&token,None,"").await.code,404);
+    // An "editor" invitation stored by an older version only reads.
+    let legacy="b".repeat(64);
+    r.db_sync(|s|s.update(|tx|store::put(tx,store::SHARES,legacy.as_bytes(),&serde_json::to_vec(&json!({"id":legacy,"publication_id":id,"role":"editor","password_hash":"","created":0,"expires":i64::MAX,"revoked":false}))?))).unwrap();
+    assert_eq!(access(&r,"PUT",&format!("/s/{legacy}"),None,json!({"title":"bad","html":"bad","version":1}),"localhost").await.code,404);
+    assert_eq!(access(&r,"GET",&format!("/s/{legacy}"),None,Value::Null,"localhost").await.json()["role"],"viewer");
     assert_eq!(call(&r,"PUT","/v1/settings/domain",&token,None,r#"{"hosts":["wiki.example.com"]}"#).await.code,200);
-    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),"v",Value::Null,"evil.test").await.code,403);
-    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),"v",Value::Null,"wiki.example.com").await.code,200);
+    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),Some(&viewer_password),Value::Null,"evil.test").await.code,403);
+    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),Some(&viewer_password),Value::Null,"wiki.example.com").await.code,200);
     assert_eq!(call(&r,"GET","/v1/settings/domain",&token,None,"").await.code,200,"owner locked out");
     assert_eq!(call(&r,"PUT","/v1/settings/domain",&token,None,r#"{"hosts":[]}"#).await.code,200);
     r.db_sync(|s|s.update(|tx|{let raw=store::get(tx,store::PUBLICATIONS,id.as_bytes())?.unwrap();let mut p:Value=serde_json::from_slice(&raw)?;p["expires"]=json!(0);store::put(tx,store::PUBLICATIONS,id.as_bytes(),&serde_json::to_vec(&p)?) })).unwrap();
-    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),"v",Value::Null,"localhost").await.code,404,"expired publication remains visible through invite");
-    assert_eq!(call(&r,"GET",&owner_path,&token,None,"").await.code,404,"expired snapshot must not reconcile");
-    assert_eq!(call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":id,"role":"editor"}).to_string()).await.code,404,"expired publication accepts invites");
+    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),Some(&viewer_password),Value::Null,"localhost").await.code,404,"expired publication remains visible through invite");
+    assert_eq!(call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":id,"role":"viewer"}).to_string()).await.code,404,"expired publication accepts invites");
     assert_eq!(call(&r,"DELETE",&format!("/v1/publications/{id}"),&token,None,"").await.code,204);
-    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),"v",Value::Null,"localhost").await.code,404);
-}
-
-#[tokio::test]
-async fn collaboration_metadata_presence_permissions_and_cas(){
- async fn access(r:&Relay,method:&str,path:&str,password:&str,v:Value,cross:bool)->Out{
-  let mut q=Request::builder().method(method).uri(path).header("accept","application/json").header("x-share-password",password);
-  if cross {q=q.header("sec-fetch-site","cross-site");}
-  let res=r.handle(q.body(Full::new(Bytes::from(v.to_string()))).unwrap()).await;let(parts,body)=res.into_parts();Out{code:parts.status.as_u16(),headers:parts.headers,body:body.bytes().await.to_vec()}
- }
- let dir=TempDir::new();let token="a".repeat(32);let r=Relay::open(dir.db(),&token).unwrap();
- let p=call(&r,"POST","/v1/publications",&token,None,json!({"title":"Home","html":"<p>PRIVATEBODY</p>","days":7}).to_string()).await.json();
- let a=call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":p["id"],"role":"editor","password":"secret"}).to_string()).await.json();
- let b=call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":p["id"],"role":"viewer","password":"viewer"}).to_string()).await.json();
- let ap=format!("/s/{}",a["id"].as_str().unwrap());let bp=format!("/s/{}",b["id"].as_str().unwrap());
- let heartbeat=json!({"client_id":"client-aaaaaaaaaaaa","page_id":""});
- assert_eq!(access(&r,"POST",&format!("{ap}/session"),"wrong",heartbeat.clone(),false).await.code,401);
- assert_eq!(access(&r,"POST",&format!("{ap}/session"),"secret",heartbeat.clone(),true).await.code,403);
- let first=access(&r,"POST",&format!("{ap}/session"),"secret",heartbeat.clone(),false).await;assert_eq!(first.code,200);assert_eq!(first.json()["version"],1);assert!(!first.text().contains("PRIVATEBODY"));assert!(!first.text().contains(a["id"].as_str().unwrap()));
- let peer=access(&r,"POST",&format!("{bp}/session"),"viewer",json!({"client_id":"client-bbbbbbbbbbbb","page_id":""}),false).await;assert_eq!(peer.json()["sessions"].as_array().unwrap().len(),2);
- let write=json!({"title":"A","html":"<p>A edit</p>","version":1});assert_eq!(access(&r,"PUT",&ap,"secret",write.clone(),false).await.code,200);assert_eq!(access(&r,"PUT",&ap,"secret",write.clone(),false).await.code,409);assert_eq!(access(&r,"PUT",&bp,"viewer",write,false).await.code,403);
- assert_eq!(access(&r,"POST",&format!("{ap}/session"),"secret",heartbeat.clone(),false).await.json()["version"],2);
- assert_eq!(call(&r,"DELETE",&format!("/v1/shares/{}",a["id"].as_str().unwrap()),&token,None,"").await.code,204);
- assert_eq!(access(&r,"POST",&format!("{ap}/session"),"secret",heartbeat,false).await.code,404);
- assert_eq!(access(&r,"POST",&format!("{bp}/session"),"viewer",json!({"client_id":"client-bbbbbbbbbbbb","page_id":""}),false).await.json()["sessions"].as_array().unwrap().len(),1);
- r.presence.lock().unwrap().clear();
- // Slow password hashing (Windows runners) can make 64 joins outlast the 40 s session TTL; keep each one alive for the cap check.
- for i in 0..64{assert_eq!(access(&r,"POST",&format!("{bp}/session"),"viewer",json!({"client_id":format!("client-{i:016}"),"page_id":""}),false).await.code,200);for peer in r.presence.lock().unwrap().iter_mut(){peer.expires=i64::MAX;}}
- assert_eq!(access(&r,"POST",&format!("{bp}/session"),"viewer",json!({"client_id":"client-overflow000000","page_id":""}),false).await.code,429);
- // Expired sessions disappear without waiting for wall-clock TTL in a test.
- for peer in r.presence.lock().unwrap().iter_mut(){peer.expires=0;}
- assert_eq!(access(&r,"POST",&format!("{bp}/session"),"viewer",json!({"client_id":"client-renewed000000","page_id":"missing"}),false).await.json()["sessions"].as_array().unwrap().len(),1);
- drop(r);let r=Relay::open(dir.db(),&token).unwrap();assert!(r.presence.lock().unwrap().is_empty());
- assert_eq!(access(&r,"GET",&bp,"viewer",Value::Null,false).await.json()["html"],"<p>A edit</p>");
-}
-
-#[tokio::test]
-async fn authoritative_block_merge_history_restart_and_false_base(){
- async fn edit(r:&Relay,path:&str,v:Value)->Out{let req=Request::builder().method("PUT").uri(path).header("accept","application/json").body(Full::new(Bytes::from(v.to_string()))).unwrap();let res=r.handle(req).await;let(parts,body)=res.into_parts();Out{code:parts.status.as_u16(),headers:parts.headers,body:body.bytes().await.to_vec()}}
- let dir=TempDir::new();let token="a".repeat(32);let r=Relay::open(dir.db(),&token).unwrap();
- let p=call(&r,"POST","/v1/publications",&token,None,json!({"title":"Home","html":"<p>one</p><p>two🙂</p>","days":7}).to_string()).await.json();
- let invite=call(&r,"POST","/v1/shares",&token,None,json!({"publication_id":p["id"],"role":"editor"}).to_string()).await.json();let path=format!("/s/{}",invite["id"].as_str().unwrap());let owner=format!("/v1/publications/{}",p["id"].as_str().unwrap());
- let write=|html:&str,version|json!({"title":"Home","html":html,"version":version,"merge":"blocks-v1"});
- assert_eq!(edit(&r,&path,write("<p>first A</p><p>two🙂</p>",1)).await.code,200);
- // History survives process restart and is looked up only by server revision.
- drop(r);let r=Relay::open(dir.db(),&token).unwrap();let merged=edit(&r,&path,write("<p>one</p><p>second B🙂</p>",1)).await;assert_eq!(merged.code,200,"{}",merged.text());assert_eq!(merged.json()["merged"],true);
- assert_eq!(call(&r,"GET",&owner,&token,None,"").await.json()["html"],"<p>first A</p><p>second B🙂</p>");
- assert_eq!(edit(&r,&path,write("<p>first C</p><p>two🙂</p>",1)).await.code,409,"same paragraph conflict");
- assert_eq!(edit(&r,&path,write("<p>one</p><p>two🙂</p><p>new block</p>",1)).await.code,409,"structural edits conflict");
- let mut forged=write("<p>forged</p>",1);forged["base_html"]=json!("<p>pretend</p>");assert_eq!(edit(&r,&path,forged).await.code,400);
- assert_eq!(edit(&r,&path,write("<p>unknown base</p>",999)).await.code,409);
- assert_eq!(edit(&r,&path,write("<p>unknown base</p>",0)).await.code,409);
- // Owner updates also establish an authoritative merge base, not just shared PUTs.
- assert_eq!(call(&r,"PUT",&owner,&token,None,json!({"title":"Home","html":"<p>owner A</p><p>second B🙂</p>","days":7}).to_string()).await.code,200);
- assert_eq!(edit(&r,&path,write("<p>first A</p><p>client B🙂</p>",3)).await.code,200);
- assert_eq!(call(&r,"GET",&owner,&token,None,"").await.json()["html"],"<p>owner A</p><p>client B🙂</p>");
- let mut version=5;for i in 0..18{let out=edit(&r,&path,write(&format!("<p>owner A</p><p>{i}</p>"),version)).await;assert_eq!(out.code,200);version+=1;}
- assert_eq!(edit(&r,&path,write("<p>one</p><p>too old</p>",1)).await.code,409,"pruned base never guessed");
- assert_eq!(call(&r,"DELETE",&format!("/v1/shares/{}",invite["id"].as_str().unwrap()),&token,None,"").await.code,204);
- assert_eq!(edit(&r,&path,write("<p>revoked</p>",version)).await.code,404);
- assert_eq!(call(&r,"DELETE",&owner,&token,None,"").await.code,204);
- let history=r.db_sync(|s|s.view(|tx|store::scan(tx,"publication-merge-history-v1",b"",100))).unwrap();assert!(history.is_empty(),"revocation purges historical plaintext");
+    assert_eq!(access(&r,"GET",&format!("/s/{vid}"),Some(&viewer_password),Value::Null,"localhost").await.code,404);
 }

@@ -3,7 +3,7 @@
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioIo, TokioTimer};
-use inkism_sync_relay::{google_jwks_fetcher, store::Store, Relay};
+use inkism_sync_relay::{google_jwks_fetcher, Relay};
 use std::io::Read;
 use std::process::exit;
 use std::sync::Arc;
@@ -13,8 +13,6 @@ use zeroize::Zeroizing;
 const USAGE: &str = "Usage of inkism-sync-relay:
   -db string
     \tOpaque encrypted event database (default \"relay.db\")
-  -import-bolt-dump string
-    \tone-time migration: load a relay-export JSON-lines dump into a new -db, then exit
   -listen string
     \tListen behind HTTPS reverse proxy (default \"127.0.0.1:47832\")
   -register-owner-key-stdin
@@ -43,7 +41,6 @@ struct Flags {
     tls_cert: String,
     tls_key: String,
     register: bool,
-    import: String,
 }
 
 /// The flag name and its inline `=value`; None ends parsing.
@@ -76,7 +73,7 @@ fn parse_bool(inline: Option<&str>, name: &str) -> bool {
 }
 
 fn parse_flags(args: impl Iterator<Item = String>) -> Flags {
-    let mut f = Flags { listen: "127.0.0.1:47832".into(), db: "relay.db".into(), tls_cert: String::new(), tls_key: String::new(), register: false, import: String::new() };
+    let mut f = Flags { listen: "127.0.0.1:47832".into(), db: "relay.db".into(), tls_cert: String::new(), tls_key: String::new(), register: false };
     let mut args = args.peekable();
     while let Some(arg) = args.next() {
         let Some((name, inline)) = split_flag(&arg) else { break };
@@ -93,7 +90,6 @@ fn parse_flags(args: impl Iterator<Item = String>) -> Flags {
             "db" => &mut f.db,
             "tls-cert" => &mut f.tls_cert,
             "tls-key" => &mut f.tls_key,
-            "import-bolt-dump" => &mut f.import,
             _ => usage_error(format!("flag provided but not defined: -{name}")),
         };
         *slot = match inline.or_else(|| args.next()) {
@@ -112,23 +108,6 @@ fn env(name: &str) -> String {
     }
 }
 
-fn import_dump(db: &str, import: &str) {
-    if std::path::Path::new(db).exists() {
-        fatal(format!("{db}: refusing to import into an existing database"));
-    }
-    let mut store = Store::open(db.as_ref()).unwrap_or_else(|e| fatal(e));
-    match store.import_bolt_dump(import.as_ref()) {
-        Ok((buckets, entries)) => println!("imported {buckets} buckets, {entries} entries into {db}"),
-        Err(e) => {
-            drop(store);
-            for suffix in ["", "-wal", "-shm"] {
-                let _ = std::fs::remove_file(format!("{db}{suffix}"));
-            }
-            fatal(format!("import failed: {e}"))
-        }
-    }
-}
-
 fn register_owner_key_stdin(relay: &mut Relay) {
     let mut raw = Zeroizing::new(Vec::new());
     if std::io::stdin().take(46).read_to_end(&mut raw).is_err() || raw.len() > 45 {
@@ -144,10 +123,6 @@ fn register_owner_key_stdin(relay: &mut Relay) {
 
 fn main() {
     let flags = parse_flags(std::env::args().skip(1));
-    if !flags.import.is_empty() {
-        import_dump(&flags.db, &flags.import);
-        return;
-    }
     let mut relay = Relay::open(&flags.db, &env("RELAY_TOKEN")).unwrap_or_else(|e| fatal(e));
     let (client_id, subject, encoded) = (env("RECOVERY_GOOGLE_CLIENT_ID"), env("RECOVERY_GOOGLE_SUBJECT"), Zeroizing::new(env("RECOVERY_MASTER_KEY")));
     if !client_id.is_empty() || !subject.is_empty() || !encoded.is_empty() {

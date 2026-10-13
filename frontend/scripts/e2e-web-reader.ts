@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright-core';
+import { chromium } from './browser-env.ts';
 const base = process.env.INKISM_URL!;
 const rpc = async (op: string, args: any = {}) => { const r = await fetch(base + '/api/rpc', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})}); const v=await r.json(); assert.equal(v.ok,true,JSON.stringify(v)); return v.data; };
 const original = await rpc('save',{note:{title:'Original preserved',content:'<p>untouched source</p>',content_format:'html'}});

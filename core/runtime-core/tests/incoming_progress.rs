@@ -94,7 +94,7 @@ fn prefetch(path: &Path, relay: &Relay, key: &Key) {
 
 #[test]
 fn invalid_note_stays_pending_while_later_note_applies_across_restart() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate();
     let writer = writer(dir.path(), &relay, &key);
@@ -140,8 +140,87 @@ fn invalid_note_stays_pending_while_later_note_applies_across_restart() {
 }
 
 #[test]
+fn higher_payload_versions_cannot_overwrite_or_delete_notes_and_survive_restart() {
+    let relay = Relay::start().expect("real Rust relay");
+    let dir = tempfile::tempdir().unwrap();
+    let key = Key::generate();
+    let writer = writer(dir.path(), &relay, &key);
+    let original_id = uuid::Uuid::new_v4().to_string();
+    let protected_id = uuid::Uuid::new_v4().to_string();
+    writer.stage_local(note(&original_id, json!("현재 형식 원문")), 1).unwrap();
+    writer.stage_local(note(&protected_id, json!("삭제하면 안 되는 노트")), 2).unwrap();
+    writer.push().unwrap();
+
+    // Newer records can retain v1 fields or change the schema entirely.
+    // Both must remain unsupported without interpreting or acknowledging them.
+    let relay_client = sync_core::RelayClient::new(&relay.url, TOKEN).unwrap();
+    let mut future_records = Vec::new();
+    for (version, id, deleted, changed_schema) in [
+        (sync_core::PAYLOAD_VERSION + 1, &original_id, false, false),
+        (u32::MAX, &protected_id, true, false),
+        (sync_core::PAYLOAD_VERSION + 1, &original_id, false, true),
+        (u32::MAX, &protected_id, true, true),
+    ] {
+        let event = uuid::Uuid::new_v4().to_string();
+        let mut future = note(id, json!("미래 형식으로 덮어쓴 본문"));
+        future.deleted = deleted;
+        let mut value = json!({
+            "version":version,"entity":future,"device_id":"future-device",
+            "counter":1,"ts":u64::MAX / 2,
+            "vclock":{writer.device_id():1,"future-device":1},
+        });
+        if changed_schema {
+            value.as_object_mut().unwrap().remove("vclock");
+            value["entity"]["kind"] = json!("futurekind");
+            value["clock"] = json!(["new schema"]);
+        }
+        let payload = value.to_string().into_bytes();
+        let blob = sync_core::encode_blob(&sync_core::seal_record(&key, &event, &payload).unwrap());
+        relay_client.post_change(&event, &blob).unwrap();
+        future_records.push((event, payload));
+    }
+    let good = uuid::Uuid::new_v4().to_string();
+    writer.stage_local(note(&good, json!("미래 기록 뒤의 정상 노트")), 3).unwrap();
+    writer.push().unwrap();
+
+    let path = dir.path().join("receiver.db");
+    let app = open_paused(&path, &relay, &key);
+    for (event, payload) in &future_records {
+        assert_eq!(queued(&path, event), ("pending".into(), payload.clone()));
+    }
+    resume(&app);
+    let assert_preserved = |app: &AppCore| {
+        let status = round(app);
+        assert_eq!(get(app, &original_id)["title"], "현재 형식 원문", "future schema overwrote a supported note");
+        assert_eq!(get(app, &protected_id)["title"], "삭제하면 안 되는 노트", "future tombstone deleted a supported note");
+        assert_eq!(get(app, &good)["title"], "미래 기록 뒤의 정상 노트");
+        assert!(status["error"].is_null(), "unsupported records must not become a blocking error: {status}");
+        assert_eq!(status["unsupported_records"], 4, "{status}");
+        let state = Connection::open(state_path(&path)).unwrap();
+        let host = Connection::open(&path).unwrap();
+        for (event, payload) in &future_records {
+            assert_eq!(queued(&path, event), ("pending".into(), payload.clone()), "pending bytes must survive later acknowledgements and restart");
+            for (connection, table) in [(&state, "applied_events"), (&host, "sync_applied")] {
+                assert_eq!(connection.query_row(&format!("SELECT COUNT(*) FROM {table} WHERE event_id=?1"), [event], |r| r.get::<_, i64>(0)).unwrap(), 0);
+            }
+        }
+    };
+    assert_preserved(&app);
+    let originals = [get(&app, &original_id), get(&app, &protected_id)];
+    drop(app);
+    let app = AppCore::open(path.to_str().unwrap()).unwrap();
+    assert_preserved(&app);
+    assert_eq!([get(&app, &original_id), get(&app, &protected_id)], originals, "restart or repeated pulls rewrote the original notes");
+    let later = uuid::Uuid::new_v4().to_string();
+    writer.stage_local(note(&later, json!("재시작 뒤에도 동기화")), 4).unwrap();
+    writer.push().unwrap();
+    assert_preserved(&app);
+    assert_eq!(get(&app, &later)["title"], "재시작 뒤에도 동기화");
+}
+
+#[test]
 fn malformed_queue_json_does_not_hide_next_record_and_is_never_acknowledged() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate();
     let writer = writer(dir.path(), &relay, &key);
@@ -188,7 +267,7 @@ fn malformed_queue_json_does_not_hide_next_record_and_is_never_acknowledged() {
 
 #[test]
 fn ack_failure_stops_before_next_note_and_replays_without_overwriting_local_edit() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate();
     let writer = writer(dir.path(), &relay, &key);
@@ -243,7 +322,7 @@ fn ack_failure_stops_before_next_note_and_replays_without_overwriting_local_edit
 
 #[test]
 fn host_write_failure_rolls_back_partial_note_then_allows_later_note_and_retry() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate();
     let writer = writer(dir.path(), &relay, &key);
@@ -307,7 +386,7 @@ fn host_write_failure_rolls_back_partial_note_then_allows_later_note_and_retry()
 
 #[test]
 fn superseded_missing_attachment_is_acknowledged_without_downloading_it() {
-    let relay = Relay::start().expect("real Go relay");
+    let relay = Relay::start().expect("real Rust relay");
     let dir = tempfile::tempdir().unwrap();
     let key = Key::generate();
     let writer = writer(dir.path(), &relay, &key);

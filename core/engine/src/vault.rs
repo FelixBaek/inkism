@@ -204,32 +204,107 @@ pub fn unlock(
     revise(conn, id, revision, true, || store_unlocked(conn, id, content, text, format))
 }
 
-/// Move named snapshots and current body into encryption in one CAS transaction.
-pub fn lock_with_versions(conn:&Connection,id:&str,revision:i64,body:&LockedBody,versions:&serde_json::Value,expected:&str)->Result<serde_json::Value>{
- revise(conn,id,revision,false,||{
-  let current=crate::named_versions::backup(conn,id)?;
-  if crate::encrypted_versions::digest(&current)?!=expected{return Err(EngineError::Conflict("named versions changed".into()));}
-  crate::encrypted_versions::replace(conn,id,versions,false)?;
-  conn.execute("DELETE FROM history WHERE note_id=?1 AND label IS NOT NULL",[id])?;
-  store_locked(conn,id,body)
- })
-}
-pub fn unlock_with_versions(conn:&Connection,id:&str,revision:i64,content:&str,text:&str,format:&str,versions:&serde_json::Value,expected:&str)->Result<serde_json::Value>{
- revise(conn,id,revision,true,||{
-  if crate::encrypted_versions::digest(&crate::encrypted_versions::rows(conn,id)?)?!=expected{return Err(EngineError::Conflict("encrypted versions changed".into()));}
-  store_unlocked(conn,id,content,text,format)?;
-  crate::named_versions::import_with_ids(conn,id,versions,&std::collections::HashMap::new(),true)?;
-  conn.execute("DELETE FROM encrypted_named_versions WHERE note_id=?1",[id])?;Ok(())
- })
+/// Move named snapshots and the current body into encryption one snapshot at
+/// a time: inside the same revision
+/// transaction each plaintext snapshot (in [`crate::named_versions::backup`]
+/// row form) is handed to `seal`, which returns its encrypted row (same id).
+/// Reading and writing share the transaction, so no snapshot digest is needed
+/// and at most one plaintext snapshot and its ciphertext are in memory.
+/// Existing encrypted snapshots of the note are kept; the per-note limits
+/// apply to the result. Any error rolls everything back.
+pub fn lock_with_sealed_versions(
+    conn: &Connection,
+    id: &str,
+    revision: i64,
+    body: &LockedBody,
+    seal: &mut dyn FnMut(serde_json::Value) -> Result<serde_json::Value>,
+) -> Result<serde_json::Value> {
+    revise(conn, id, revision, false, || {
+        for hid in crate::named_versions::named_ids(conn, id)? {
+            let plain = crate::named_versions::backup_row(conn, id, &hid)?
+                .ok_or_else(|| EngineError::internal("named version vanished"))?;
+            let held: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM encrypted_named_versions WHERE id=?1)", [&hid], |r| r.get(0))?;
+            if held {
+                return Err(EngineError::invalid("duplicate encrypted version id"));
+            }
+            let sealed = seal(plain)?;
+            if sealed["id"].as_str() != Some(hid.as_str()) {
+                return Err(EngineError::invalid("sealed version changed identity"));
+            }
+            crate::encrypted_versions::put(conn, id, &sealed)?;
+            conn.execute("DELETE FROM history WHERE id=?1 AND label IS NOT NULL", [&hid])?;
+        }
+        crate::encrypted_versions::check_totals(conn, id)?;
+        store_locked(conn, id, body)
+    })
 }
 
-pub fn change_encrypted_versions(conn:&Connection,id:&str,revision:i64,versions:&serde_json::Value,expected:&str,restore:Option<(&str,&str,&LockedBody)>)->Result<serde_json::Value>{
+/// Take a note out of the vault one snapshot at a time: `open` turns each stored
+/// encrypted row (in [`crate::encrypted_versions::rows`] form and order) into
+/// a plaintext named-version row (same id) inside the revision transaction.
+/// Same limits as importing the whole list; any error rolls everything back.
+pub fn unlock_with_opened_versions(
+    conn: &Connection,
+    id: &str,
+    revision: i64,
+    content: &str,
+    text: &str,
+    format: &str,
+    open: &mut dyn FnMut(serde_json::Value) -> Result<serde_json::Value>,
+) -> Result<serde_json::Value> {
+    revise(conn, id, revision, true, || {
+        let ids = crate::encrypted_versions::version_ids(conn, id)?;
+        if ids.len() > 100 {
+            return Err(EngineError::invalid("invalid named versions"));
+        }
+        store_unlocked(conn, id, content, text, format)?;
+        let mut bytes = 0usize;
+        for hid in ids {
+            let row = crate::encrypted_versions::row(conn, id, &hid)?
+                .ok_or_else(|| EngineError::internal("encrypted version vanished"))?;
+            let plain = open(row)?;
+            if plain["id"].as_str() != Some(hid.as_str()) {
+                return Err(EngineError::invalid("opened version changed identity"));
+            }
+            for key in ["content", "text"] {
+                bytes = bytes.saturating_add(plain[key].as_str().map_or(0, str::len));
+            }
+            if bytes > 64 * 1024 * 1024 {
+                return Err(EngineError::invalid("named versions too large"));
+            }
+            crate::named_versions::import_with_ids(conn, id, &serde_json::json!([plain]), &std::collections::HashMap::new(), true)?;
+        }
+        conn.execute("DELETE FROM encrypted_named_versions WHERE note_id=?1", [id])?;
+        Ok(())
+    })
+}
+
+/// One edit of a locked note's encrypted snapshots: rows to add or change
+/// (same identity), a row to remove, and the row the caller read and based
+/// the edit on (`(id, row)`), which must still be stored unchanged.
+#[derive(Default)]
+pub struct EncryptedVersionChange<'a> {
+    pub expected: Option<(String, &'a serde_json::Value)>,
+    pub put: Vec<serde_json::Value>,
+    pub remove: Option<String>,
+}
+
+/// An edit of a locked note's encrypted snapshots that touches single rows: the
+/// note's other snapshots are neither read nor rewritten. Revision, the
+/// edited row and the per-note limits are checked in the transaction.
+pub fn change_encrypted_version(conn:&Connection,id:&str,revision:i64,change:&EncryptedVersionChange,restore:Option<(&str,&str,&LockedBody)>)->Result<serde_json::Value>{
  conn.execute_batch("BEGIN IMMEDIATE")?;
  let result=(||{
   let current=crate::ops_notes::load_summary(conn,id)?;
   if !current.locked||current.readonly||current.trashed{return Err(EngineError::invalid("vault note is not editable"));}
-  if current.revision!=revision||crate::encrypted_versions::digest(&crate::encrypted_versions::rows(conn,id)?)?!=expected{return Err(EngineError::Conflict("vault note or versions changed".into()));}
-  crate::encrypted_versions::replace(conn,id,versions,false)?;
+  let unchanged=match &change.expected{
+   Some((hid,row))=>crate::encrypted_versions::row(conn,id,hid)?.as_ref()==Some(*row),
+   None=>true,
+  };
+  if current.revision!=revision||!unchanged{return Err(EngineError::Conflict("vault note or versions changed".into()));}
+  if let Some(hid)=&change.remove{conn.execute("DELETE FROM encrypted_named_versions WHERE id=?1 AND note_id=?2",params![hid,id])?;}
+  for row in &change.put{crate::encrypted_versions::put(conn,id,row)?;}
+  crate::encrypted_versions::check_totals(conn,id)?;
   if let Some((title,format,body))=restore{
    store_locked(conn,id,body)?;
    conn.execute("UPDATE notes_meta SET title=?1,content_format=?2,revision=revision+1,updated_at=?3,edited_at=?3 WHERE id=?4",params![title,format,ids::now_ms(),id])?;

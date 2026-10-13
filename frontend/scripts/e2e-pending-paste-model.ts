@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 import {createServer} from 'vite';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 
 const server=await createServer({root:fileURLToPath(new URL('..',import.meta.url)),server:{port:0,strictPort:false,host:'127.0.0.1',hmr:false}});
 let browser;

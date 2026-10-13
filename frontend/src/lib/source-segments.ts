@@ -42,6 +42,59 @@ function tokenEnd(source: string, at: number): number {
   return source.codePointAt(at)! > 0xffff ? at + 2 : at + 1;
 }
 
+/** Read an actual opening-tag attribute, ignoring quoted values of other
+ * attributes. The pure scanner is also used in a worker, without a DOM. */
+function dataType(token: string): string | undefined {
+  const name = /^<[a-z][a-z0-9]*\b/i.exec(token);
+  if (!name) return;
+  let at = name[0].length;
+  while (at < token.length) {
+    at = skipSpace(token, at);
+    if (token[at] === ">" || token[at] === "/") return;
+    const attr = /^[^\s=/>]+/.exec(token.slice(at));
+    if (!attr) return;
+    const parsed = attributeValue(token, at + attr[0].length);
+    if (!parsed) return;
+    if (attr[0].toLowerCase() === "data-type") return parsed.value;
+    at = parsed.at;
+  }
+}
+
+function skipSpace(token: string, at: number): number {
+  while (/\s/.test(token[at] ?? "")) at++;
+  return at;
+}
+
+/** The optional `=value` after an attribute name ending at `at`, and the offset
+ * after it; null when the value is malformed. */
+function attributeValue(token: string, at: number): { value?: string; at: number } | null {
+  at = skipSpace(token, at);
+  if (token[at] !== "=") return { at };
+  at = skipSpace(token, at + 1);
+  const quote = token[at];
+  if (quote === '"' || quote === "'") {
+    const end = token.indexOf(quote, at + 1);
+    return end < 0 ? null : { value: token.slice(at + 1, end), at: end + 1 };
+  }
+  const unquoted = /^[^\s>]+/.exec(token.slice(at));
+  return unquoted ? { value: unquoted[0], at: at + unquoted[0].length } : null;
+}
+
+/** Canonical math HTML represents a leaf, not editable span/div content.
+ * Splitting its text duplicates the atom when bounded models are joined.
+ * Keep known leaves whole; ordinary HTML wrappers retain normal token cuts. */
+function mathLeafEnd(source: string, at: number, openingEnd: number): number | undefined {
+  const opening = source.slice(at, openingEnd), tag = /^<(span|div)\b/i.exec(opening)?.[1].toLowerCase();
+  if (!tag || dataType(opening) !== (tag === "span" ? "inline-math" : "block-math")) return;
+  const bounded = source.slice(openingEnd, at + 32769), close = bounded.indexOf("<");
+  if (close < 0) {
+    if (source.length > at + 32768) throw new Error("큰 서식 토큰의 표시 범위를 준비하지 못했습니다. 원문을 유지합니다.");
+    return;
+  }
+  const closing = new RegExp(String.raw`^<\/${tag}\s*>`, "i").exec(source.slice(openingEnd + close, openingEnd + close + 64));
+  return closing ? openingEnd + close + closing[0].length : undefined;
+}
+
 function utf8Length(cp: number): number {
   if (cp <= 0x7f) return 1;
   if (cp <= 0x7ff) return 2;
@@ -55,7 +108,15 @@ function tokenSize(source: string, at: number, token: string, encoder: TextEncod
 }
 
 /** Maintain the open-ancestor stack (and table colgroup preludes) for one token. */
-function trackTag(stack: SegmentAncestor[], opened: number[], source: string, at: number, end: number, token: string) {
+function trackTag(
+  stack: SegmentAncestor[],
+  opened: number[],
+  source: string,
+  at: number,
+  end: number,
+  token: string,
+  byte: number,
+) {
   const tag = source[at] === "<" ? /^<(\/)?([a-z][a-z0-9]*)\b/i.exec(token) : null;
   if (!tag) return;
   const name = tag[2].toLowerCase();
@@ -66,7 +127,7 @@ function trackTag(stack: SegmentAncestor[], opened: number[], source: string, at
     if (name === "colgroup" && start! >= 0 && stack.at(-1)?.tag === "table")
       stack.at(-1)!.prelude = source.slice(start!, end);
   } else if (!VOIDS.has(name) && !token.endsWith("/>")) {
-    stack.push({ tag: name, open: token });
+    stack.push({ tag: name, open: token, at: byte });
     opened.push(at);
   }
 }
@@ -83,6 +144,15 @@ function firstCut(cuts: readonly number[], byteOffset: number) {
 /** Soft boundary: enough bytes, not before a closing tag, and outside rows/items/colgroups. */
 function softBoundary(stack: SegmentAncestor[], pending: number, closingNext: boolean) {
   return pending >= 16384 && !closingNext && !stack.some((a) => ["tr", "li", "colgroup"].includes(a.tag));
+}
+
+/** The token at `at` (a known math leaf whole) and its UTF-8 size. */
+function nextToken(source: string, at: number, encoder: TextEncoder) {
+  const openingEnd = tokenEnd(source, at),
+    leafEnd = source[at] === "<" ? mathLeafEnd(source, at, openingEnd) : undefined,
+    end = leafEnd ?? openingEnd,
+    token = source.slice(at, end);
+  return { leafEnd, end, token, size: tokenSize(source, at, token, encoder) };
 }
 
 /** Pure source scanner shared by the synchronous editor and its worker. */
@@ -117,21 +187,20 @@ export function* modelSourceSegments(
   };
   let cutIndex = firstCut(cuts, byteOffset);
   while (at < source.length) {
-    const end = tokenEnd(source, at),
-      token = source.slice(at, end);
-    const size = tokenSize(source, at, token, encoder);
-    if (cuts[cutIndex] !== undefined && cuts[cutIndex] < byteOffset + bytes + size)
+    const { leafEnd, end, token, size } = nextToken(source, at, encoder);
+    // A past-the-end cut is undefined and compares false.
+    if (cuts[cutIndex] < byteOffset + bytes + size)
       throw new Error("원문 토큰 내부에서 줄 경계를 자를 수 없습니다.");
     if (bytes - startBytes + size > 32768 && at > start) yield take();
     if (size > 32768) throw new Error("큰 서식 토큰의 표시 범위를 준비하지 못했습니다. 원문을 유지합니다.");
-    trackTag(stack, opened, source, at, end, token);
+    if (leafEnd === undefined) trackTag(stack, opened, source, at, end, token, byteOffset + bytes);
     bytes += size;
     at = end;
     // Keep closing ancestor shells with their content. Parsing a final </ul>
     // alone would fill an empty synthetic list with a phantom item.
     const closingNext = source.startsWith("</", at);
     const forced = cuts[cutIndex] === byteOffset + bytes;
-    if (forced) cutIndex++;
+    cutIndex += Number(forced);
     if (forced || !stack.length || softBoundary(stack, bytes - startBytes, closingNext)) yield take();
   }
   if (at > start) yield take();

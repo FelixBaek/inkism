@@ -1,4 +1,4 @@
-//! Port of desktop/internal/pdfexport/real_windows_test.go: drives the real
+//! Port of the former Go implementation's real-Edge test: drives the real
 //! Edge. Runs only on Windows with INKISM_TEST_REAL_PDF=1.
 #![cfg(windows)]
 

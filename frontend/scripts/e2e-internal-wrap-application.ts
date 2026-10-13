@@ -1,9 +1,11 @@
 // Compare source-piece movement with the complete native paragraph, rather
 // than treating each independently wrapped source piece as the oracle.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
+import {waitSaved} from './save-state.ts';
 import {waitForPredicate} from './wait-for-predicate.ts';
 import {historyKey} from './history-keys.ts';
+import {assertBlockBytes} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL;assert.ok(base);
 const shift=process.env.INKISM_WRAP_SHIFT==='1',key=direction=>(shift?'Shift+':'')+(direction==='up'?'ArrowUp':'ArrowDown');
 const rpc=async(op,args={})=>{const r=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const v=await r.json();assert.ok(v.ok,v.error);return v.data;};
@@ -16,7 +18,7 @@ await page.route('**/api/info',async route=>{const response=await route.fetch();
 const editor=page.locator('.tiptap-prose');
 const opened=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized);
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized&&Array.from(document.querySelectorAll<any>('.window-controls button')).some(button=>button.textContent==='이동'&&!button.disabled));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>waitSaved(page);
 // Native browser selection updates can arrive after keyboard.press resolves.
 // Read each oracle position only after that specific key changed its head.
 const oracleKey=async(direction)=>{
@@ -61,7 +63,8 @@ try{
    await page.evaluate(()=>navigator.clipboard.writeText(''));await editor.evaluate((el: any)=>el.editor.view.focus());await page.keyboard.press('Control+c');
    await waitForPredicate(()=>page.evaluate(expected=>navigator.clipboard.readText().then(value=>value===expected),text.slice(origin,oracle.offset)),'wrong full-paragraph clipboard',10000);await ready();
   }
-  await page.keyboard.type('z');await saved();assert.equal((await rpc('get',{id:note.id})).content,prefix+text.slice(0,shift?origin:oracle.offset)+'z'+text.slice(oracle.offset)+suffix,'exact full-paragraph insertion');
+  // The edited giant paragraph gains its identity; every other byte is exact.
+  await page.keyboard.type('z');await saved();assertBlockBytes((await rpc('get',{id:note.id})).content,prefix+text.slice(0,shift?origin:oracle.offset)+'z'+text.slice(oracle.offset)+suffix,{added:1,message:'exact full-paragraph insertion'});
   await historyKey(page,'undo');await saved();assert.equal((await rpc('get',{id:note.id})).content,source);
   await page.unroute('**/api/rpc');console.log('PASS full-paragraph wrap, native down/up round trip, exact '+(shift?'clipboard/':'')+'typing/undo, bounded view: '+label+' shift='+shift+' lazy='+process.env.INKISM_LAZY);
  }

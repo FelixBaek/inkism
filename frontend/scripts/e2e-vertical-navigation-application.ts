@@ -1,7 +1,7 @@
 import {waitForAsync} from './async-browser-condition.ts';
 // Native keyboard movement across a virtual window, compared with the full editor.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {historyKey} from './history-keys.ts';
 const base=process.env.INKISM_URL;
 const shift=process.env.INKISM_VERTICAL_SHIFT==='1';

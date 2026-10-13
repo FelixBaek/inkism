@@ -1,4 +1,5 @@
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
+import {trackSaves} from './save-state.ts';
 import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47920';
 const rpc=async(op,args={})=>{const r=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});const v=await r.json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
@@ -20,7 +21,7 @@ const cursor=async(edge)=>{
 };
 const selectedBlock=()=>page.evaluate(()=>getSelection()?.anchorNode?.parentElement?.closest('p')?.textContent);
 const readyCursor=()=>page.waitForFunction(()=>document.activeElement?.classList.contains('tiptap-prose'));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saves=trackSaves(page),saved=()=>saves.saved();
 try {
  await page.addInitScript(()=>{
    (window as any).boundaryTrace=[];
