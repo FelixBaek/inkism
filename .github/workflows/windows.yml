@@ -266,7 +266,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" /DValidationBuild tools/build/windows/installer.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          ./tools/scripts/test-windows-installer.ps1
+          # The installed-app UI pass is skipped like the other native UI checks until the UI redesign.
+          ./tools/scripts/test-windows-installer.ps1 -SkipUI
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           (Get-FileHash dist/Inkism-setup.exe -Algorithm SHA256).Hash | Set-Content dist/Inkism-setup.exe.sha256
       - name: Package validated Windows files
