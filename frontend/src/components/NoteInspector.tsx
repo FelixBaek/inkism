@@ -1,5 +1,5 @@
 import { readBacklinkLocation, type BacklinkLocation } from "../lib/backlink-location";
-import { navigateNoteAnchor } from "../lib/note-anchor";
+import { waitForAnchorEditor, navigateNoteAnchor } from "../lib/note-anchor";
 import { knowledge } from "../lib/knowledge";
 import type { Note } from "../types";
 import React, { useEffect, useRef, useState } from "react";
@@ -175,12 +175,7 @@ export function BacklinkList({ s }: Readonly<{ s: Store }>) {
       await s.selectNote(id);
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       if (location.anchor.byteOffset !== undefined) {
-        const deadline = Date.now() + 10000;
-        while (document.querySelector(".windowed-editor") && !document.querySelector(".windowed-editor .ProseMirror")) {
-          if (Date.now() > deadline) throw new Error(t("문서를 준비 중입니다. 잠시 후 다시 열어 주세요."));
-          await new Promise((resolve) => setTimeout(resolve, 25));
-        }
-        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+        await waitForAnchorEditor();
       }
       const draft = s.readDraft();
       const locatedNote =
@@ -223,9 +218,10 @@ export function BacklinkList({ s }: Readonly<{ s: Store }>) {
   );
 }
 
-function historyLabel(entry: HistoryEntry, change: {added: number | null; removed: number | null} | undefined) {
-  if (entry.label) return t("보관: {name}", {name: entry.label});
-  if (change?.added != null) return t("{added}개 추가 / {removed}개 삭제", {added: change.added, removed: change.removed!});
+function historyLabel(entry: HistoryEntry, change: { added: number | null; removed: number | null } | undefined) {
+  if (entry.label) return t("보관: {name}", { name: entry.label });
+  if (change?.added != null)
+    return t("{added}개 추가 / {removed}개 삭제", { added: change.added, removed: change.removed! });
   return entry.title || t("제목 없음");
 }
 
@@ -316,9 +312,7 @@ function HistoryBody({
               <time dateTime={new Date(entry.created_at).toISOString()} title={timestamp(entry.created_at)}>
                 {shortTime(entry.created_at)}
               </time>
-              <span title={entry.title}>
-                {historyLabel(entry, changes[entry.id])}
-              </span>
+              <span title={entry.title}>{historyLabel(entry, changes[entry.id])}</span>
             </button>
           </li>
         ))}

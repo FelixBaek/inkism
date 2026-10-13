@@ -27,6 +27,81 @@ import "./KnowledgeTools.css";
 import { CollectionManager } from "./CollectionManager";
 import { calculate, aggregate } from "../lib/collection-calculation";
 
+const rowKeys = new WeakMap<object, string>();
+function rowKey(row: object): string {
+  let key = rowKeys.get(row);
+  if (!key) {
+    key = crypto.randomUUID();
+    rowKeys.set(row, key);
+  }
+  return key;
+}
+function rowPatch<T extends object>(row: T, patch: Partial<T>): T {
+  const next = { ...row, ...patch };
+  rowKeys.set(next, rowKey(row));
+  return next;
+}
+function knowledgePanelTitle(panel: string) {
+  if (panel === "graph") return t("관계 그래프");
+  if (panel === "views") return t("노트 모아보기");
+  return t("속성과 노트 연결");
+}
+function propertyInputType(type: NoteProperty["type"]) {
+  if (type === "number") return "number";
+  return type === "date" ? "date" : "text";
+}
+function propertyInputValue(type: NoteProperty["type"], value: string) {
+  return type === "number" && value !== "" ? Number(value) : value;
+}
+function PropertyInput({
+  property,
+  items,
+  onChange,
+}: Readonly<{ property: NoteProperty; items: KnowledgeItem[]; onChange: (patch: Partial<NoteProperty>) => void }>) {
+  if (property.type === "attachment")
+    return <AttachmentPropertyEditor value={String(property.value)} onChange={(value) => onChange({ value })} />;
+  if (["select", "multiselect", "relation"].includes(property.type))
+    return <PropertyValueEditor property={property} items={items} onChange={onChange} />;
+  if (property.type === "checkbox")
+    return (
+      <input
+        type="checkbox"
+        aria-label={t("속성 값")}
+        checked={property.value === true}
+        onChange={(e) => onChange({ value: e.target.checked })}
+      />
+    );
+  if (["list", "person"].includes(property.type))
+    return <ListPropertyValue value={property.value as string[]} onChange={(value) => onChange({ value })} />;
+  return (
+    <input
+      aria-label={t("속성 값")}
+      type={propertyInputType(property.type)}
+      step="any"
+      value={displayProperty(property.value)}
+      onChange={(e) => onChange({ value: propertyInputValue(property.type, e.target.value) })}
+    />
+  );
+}
+function configuredLanes(property: NoteProperty): string[] {
+  if (property.type === "checkbox") return ["false", "true"];
+  if (property.type === "select") return ["", ...(property.options ?? [])];
+  return property.type === "text" ? [String(property.value)] : [];
+}
+function formulaError(error: string) {
+  if (error === "missing") return t("수식: 속성이 없거나 자료형이 맞지 않음");
+  if (error === "zero") return t("수식: 0으로 나눌 수 없음");
+  if (error === "limit") return t("수식: 계산 범위 초과");
+  return t("수식: 문법 오류");
+}
+function moveValues(property: NoteProperty | undefined, items: KnowledgeItem[], groupBy: string | undefined) {
+  if (property?.type === "checkbox") return ["false", "true"];
+  if (property?.type === "select") return ["", ...(property.options ?? [])];
+  return Array.from(
+    new Set(["", ...items.map((item) => displayProperty(item.properties.find((p) => p.name === groupBy)?.value))]),
+  );
+}
+
 export const KNOWLEDGE_EVENT = "inkism-open-knowledge";
 type Panel = "graph" | "views" | "note";
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -97,7 +172,7 @@ export function KnowledgeTools() {
                 aria-pressed={panel === p}
                 onClick={() => setPanel(p)}
               >
-                {t(p === "graph" ? "관계 그래프" : p === "views" ? "노트 모아보기" : "속성과 노트 연결")}
+                {knowledgePanelTitle(p)}
               </button>
             ))}
           </nav>
@@ -196,12 +271,16 @@ export function PropertyEditor() {
     }
   };
   const update = (index: number, patch: Partial<NoteProperty>) =>
-    data && change({ ...data, properties: data.properties.map((p, i) => (i === index ? { ...p, ...patch } : p)) });
+    data && change({ ...data, properties: data.properties.map((p, i) => (i === index ? rowPatch(p, patch) : p)) });
   return (
     <section className="knowledge-properties">
       <h3>{t("별칭과 사용자 속성")}</h3>
       {error && <p role="alert">{error}</p>}
-      {!data && !error && <p><output>{t("불러오는 중…")}</output></p>}
+      {!data && !error && (
+        <p>
+          <output>{t("불러오는 중…")}</output>
+        </p>
+      )}
       {data && (
         <fieldset disabled={busy || Boolean(s.draft?.readonly)} className="plain-fieldset">
           <label>
@@ -217,7 +296,7 @@ export function PropertyEditor() {
           </label>
           <div className="knowledge-property-list">
             {data.properties.map((property, index) => (
-              <div className="knowledge-property" key={index}>
+              <div className="knowledge-property" key={rowKey(property)}>
                 <input
                   disabled={!!property.definition_id}
                   aria-label={t("속성 이름")}
@@ -269,44 +348,7 @@ export function PropertyEditor() {
                     </option>
                   ))}
                 </select>
-                {property.type === "attachment" ? (
-                  <AttachmentPropertyEditor
-                    key={`${id}:${property.name}:${index}`}
-                    value={String(property.value)}
-                    onChange={(value) => update(index, { value })}
-                  />
-                ) : ["select", "multiselect", "relation"].includes(property.type) ? (
-                  <PropertyValueEditor property={property} items={items} onChange={(patch) => update(index, patch)} />
-                ) : property.type === "checkbox" ? (
-                  <input
-                    type="checkbox"
-                    aria-label={t("속성 값")}
-                    checked={property.value === true}
-                    onChange={(e) => update(index, { value: e.target.checked })}
-                  />
-                ) : ["list", "person"].includes(property.type) ? (
-                  <ListPropertyValue
-                    value={property.value as string[]}
-                    onChange={(value) => update(index, { value })}
-                  />
-                ) : (
-                  <input
-                    aria-label={t("속성 값")}
-                    type={property.type === "number" ? "number" : property.type === "date" ? "date" : "text"}
-                    step="any"
-                    value={displayProperty(property.value)}
-                    onChange={(e) =>
-                      update(index, {
-                        value:
-                          property.type === "number"
-                            ? e.target.value === ""
-                              ? ""
-                              : Number(e.target.value)
-                            : e.target.value,
-                      })
-                    }
-                  />
-                )}
+                <PropertyInput property={property} items={items} onChange={(patch) => update(index, patch)} />
                 <button
                   type="button"
                   className="btn"
@@ -332,7 +374,11 @@ export function PropertyEditor() {
             <button type="button" className="btn" onClick={() => void save()}>
               {t("속성 저장")}
             </button>
-            {saved && <p><output>{t("저장됨")}</output></p>}
+            {saved && (
+              <p>
+                <output>{t("저장됨")}</output>
+              </p>
+            )}
           </div>
         </fieldset>
       )}
@@ -585,10 +631,20 @@ function NoteGraph({ onClose }: { onClose: () => void }) {
         {(error || !data || data.truncated || subset.total > 250) && (
           <div className="graph-notices">
             {error && <p role="alert">{error}</p>}
-            {!data && !error && <p><output>{t("불러오는 중…")}</output></p>}
-            {data?.truncated && <p><output>{t("큰 보관함의 일부만 불러왔습니다.")}</output></p>}
+            {!data && !error && (
+              <p>
+                <output>{t("불러오는 중…")}</output>
+              </p>
+            )}
+            {data?.truncated && (
+              <p>
+                <output>{t("큰 보관함의 일부만 불러왔습니다.")}</output>
+              </p>
+            )}
             {subset.total > 250 && (
-              <p><output>{t("그래프는 250개까지 표시합니다. 검색이나 태그로 범위를 좁혀 주세요.")}</output></p>
+              <p>
+                <output>{t("그래프는 250개까지 표시합니다. 검색이나 태그로 범위를 좁혀 주세요.")}</output>
+              </p>
             )}
           </div>
         )}
@@ -819,17 +875,7 @@ function NoteViews({ onClose }: { onClose: () => void }) {
   // Show empty configured lanes too, so a first card can be dragged into them.
   if (view.layout === "kanban" && view.group_by) {
     const source = items.flatMap((n) => n.properties).filter((p) => p.name === view.group_by);
-    const lanes = new Set(
-      source.flatMap((p) =>
-        p.type === "checkbox"
-          ? ["false", "true"]
-          : p.type === "select"
-            ? ["", ...(p.options ?? [])]
-            : p.type === "text"
-              ? [String(p.value)]
-              : [],
-      ),
-    );
+    const lanes = new Set(source.flatMap(configuredLanes));
     for (const label of lanes) {
       if (!groups.some((g) => g.label === label)) groups.push({ key: `empty:${label}`, label, items: [] });
     }
@@ -837,17 +883,7 @@ function NoteViews({ onClose }: { onClose: () => void }) {
   const summary = aggregate(result, view, items);
   const formulaText = (expression: string, note: KnowledgeItem) => {
     const result = calculate(expression, note, items);
-    return result.error
-      ? t(
-          result.error === "missing"
-            ? "수식: 속성이 없거나 자료형이 맞지 않음"
-            : result.error === "zero"
-              ? "수식: 0으로 나눌 수 없음"
-              : result.error === "limit"
-                ? "수식: 계산 범위 초과"
-                : "수식: 문법 오류",
-        )
-      : String(result.value);
+    return result.error ? formulaError(result.error) : String(result.value);
   };
   const labels = new Map(items.map((n) => [n.id, n.title || t("제목 없음")]));
   const display = (p: NoteProperty | undefined) =>
@@ -1072,14 +1108,14 @@ function NoteViews({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         {(view.filters ?? []).map((filter, index) => (
-          <div className="knowledge-row" key={index}>
+          <div className="knowledge-row" key={rowKey(filter)}>
             <select
               aria-label={t("추가 필터 속성")}
               value={filter.property}
               onChange={(e) =>
                 setView({
                   ...view,
-                  filters: view.filters!.map((f, i) => (i === index ? { ...f, property: e.target.value } : f)),
+                  filters: view.filters!.map((f, i) => (i === index ? rowPatch(f, { property: e.target.value }) : f)),
                 })
               }
             >
@@ -1092,7 +1128,7 @@ function NoteViews({ onClose }: { onClose: () => void }) {
                 setView({
                   ...view,
                   filters: view.filters!.map((f, i) =>
-                    i === index ? { ...f, operator: e.target.value as SavedView["filter"]["operator"] } : f,
+                    i === index ? rowPatch(f, { operator: e.target.value as SavedView["filter"]["operator"] }) : f,
                   ),
                 })
               }
@@ -1110,7 +1146,7 @@ function NoteViews({ onClose }: { onClose: () => void }) {
               onChange={(e) =>
                 setView({
                   ...view,
-                  filters: view.filters!.map((f, i) => (i === index ? { ...f, value: e.target.value } : f)),
+                  filters: view.filters!.map((f, i) => (i === index ? rowPatch(f, { value: e.target.value }) : f)),
                 })
               }
             />
@@ -1351,7 +1387,11 @@ function NoteViews({ onClose }: { onClose: () => void }) {
       </div>
       <div className="kv-body">
         {error && <p role="alert">{error}</p>}
-        {truncated && <p><output>{t("큰 보관함의 일부만 불러왔습니다.")}</output></p>}
+        {truncated && (
+          <p>
+            <output>{t("큰 보관함의 일부만 불러왔습니다.")}</output>
+          </p>
+        )}
         {view.layout === "kanban" && !view.group_by && <p>{t("그룹 속성을 선택하면 열별로 정리합니다.")}</p>}
         <div className={view.layout === "kanban" ? "knowledge-board" : ""}>
           {groups.map((group) => (
@@ -1429,19 +1469,7 @@ function NoteViews({ onClose }: { onClose: () => void }) {
                   {group.items.map((n) => {
                     const property = n.properties.find((p) => p.name === view.group_by);
                     const movable = property && ["text", "select", "checkbox"].includes(property.type);
-                    const values =
-                      property?.type === "checkbox"
-                        ? ["false", "true"]
-                        : property?.type === "select"
-                          ? ["", ...(property.options ?? [])]
-                          : Array.from(
-                              new Set([
-                                "",
-                                ...items.map((item) =>
-                                  displayProperty(item.properties.find((p) => p.name === view.group_by)?.value),
-                                ),
-                              ]),
-                            );
+                    const values = moveValues(property, items, view.group_by);
                     return (
                       <article
                         key={n.id}
@@ -1524,10 +1552,12 @@ function NoteViews({ onClose }: { onClose: () => void }) {
         )}
       </div>
       <footer className="kv-footer">
-        <p><output>
-          {t("노트 {count}개", { count: result.length })} · {t("집계 결과")}: {summary.value ?? "—"}
-          {summary.errors > 0 && ` · ${t("계산 오류 {count}개", { count: summary.errors })}`}
-        </output></p>
+        <p>
+          <output>
+            {t("노트 {count}개", { count: result.length })} · {t("집계 결과")}: {summary.value ?? "—"}
+            {summary.errors > 0 && ` · ${t("계산 오류 {count}개", { count: summary.errors })}`}
+          </output>
+        </p>
         <span className="kv-gap" />
         <button className="btn" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
           {t("이전")}

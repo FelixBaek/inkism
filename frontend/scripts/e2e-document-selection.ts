@@ -12,6 +12,9 @@ const title='전체 선택 검사 '+Date.now();
 const content=Array.from({length:10000},(_,i)=>`<p><strong>블록 ${i}</strong> 한글😀</p>`).join('');
 const note=await rpc('save',{note:{title,content,text:'선택'}});await rpc('wait_index');
 const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
+// Commands launch asynchronous whole-document work; the previous save badge
+// can still be OK before that work starts. Wait for this operation's durable bytes.
+const stored=expected=>waitForPredicate(async()=>(await rpc('get',{id:note.id})).content===expected,'whole-document operation did not preserve exact durable source',15000);
 const formatted=()=>page.waitForFunction(()=>!document.querySelector<any>('.window-error')&&Array.from(document.querySelectorAll<any>('.window-controls button')).some(b=>b.textContent==='이동'&&!b.disabled));
 const focus=()=>page.locator('.tiptap-prose').evaluate((el: any)=>{el.editor.view.focus();});
 try{
@@ -27,35 +30,37 @@ try{
  assert.equal((await rpc('get',{id:note.id})).content,content);
  // Structural formatting must reach all 10,000 blocks while the DOM stays bounded.
  await page.locator('.tiptap-prose').evaluate((el: any)=>el.editor.commands.toggleHeading({level:1}));
- await formatted();await saved();
+ await formatted();await stored(content.replaceAll('<p>','<h1>').replaceAll('</p>','</h1>'));await saved();
  let headings=(await rpc('get',{id:note.id})).content;
  assert.equal((headings.match(/<h1>/g)||[]).length,10000);
  assert.equal(await page.locator('.tiptap-prose h1').count(),32);
  await focus();await page.keyboard.press('Control+a');
  await page.locator('.tiptap-prose').evaluate((el: any)=>el.editor.commands.toggleHeading({level:1}));
- await formatted();await saved();
+ await formatted();await stored(content);await saved();
  assert.equal((await rpc('get',{id:note.id})).content,content);
- await focus();await page.keyboard.press('Control+z');await saved();
+ await focus();await page.keyboard.press('Control+z');await stored(headings);await saved();
  assert.equal((await rpc('get',{id:note.id})).content,headings);
  await page.reload();await page.locator('[data-window-start="0"]').waitFor();
- await historyKey(page,'undo');await saved();
+ await historyKey(page,'undo');await stored(content);await saved();
  assert.equal((await rpc('get',{id:note.id})).content,content);
  await focus();await page.keyboard.press('Control+a');
  await page.keyboard.press('Control+b');
- await formatted();await saved();
+ await formatted();await waitForPredicate(async()=>(await rpc('get',{id:note.id})).content!==content,'bold operation did not persist',15000);await saved();
  let updated=await rpc('get',{id:note.id});assert.notEqual(updated.content,content);assert.ok(updated.content.includes('블록 9999'));
- await focus();await page.keyboard.press('Control+z');await saved();assert.equal((await rpc('get',{id:note.id})).content,content);
+ await focus();await page.keyboard.press('Control+z');await stored(content);await saved();assert.equal((await rpc('get',{id:note.id})).content,content);
  assert.equal(await page.locator('.tiptap-prose p').count(),32);
  await focus();await page.keyboard.press('Control+a');await page.keyboard.press('Delete');
- await page.waitForFunction(()=>document.querySelector('.tiptap-prose')?.textContent==='');await saved();
+ await page.waitForFunction(()=>document.querySelector('.tiptap-prose')?.textContent==='');await stored('<p></p>');await saved();
  assert.equal((await rpc('get',{id:note.id})).content,'<p></p>');
- await focus();await page.keyboard.press('Control+z');await saved();assert.equal((await rpc('get',{id:note.id})).content,content);
+ await focus();await page.keyboard.press('Control+z');await stored(content);await saved();assert.equal((await rpc('get',{id:note.id})).content,content);
  assert.equal(await page.locator('.tiptap-prose p').count(),32);
  await focus();await page.keyboard.press('Control+a');await page.keyboard.insertText('대체😀');
  await page.waitForFunction(()=>document.querySelector('.tiptap-prose')?.textContent==='대체😀');await saved();
  // A typed replacement block acquires its permanent ID; every other byte is canonical.
- assert.match((await rpc('get',{id:note.id})).content,/^<p id="ink-block-[0-9a-f-]{36}"><strong>대체😀<\/strong><\/p>$/);
- await focus();await page.keyboard.press('Control+z');await saved();assert.equal((await rpc('get',{id:note.id})).content,content);
+ const replacement=/^<p id="ink-block-[0-9a-f-]{36}"><strong>대체😀<\/strong><\/p>$/;
+ await waitForPredicate(async()=>replacement.test((await rpc('get',{id:note.id})).content),'typed replacement did not persist exactly',15000);
+ assert.match((await rpc('get',{id:note.id})).content,replacement);
+ await focus();await page.keyboard.press('Control+z');await stored(content);await saved();assert.equal((await rpc('get',{id:note.id})).content,content);
  await focus();await page.keyboard.press('Control+a');await page.keyboard.press('Escape');assert.equal(await page.locator('.document-selection-status').count(),0);
  // Shift selection retains an anchor in the first window while displaying the end.
  await page.locator('.tiptap-prose').evaluate((el: any)=>{el.editor.commands.setTextSelection(1);el.editor.view.focus();});

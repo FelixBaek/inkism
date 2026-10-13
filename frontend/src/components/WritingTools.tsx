@@ -44,6 +44,13 @@ function recentNotes(): string[] {
   }
 }
 /** Mount once in the application toolbar, including when no note is selected. */
+function writingPanelTitle(panel: Panel) {
+  if (panel === "quick") return t("빠른 전환");
+  if (panel === "templates") return t("템플릿");
+  if (panel === "merge") return t("노트 합치기");
+  return t("목차");
+}
+
 export function WritingTools() {
   const s = useStore(),
     latest = useRef(s);
@@ -455,30 +462,14 @@ export function WritingTools() {
       <dialog
         ref={dialog}
         className="writing-tools-dialog"
-        aria-label={
-          panel === "quick"
-            ? t("빠른 전환")
-            : panel === "templates"
-              ? t("템플릿")
-              : panel === "merge"
-                ? t("노트 합치기")
-                : t("목차")
-        }
+        aria-label={writingPanelTitle(panel)}
         onCancel={(e) => {
           if (running.current) e.preventDefault();
           else close();
         }}
       >
         <header>
-          <strong>
-            {panel === "quick"
-              ? t("빠른 전환")
-              : panel === "templates"
-                ? t("템플릿")
-                : panel === "merge"
-                  ? t("노트 합치기")
-                  : t("목차")}
-          </strong>
+          <strong>{writingPanelTitle(panel)}</strong>
           <button
             type="button"
             className="btn btn-secondary"
@@ -490,7 +481,11 @@ export function WritingTools() {
           </button>
         </header>
         {error && <p role="alert">{error}</p>}
-        {busy && <p role="status">{t("불러오는 중…")}</p>}
+        {busy && (
+          <p>
+            <output>{t("불러오는 중…")}</output>
+          </p>
+        )}
         {panel === "quick" && (
           <>
             <input
