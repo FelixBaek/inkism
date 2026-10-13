@@ -1,8 +1,14 @@
 import { advanceSourceHistory } from "../lib/source-history-cache";
+import { advanceRichHistory } from "../lib/rich-history-cache";
+import { inspectRichHTML } from "../lib/rich-document";
+import { usePref } from "../lib/pref";
+import { RichEditor } from "./RichEditor";
+import { TagInput } from "./TagInput";
+import { X } from "../icons";
 import { withReadonly } from "../lib/readonly-permission";
 import { errorText } from "../lib/text";
 import { persistHistory, loadHistories } from "../lib/persistent-history";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api, rpc } from "../api";
 import { useStore } from "../store";
 import type { Note } from "../types";
@@ -34,6 +40,11 @@ export function SplitWorkspace({
   closeInspector: () => void;
 }>) {
   const s = useStore();
+  // 오른쪽 창 편집 방식 (Figma 05: 서식). 원문은 언제든 고를 수 있다.
+  const [splitMode, setSplitMode] = usePref<"rich" | "source">("inkism.split.mode", (raw) =>
+    raw === "source" ? "source" : "rich",
+  );
+  const [tagDraft, setTagDraft] = useState("");
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [generation, setGeneration] = useState(0),
     [note, setNote] = useState<SourceNote | null>(null);
@@ -140,6 +151,7 @@ export function SplitWorkspace({
     const position = positions.current[saved.id];
     if (position?.revision === payload.revision) position.revision = saved.revision;
     advanceSourceHistory(saved.id + ":split", payload.revision, saved.revision);
+    advanceRichHistory(saved.id + ":split", payload.revision, saved.revision);
     if (version.current !== snapshotVersion) return;
     await persistHistory(saved.id, saved.revision);
     if (version.current !== snapshotVersion) return;
@@ -344,14 +356,34 @@ export function SplitWorkspace({
       setBusy(false);
     }
   };
-  const edit = (content: string) => {
-    if (!draft.current || draft.current.readonly) return;
-    draft.current = { ...draft.current, content };
+  /** 본문·제목·태그 변경은 모두 같은 분할 초안(draft)과 같은 저장(flush) 경로로 간다. */
+  const edit = (content: string) => editPatch({ content });
+  const editPatch = (patch: Partial<Pick<SourceNote, "content" | "title" | "tags">>, id = draft.current?.id) => {
+    if (!draft.current || draft.current.readonly || draft.current.id !== id) return;
+    draft.current = { ...draft.current, ...patch };
+    if (patch.title !== undefined || patch.tags !== undefined) setNote(draft.current);
     dirty.current = true;
     version.current++;
     scheduleCheckpointRef.current();
     clearTimeout(timer.current);
     timer.current = setTimeout(() => void flushRef.current().catch(report), 700);
+  };
+  // 서식 편집은 HTML 노트이고 원문이 서식 편집기로 그대로 왕복할 때만(왼쪽 편집기와 같은 기준).
+  const mountedContent = note && draft.current?.id === note.id ? draft.current.content : note?.content ?? "";
+  const inspection = useMemo(
+    () => (note && (note.content_format ?? "html") === "html" ? inspectRichHTML(mountedContent) : null),
+    // 편집기를 새로 여는 순간(노트·세대·방식)에만 다시 본다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [note?.id, generation, splitMode],
+  );
+  const richCapable = Boolean(inspection?.editable);
+  const showRich = splitMode === "rich" && richCapable;
+  const richInitial = showRich ? inspection!.content : null;
+  const switchMode = (mode: "rich" | "source") => {
+    if (mode === splitMode) return;
+    // 서식 편집기에 남은 입력을 초안으로 먼저 넘긴 뒤 다른 편집기를 연다.
+    window.dispatchEvent(new Event("inkism-flush-editor"));
+    setSplitMode(mode);
   };
   return (
     <div className={"split-workspace" + (note ? " is-split" : "")}>
@@ -409,6 +441,28 @@ export function SplitWorkspace({
             ))}
           </div>
           <div className="split-controls">
+            <fieldset className="mode-toggle plain-fieldset" aria-label={t("분할 편집 모드")} disabled={busy}>
+              <button
+                type="button"
+                className={`mode-btn${showRich ? " is-active" : ""}`}
+                aria-label={t("분할 서식 편집")}
+                aria-pressed={showRich}
+                disabled={!richCapable}
+                title={richCapable ? undefined : t("이 노트는 원문으로만 편집합니다.")}
+                onClick={() => switchMode("rich")}
+              >
+                {t("서식")}
+              </button>
+              <button
+                type="button"
+                className={`mode-btn${showRich ? "" : " is-active"}`}
+                aria-label={t("분할 원문 편집")}
+                aria-pressed={!showRich}
+                onClick={() => switchMode("source")}
+              >
+                {t("원문")}
+              </button>
+            </fieldset>
             <select
               aria-label={t("분할 노트")}
               value={note.id}
@@ -426,7 +480,48 @@ export function SplitWorkspace({
               {t("분할 저장")}
             </button>
           </div>
-          <h2>{note.title}</h2>
+          <h2 className="split-title">
+            <input
+              aria-label={t("분할 노트 제목")}
+              value={note.title}
+              placeholder={t("제목 없는 노트")}
+              readOnly={Boolean(note.readonly)}
+              onChange={(e) => editPatch({ title: e.target.value }, note.id)}
+            />
+          </h2>
+          <div className="split-tags tag-editor" aria-label={t("분할 노트 태그")}>
+            {note.tags.map((tag) => (
+              <span key={tag} className="tag-chip">
+                <span className="tag-chip-label" title={tag}>
+                  #{tag}
+                </span>
+                {!note.readonly && (
+                  <button
+                    type="button"
+                    className="tag-remove"
+                    aria-label={t("태그 삭제: {tag}", { tag })}
+                    onClick={() => editPatch({ tags: note.tags.filter((x) => x !== tag) }, note.id)}
+                  >
+                    <X size={11} aria-hidden />
+                  </button>
+                )}
+              </span>
+            ))}
+            {!note.readonly && (
+              <TagInput
+                value={tagDraft}
+                onChange={setTagDraft}
+                current={note.tags}
+                placeholder={note.tags.length === 0 ? t("태그 추가 (Enter)") : t("태그 더 추가")}
+                onCommit={(text = tagDraft) => {
+                  const tag = text.trim().replace(/^#/, "");
+                  if (tag && !note.tags.includes(tag) && note.tags.length < 100) editPatch({ tags: [...note.tags, tag] }, note.id);
+                  setTagDraft("");
+                }}
+                onRemoveLast={() => editPatch({ tags: note.tags.slice(0, -1) }, note.id)}
+              />
+            )}
+          </div>
           {error && (
             <div role="alert">
               {error}
@@ -450,12 +545,25 @@ export function SplitWorkspace({
               </button>
             </div>
           )}
+          {showRich && richInitial !== null ? (
+            <div className="split-rich">
+              <RichEditor
+                key={note.id + ":rich:" + generation}
+                initialContent={richInitial}
+                readOnly={Boolean(note.readonly)}
+                noteIdentity={{ id: note.id + ":split", revision: note.revision }}
+                onChange={(content) => {
+                  if (draft.current?.id === note.id) edit(content);
+                }}
+              />
+            </div>
+          ) : (
           <SourceEditor
             key={note.id + ":source:" + generation}
             id={note.id + ":split"}
             revision={note.revision}
             language={note.content_format ?? "html"}
-            initialContent={note.content}
+            initialContent={draft.current?.id === note.id ? draft.current.content : note.content}
             readOnly={Boolean(note.readonly)}
             initialLocation={
               positions.current[note.id]?.revision === note.revision ? positions.current[note.id] : undefined
@@ -476,6 +584,7 @@ export function SplitWorkspace({
               if (draft.current?.id === note.id) edit(content);
             }}
           />
+          )}
         </section>
       )}
       {!note && error && (

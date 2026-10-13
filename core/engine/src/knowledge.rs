@@ -177,6 +177,7 @@ pub fn validate_document(v: &Value) -> Result<()> {
             "tone",
             "card_size",
             "card_shadow",
+            "cover",
         ]
         .contains(&k.as_str())
     }) {
@@ -201,6 +202,12 @@ pub fn validate_document(v: &Value) -> Result<()> {
     }
     if v.get("card_shadow").is_some_and(|v| !v.is_boolean()) {
         return Err(invalid("invalid card shadow"));
+    }
+    // Note cover photo: same rules as notebook covers, stored only in canonical form.
+    if let Some(cover) = v.get("cover").filter(|c| !c.is_null()) {
+        if crate::notebook_cover::validate(cover)? != *cover {
+            return Err(invalid("invalid note cover"));
+        }
     }
     Ok(())
 }

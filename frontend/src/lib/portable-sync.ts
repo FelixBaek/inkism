@@ -41,7 +41,7 @@ export async function planFolderChanges(files:File[],get:typeof api.get=api.get)
    const current=await get(entry.id);
    if(current.revision!==entry.revision||(current.content_format||'html')!==entry.format||current.readonly||current.trashed||(current as Note&{locked?:boolean}).locked||await hashText(current.content)!==entry.source_sha256)throw new Error(t('앱의 노트가 변경되었거나 편집할 수 없습니다.'));
    if(restorePortableLinks(current.content,manifest)!==current.content)throw new Error(t('원문에 내보낸 파일과 같은 상대 경로가 있어 자동으로 반영할 수 없습니다.'));
-   if(metadataChanged){if(typeof metadata.title!=='string'||!Array.isArray(metadata.tags)||metadata.tags.some(t=>typeof t!=='string')||!(metadata.notebook_id===null||typeof metadata.notebook_id==='string'))throw new Error(t('제목·태그·노트북 메타데이터가 올바르지 않습니다.'));details.push(t('제목·태그·노트북'));}
+   if(metadataChanged){if(typeof metadata.title!=='string'||!Array.isArray(metadata.tags)||metadata.tags.some(t=>typeof t!=='string')||!(metadata.notebook_id===null||typeof metadata.notebook_id==='string'))throw new Error(t('제목·태그·폴더 메타데이터가 올바르지 않습니다.'));details.push(t('제목·태그·폴더'));}
    if(bodyChanged)details.push(t('본문'));if(assets.length)details.push(t('첨부파일 새 사본'));
    plan.changes.push({key:entry.id,kind,path,previousPath:kind==='rename'?entry.path:undefined,title:kind==='rename'?path.slice(6).replace(/\.[^.]+$/,''):(metadataChanged?metadata.title!:current.title),tags:metadataChanged?metadata.tags:current.tags,notebook_id:metadataChanged?metadata.notebook_id:current.notebook_id,entry,current,content:portable,assets,details});
   }catch(e){plan.conflicts.push(`${path}: ${e instanceof Error?e.message:'확인 실패'}`);}

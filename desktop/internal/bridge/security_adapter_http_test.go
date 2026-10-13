@@ -42,7 +42,8 @@ func (f *securityHTTPFake) Cancel() {
 		f.once.Do(func() { close(f.canceled) })
 	}
 }
-func (f *securityHTTPFake) Lock() error { f.calls.Add(1); return f.lockErr }
+func (f *securityHTTPFake) Lock() error                   { f.calls.Add(1); return f.lockErr }
+func (f *securityHTTPFake) Disable(context.Context) error { f.calls.Add(1); return f.loginErr }
 func securityHTTPCall(h *Handler, method, path, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, "http://inkism.local"+path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -52,7 +53,7 @@ func securityHTTPCall(h *Handler, method, path, body string) *httptest.ResponseR
 }
 
 func TestSecurityAdapterHTTPRejectsUntrustedRoutesBeforeController(t *testing.T) {
-	for _, route := range []string{"status", "login", "cancel", "lock"} {
+	for _, route := range []string{"status", "login", "cancel", "lock", "disable"} {
 		method := "POST"
 		if route == "status" {
 			method = "GET"
@@ -247,5 +248,34 @@ func TestSecurityAdapterHTTPClientCancellationReleasesLogin(t *testing.T) {
 	}
 	if !h.Gate.Status().Locked {
 		t.Fatal("canceled request unlocked data")
+	}
+}
+
+func TestSecurityAdapterHTTPDisableOnlyFromUnlockedConfiguredState(t *testing.T) {
+	configured := SecurityStatus{Available: true, Configured: true}
+	for _, tc := range []struct {
+		name   string
+		status SecurityStatus
+		ok     bool
+	}{
+		{"unlocked", configured, true},
+		{"locked", SecurityStatus{Available: true, Configured: true, Locked: true}, false},
+		{"not-configured", SecurityStatus{Available: true}, false},
+		{"unavailable", SecurityStatus{Configured: true}, false},
+	} {
+		fake := &securityHTTPFake{status: tc.status}
+		out := securityHTTPCall(&Handler{Host: "inkism.local", Security: fake}, "POST", "/api/security/disable", "{}")
+		if (out.Code == 200) != tc.ok || fake.calls.Load() != map[bool]int32{true: 1, false: 0}[tc.ok] {
+			t.Fatalf("%s: status=%d calls=%d", tc.name, out.Code, fake.calls.Load())
+		}
+	}
+	fake := &securityHTTPFake{status: configured}
+	h := &Handler{Host: "inkism.local", Security: fake}
+	if securityHTTPCall(h, "GET", "/api/security/disable", "").Code == 200 || securityHTTPCall(h, "POST", "/api/security/disable", `{"skip_login":true}`).Code == 200 || fake.calls.Load() != 0 {
+		t.Fatal("disable reached the controller without an empty POST")
+	}
+	fake = &securityHTTPFake{status: configured, loginErr: errors.New("다른 계정")}
+	if out := securityHTTPCall(&Handler{Host: "inkism.local", Security: fake}, "POST", "/api/security/disable", "{}"); out.Code != 409 {
+		t.Fatalf("failed re-login: %d", out.Code)
 	}
 }

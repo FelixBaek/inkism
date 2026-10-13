@@ -15,7 +15,7 @@ page.on('pageerror',e=>errors.push(e.message));
 const editor=page.locator('.tiptap-prose');
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized);
 const idle=()=>page.waitForFunction(()=>!document.querySelector('.window-error')&&Array.from(document.querySelectorAll<HTMLButtonElement>('.window-controls button')).some(b=>b.textContent==='이동'&&!b.disabled));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
 const segment=n=>page.waitForFunction(n=>document.querySelector('[data-segment-start]')?.getAttribute('data-segment-start')===String(n),n);
 const focus=()=>editor.evaluate((el:any)=>el.editor.view.focus());
 const body=async()=>(await rpc('get',{id:note.id})).content;

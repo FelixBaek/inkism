@@ -6,9 +6,11 @@ export interface SecurityStatus {
   provider?: "google";
   setup_required?: boolean;
   pending?: boolean;
+  /** 가린 계정(f***@example.com). 원래 주소는 엔진이 저장하지도 보내지도 않는다. */
+  account_hint?: string;
 }
 export async function securityRequest(
-  path: "status" | "lock" | "login" | "cancel",
+  path: "status" | "lock" | "login" | "cancel" | "disable",
   signal?: AbortSignal,
 ): Promise<SecurityStatus> {
   const response = await fetch("/api/security/" + path, {
@@ -49,5 +51,8 @@ export async function securityRequest(
     ...(v.provider ? { provider: v.provider } : {}),
     ...(v.setup_required !== undefined ? { setup_required: v.setup_required } : {}),
     ...(v.pending !== undefined ? { pending: v.pending } : {}),
+    ...(typeof v.account_hint === "string" && /^[^@\s*]\*\*\*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(v.account_hint)
+      ? { account_hint: v.account_hint }
+      : {}),
   };
 }

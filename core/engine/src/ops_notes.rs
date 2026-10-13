@@ -163,6 +163,10 @@ fn append_list_filters(
     if let Some(q) = args.get("query").and_then(Value::as_str) {
         crate::search::append(conn, q, where_sql, binds)?;
     }
+    // Daily notes are keyed `daily-YYYY-MM-DD` (knowledge::daily); '.' sorts right after '-'.
+    if args.get("daily").and_then(Value::as_bool) == Some(true) {
+        where_sql.push_str(" AND m.id >= 'daily-' AND m.id < 'daily.'");
+    }
     Ok(())
 }
 

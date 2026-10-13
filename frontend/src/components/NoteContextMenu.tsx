@@ -8,6 +8,7 @@ import { plainTextOf } from "../lib/text";
 import { openInNewTab } from "./NoteTabs";
 import { ContextMenu, type MenuItemSpec } from "./Menu";
 import { printNote } from "../lib/print-note";
+import { PREVIEW_EVENT } from "./PreviewExport";
 import {
   Printer,
   ExternalLink,
@@ -16,7 +17,7 @@ import {
   Star,
   Bell,
   Archive,
-  Notebook,
+  Folder,
   Palette,
   Hash,
   CloudUpload,
@@ -53,7 +54,7 @@ function download(blob: Blob, name: string) {
 
 export type NoteMenuTarget = { item: Summary; x: number; y: number };
 
-/** 노트 메뉴. 이 앱에 실제 기능이 있는 항목만 둔다(잠금·바로가기 없음). */
+/** 노트 메뉴. 이 앱에 실제 기능이 있는 항목만 둔다(잠금 없음). */
 export function useNoteCommands(item: Summary, onReminder: () => void, onPublish: () => void): MenuItemSpec[] {
   const s = useStore();
   const selected = s.selectedId === item.id;
@@ -70,12 +71,13 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
 
   if (item.trashed) {
     const items: MenuItemSpec[] = [
-      { commandId: "context.note.restore", label: t("휴지통에서 복원"), icon: icon(<RotateCcw />), onSelect: () => void s.quickRestore(item.id) },
+      { commandId: "context.note.restore", label: t("복원"), icon: icon(<RotateCcw />), onSelect: () => void s.quickRestore(item.id) },
       {
         commandId: "context.note.delete", label: t("영구 삭제"),
         icon: icon(<Trash2 />),
         danger: true,
         separatorBefore: true,
+        shortcut: "Del",
         onSelect: () => void s.quickDelete(item.id),
       },
     ];
@@ -139,7 +141,13 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
 
   const items: MenuItemSpec[] = [
     { commandId: "context.note.open-tab", label: t("새 탭에서 열기"), icon: icon(<ExternalLink />), onSelect: () => void openInNewTab(s, item.id) },
-    { commandId: "context.note.pin", label: t("고정"), icon: icon(<Pin />), checked: item.pinned, onSelect: () => patch({ pinned: !item.pinned }) },
+    { commandId: "context.note.pin", separatorBefore: true, label: t("고정"), icon: icon(<Pin />), checked: item.pinned, onSelect: () => patch({ pinned: !item.pinned }) },
+    {
+      commandId: "context.note.favorite", label: t("즐겨찾기"),
+      icon: icon(<Star />),
+      checked: item.favorite,
+      onSelect: () => patch({ favorite: !item.favorite }),
+    },
     {
       commandId: "context.note.readonly", label: t("읽기 전용"),
       icon: icon(<PencilOff />),
@@ -147,27 +155,14 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
       onSelect: () => patch({ readonly: !item.readonly }),
     },
     {
-      commandId: "context.note.favorite", label: t("즐겨찾기"),
-      icon: icon(<Star />),
-      checked: item.favorite,
-      onSelect: () => patch({ favorite: !item.favorite }),
-    },
-    { commandId: "context.note.reminder", label: t("알림 설정"), icon: icon(<Bell />), onSelect: onReminder },
-    {
-      commandId: "context.note.archive", label: t("보관"),
-      icon: icon(<Archive />),
-      checked: item.archived,
-      onSelect: () => patch({ archived: !item.archived }),
-    },
-    {
-      commandId: "context.note.notebooks", label: t("노트북"),
-      icon: icon(<Notebook />),
+      commandId: "context.note.notebooks", label: t("폴더에 넣기"),
       separatorBefore: true,
+      icon: icon(<Folder />),
       items: [
         ...(s.notebooks.length
           ? s.notebooks.map((nb) => ({
               commandId: "context.note.notebook:"+nb.id, label: nb.name,
-              icon: icon(<Notebook />),
+              icon: icon(<Folder />),
               checked: notebookIds.includes(nb.id),
               onSelect: () =>
                 patch({
@@ -176,14 +171,29 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
                     : [...notebookIds, nb.id],
                 }),
             }))
-          : [{ label: t("노트북이 없습니다"), disabled: true }]),
+          : [{ label: t("폴더가 없습니다"), disabled: true }]),
         {
-          commandId: "context.note.notebook-remove", label: t("노트북에서 빼기"),
+          commandId: "context.note.notebook-remove", label: t("폴더에서 빼기"),
           separatorBefore: true,
           disabled: notebookIds.length === 0,
           onSelect: () => patch({ notebook_ids: [] }),
         },
       ],
+    },
+    {
+      commandId: "context.note.tags", label: t("태그 지정"),
+      icon: icon(<Hash />),
+      items: s.tags.length
+        ? s.tags.map((tag) => ({
+            commandId: "context.note.tag:"+tag.name, label: tag.name,
+            icon: icon(<Hash />),
+            checked: item.tags.includes(tag.name),
+            onSelect: () =>
+              patch({
+                tags: item.tags.includes(tag.name) ? item.tags.filter((x) => x !== tag.name) : [...item.tags, tag.name],
+              }),
+          }))
+        : [{ label: t("태그가 없습니다"), disabled: true }],
     },
     {
       commandId: "context.note.color", label: t("색 지정"),
@@ -199,25 +209,27 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
       ],
     },
     {
-      commandId: "context.note.tags", label: t("태그"),
-      icon: icon(<Hash />),
-      items: s.tags.length
-        ? s.tags.map((tag) => ({
-            commandId: "context.note.tag:"+tag.name, label: tag.name,
-            icon: icon(<Hash />),
-            checked: item.tags.includes(tag.name),
-            onSelect: () =>
-              patch({
-                tags: item.tags.includes(tag.name) ? item.tags.filter((x) => x !== tag.name) : [...item.tags, tag.name],
-              }),
-          }))
-        : [{ label: t("태그가 없습니다"), disabled: true }],
+      commandId: "context.note.copy-link", label: t("링크 복사"),
+      separatorBefore: true,
+      icon: icon(<Link2 />),
+      onSelect: () => run(t("복사 실패"), () => navigator.clipboard.writeText("note://" + item.id)),
     },
-    { commandId: "context.note.publish", label: t("게시"), icon: icon(<CloudUpload />), separatorBefore: true, onSelect: onPublish },
+    { commandId: "context.note.duplicate", label: t("복제"), icon: icon(<CopyNote />), onSelect: duplicate },
     {
-      commandId: "context.note.export", label: t("다른 형식으로 내보내기"),
+      commandId: "context.note.archive", label: t("보관"),
+      icon: icon(<Archive />),
+      checked: item.archived,
+      onSelect: () => patch({ archived: !item.archived }),
+    },
+    { commandId: "context.note.reminder", separatorBefore: true, label: t("알림 설정"), icon: icon(<Bell />), onSelect: onReminder },
+    { commandId: "context.note.publish", label: t("게시"), icon: icon(<CloudUpload />), onSelect: onPublish },
+    {
+      commandId: "context.note.export", label: t("내보내기"),
+      separatorBefore: true,
       icon: icon(<ShareExport />),
-      items: [
+      // 열린 노트는 형식을 고르는 내보내기 창으로, 목록의 다른 노트는 바로 형식을 고른다.
+      ...(s.draft?.id === item.id ? { onSelect: () => window.dispatchEvent(new Event(PREVIEW_EVENT)) } : {}),
+      items: s.draft?.id === item.id ? undefined : [
         { commandId: "context.note.export-source", label: t("원문"), onSelect: () => exportAs("source") },
         { commandId: "context.note.export-markdown", label: t("Markdown + 첨부파일 (ZIP)"), onSelect: () => exportAs("markdown") },
         { commandId: "context.note.export-html", label: t("서식 HTML"), onSelect: () => exportAs("html") },
@@ -242,16 +254,11 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
         }),
     },
     {
-      commandId: "context.note.copy-link", label: t("링크 복사"),
-      icon: icon(<Link2 />),
-      onSelect: () => run(t("복사 실패"), () => navigator.clipboard.writeText("note://" + item.id)),
-    },
-    { commandId: "context.note.duplicate", label: t("복제"), icon: icon(<CopyNote />), onSelect: duplicate },
-    {
-      commandId: "context.note.trash", label: t("휴지통으로 옮기기"),
+      commandId: "context.note.trash", label: t("삭제"),
+      separatorBefore: true,
+      shortcut: "Del",
       icon: icon(<Trash2 />),
       danger: true,
-      separatorBefore: true,
       onSelect: () => patch({ trashed: true }),
     },
   ];

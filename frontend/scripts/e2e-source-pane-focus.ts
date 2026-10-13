@@ -23,7 +23,7 @@ try{
   }
   return route.continue();
  });
- await page.addInitScript(()=>{if(window.top!==window||!/^https?:$/.test(location.protocol))return;localStorage.setItem('inkism.lang','ko');if(localStorage.getItem('inkism.inspector')===null)localStorage.setItem('inkism.inspector','false');});await page.goto(base);await pending;
+ await page.addInitScript(()=>{if(window.top!==window||!/^https?:$/.test(location.protocol))return;localStorage.setItem('inkism.lang','ko');localStorage.setItem('inkism.split.mode','source');if(localStorage.getItem('inkism.inspector')===null)localStorage.setItem('inkism.inspector','false');});await page.goto(base);await pending;
  const right=page.locator('.split-secondary'),left=page.locator('.split-primary');
  await right.locator('.cm-content').focus();await page.keyboard.press('Control+End');await page.keyboard.insertText(' 먼저');
  release();await left.locator('.cm-content').waitFor();

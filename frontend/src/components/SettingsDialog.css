@@ -1,92 +1,54 @@
-/* 설정 창 (Figma Settings 12:764): 왼쪽 항목 목록 + 오른쪽 카드 */
-.editor-compatibility-switch { flex-shrink:0; }
-.settings-editor-help,.settings-editor-list p { font-size:12px;color:var(--muted);line-height:1.5; }
-.settings-editor-list { border:1px solid var(--border);border-radius:8px;padding:12px; }
-.settings-editor-list h4 { margin:0 0 8px;font-size:13px; }
-.settings-editor-form { display:flex;flex-wrap:wrap;gap:6px;margin:10px 0; }
-.settings-editor-form input { min-width:0;width:130px;border:1px solid var(--border);border-radius:6px;background:var(--canvas);color:var(--text);padding:6px; }
-.settings-editor-form input[type=color] { width:32px;padding:2px; }
-.settings-editor-list ul { list-style:none;margin:8px 0;padding:0; }
-.settings-editor-list li { display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0; }
-.settings-editor-list i { display:inline-block;width:12px;height:12px;border:1px solid var(--border);border-radius:3px;margin-right:6px; }
-.plugin-list { display:flex; flex-direction:column; gap:8px; }
-.plugin-card { align-items:flex-start; }
-.plugin-card small,.plugin-version { color:var(--muted); font-size:11px; }
-.plugin-toggle { display:flex; align-items:center; gap:5px; white-space:nowrap; font-size:12px; }
-.plugin-error { color:var(--danger, #c0392b); font-size:12px; }
-.settings-color-defaults { display:flex;flex-wrap:wrap;gap:8px;font-size:12px;padding:8px 0; }
+/* 설정 화면 (Figma nocturne 15~23·33): 작업공간 자리를 덮는 화면. 왼쪽 설정 메뉴 + 오른쪽 두 열 내용.
+ * 각 .settings-card 는 묶음 하나: 제목(밑줄) → 값·목록 → 버튼 줄 → 안내 상자 순서. */
 .settings-dialog {
+  position: fixed;
+  inset: 0 0 0 var(--sidebar-w);
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--surface, var(--canvas));
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--canvas);
   color: var(--text);
-  width: min(760px, calc(100vw - 32px));
-  height: min(520px, calc(100vh - 48px));
-  box-shadow: 0 24px 64px rgb(0 0 0 / 0.45);
   overflow: hidden;
 }
-.settings-dialog::backdrop {
-  background: rgb(0 0 0 / 0.35);
-}
-.settings-shell {
-  display: grid;
-  grid-template-columns: 200px 1fr;
-  height: 100%;
-}
-.settings-nav {
+.settings-dialog[open] {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 16px 10px;
-  background: var(--sidebar, var(--canvas));
-  border-right: 1px solid var(--border);
 }
-.settings-nav h2 {
-  margin: 4px 10px 10px;
-  font-size: 15px;
-  font-weight: 600;
+.settings-dialog::backdrop {
+  background: transparent;
 }
-.settings-nav__item {
+@media (max-width: 760px) {
+  .settings-dialog {
+    inset: 0;
+  }
+  .settings-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .settings-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+.settings-top {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 30px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
+  height: 44px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
   color: var(--muted);
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
+  font-size: var(--fs-caption);
 }
-.settings-nav__item:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-.settings-nav__item.is-active {
-  background: var(--selected, var(--hover));
-  color: var(--text);
-}
-.settings-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px 24px 24px;
-  overflow-y: auto;
-}
-.settings-body__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-.settings-body__head h3 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
+.settings-top > span {
+  flex: 1;
 }
 .settings-close {
   display: grid;
@@ -94,7 +56,7 @@
   width: 28px;
   height: 28px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: none;
   color: var(--muted);
   cursor: pointer;
@@ -103,63 +65,269 @@
   background: var(--hover);
   color: var(--text);
 }
-.settings-card {
+.settings-shell {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 180px 1fr;
+}
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  background: var(--raised);
+  overflow-y: auto;
+}
+.settings-nav h2,
+.settings-body > h3 {
+  margin: 0;
+  font-size: var(--fs-heading);
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+}
+.settings-nav__item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--canvas);
+  flex: none;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
 }
-.settings-card__text {
-  flex: 1;
+.settings-nav__item:hover {
+  background: var(--hover);
+}
+.settings-nav__item.is-active {
+  background: var(--active);
+  color: var(--accent-text);
+}
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
   min-width: 0;
+  padding: 28px;
+  overflow-y: auto;
 }
-.settings-card__text strong {
-  display: block;
-  font-size: 13.5px;
-  font-weight: 600;
+/* 두 열로 흘린다(Figma 482px 열 ×2, 사이 32px). 좁으면 한 열. */
+.settings-content {
+  columns: 2 340px;
+  column-gap: 32px;
+  max-width: 996px;
 }
-.settings-card__text p {
-  margin: 3px 0 0;
+.settings-content > *,
+.settings-content > section > *,
+.settings-content > .portable-library-settings > * {
+  break-inside: avoid;
+}
+.settings-content > *:not(:last-child),
+.settings-content > section > .settings-card,
+.settings-content > .portable-library-settings > *:not(:last-child) {
+  margin-bottom: 28px;
+}
+.settings-content p {
+  margin: 0;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: var(--fs-small);
   line-height: 1.5;
 }
-.settings-card__action {
-  flex: none;
+
+/* 묶음: .settings-card. __text 를 펼쳐(display: contents) 제목·목록·버튼·안내 순서를 맞춘다. */
+.settings-card {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  min-width: 0;
 }
-/* 기존 도구의 사이드바용 트리거 버튼을 카드 안에서는 일반 버튼처럼 보이게 한다. */
+.settings-card__text {
+  display: contents;
+}
+.settings-card__text > strong,
+.settings-content section > h3,
+.settings-editor-list h4 {
+  order: -3;
+  display: block;
+  margin: 0 0 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  line-height: 1.6;
+}
+.settings-content section > h3 {
+  margin-bottom: 12px;
+}
+.settings-card__text > :not(strong, p) {
+  order: -2;
+}
+.settings-card__action {
+  order: -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+/* 설명은 버튼 아래 안내 상자로 */
+.settings-card__text > p {
+  order: 0;
+  padding: 10px;
+  background: var(--hover);
+}
+.settings-card__text > p + p {
+  margin-top: -12px;
+  padding-top: 0;
+}
+/* 제목·설명 없이 한 줄만 있는 카드(사용자 단축키·폰트 파일 행) */
+.settings-card:not(:has(> .settings-card__text)) {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px !important;
+  font-size: var(--fs-caption);
+}
+.settings-content .settings-card:not(:has(> .settings-card__text)) > label {
+  display: flex;
+  flex-direction: row;
+  margin: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+.settings-card:not(:has(> .settings-card__text)) > label > input {
+  width: 200px;
+}
+
+/* 필드: 라벨은 위(12px 보조), 값 칸 32px */
+.settings-field {
+  order: -2;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+.settings-content label:has(> input:not([type="checkbox"], [type="radio"], [type="color"])),
+.settings-content label:has(> textarea) {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+.settings-content
+  :is(input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"]), select, textarea):not(
+    .settings-content dialog *
+  ),
+.settings-content .settings-select {
+  min-height: var(--size-control);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--hover);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-caption);
+}
+.settings-content textarea:not(.settings-content dialog *) {
+  padding: 8px 12px;
+}
+.settings-content input[type="file"]:not(.settings-content dialog *) {
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+.settings-content :is(input, select, textarea):focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -1px;
+}
+.settings-content .editor-zoom {
+  align-self: flex-start;
+}
+.settings-content .btn:not(.settings-content dialog *) {
+  min-height: 30px;
+  border-color: var(--border);
+  border-radius: 0;
+  background: var(--hover);
+  font-size: var(--fs-caption);
+}
+.settings-content .btn.btn-primary:not(.settings-content dialog *) {
+  border-color: var(--green);
+  background: var(--green);
+  color: var(--on-accent);
+}
+.settings-content .btn:not(.btn-primary, :disabled, .settings-content dialog *):hover {
+  background: var(--active);
+}
+/* 기존 도구의 사이드바용 트리거 버튼(동기화·사용자 테마)을 보조 버튼처럼 */
 .settings-card__action .side-item {
   width: auto;
   height: 30px;
   padding: 0 12px;
   gap: 6px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 0;
   background: var(--hover);
   color: var(--text);
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
 }
 .settings-card__action .side-item:hover {
-  background: var(--selected, var(--hover));
+  background: var(--active);
+}
+
+/* 라벨-값 줄 (정보·단축키) */
+.settings-kv {
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  gap: 8px 10px;
+  margin: 0;
+  font-size: var(--fs-caption);
+}
+.settings-kv dt {
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+.settings-kv dd {
+  margin: 0;
+  color: var(--text);
+}
+.settings-row {
+  order: -2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+.settings-row > span {
+  width: 128px;
 }
 .settings-ok {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--muted);
-  font-size: 12.5px;
+  color: var(--text);
+  font-size: var(--fs-caption);
 }
 /* 앱 잠금처럼 이 기기에서 쓸 수 없는 도구는 버튼을 그리지 않는다 → 안내 글자로 대신한다. */
 .settings-card__action:empty::after {
   content: "이 기기에서는 쓸 수 없음";
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: var(--fs-small);
 }
 .settings-select {
   min-height: var(--size-control);
@@ -170,8 +338,282 @@
   color: var(--text);
   font: inherit;
 }
-.settings-switch {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--green);
+
+.settings-content label:has(> input.toggle) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-caption);
+}
+
+/* 세그먼트: 1px 틀, 선택 칸은 --active */
+.settings-segmented {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  background: var(--hover);
+}
+.settings-segmented > :is(button, label) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-caption);
+  cursor: pointer;
+}
+.settings-segmented > [aria-pressed="true"],
+.settings-segmented > label:has(input:checked) {
+  background: var(--active);
+  color: var(--text);
+}
+.settings-segmented > label:has(input:focus-visible) {
+  outline: var(--focus-ring);
+}
+.settings-segmented > label {
+  position: relative;
+}
+/* 라디오는 칸 전체를 덮는 투명 입력(클릭·키보드·보조기술 그대로) */
+.settings-segmented input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  background: none;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* 편집기 설정: 폰트·컬러 목록 */
+.editor-compatibility-switch {
+  flex-shrink: 0;
+}
+.settings-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-editor-list > .btn {
+  align-self: flex-start;
+}
+.settings-editor-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.settings-content .settings-editor-form input {
+  flex: 1;
+  min-width: 0;
+}
+.settings-content .settings-editor-form input[type="color"],
+.settings-content .custom-theme input[type="color"] {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: none;
+  cursor: pointer;
+}
+.settings-editor-form input[type="color"]::-webkit-color-swatch-wrapper,
+.custom-theme input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.settings-editor-form input[type="color"]::-webkit-color-swatch,
+.custom-theme input[type="color"]::-webkit-color-swatch {
+  border: 0;
+}
+.settings-editor-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.settings-editor-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: var(--fs-caption);
+}
+.settings-editor-list i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  vertical-align: -1px;
+}
+.settings-editor-list summary {
+  color: var(--muted);
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+.settings-color-defaults {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: var(--fs-small);
+}
+
+/* 플러그인 */
+.plugin-list {
+  display: flex;
+  flex-direction: column;
+}
+.plugin-card small,
+.plugin-version {
+  color: var(--muted);
+  font-size: var(--fs-small);
+  font-weight: 400;
+}
+.plugin-card small {
+  order: -2;
+}
+.plugin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 8px;
+  white-space: nowrap;
+  font-size: var(--fs-caption);
+}
+.plugin-error,
+.settings-content [role="alert"] {
+  color: var(--danger);
+  font-size: var(--fs-small);
+}
+.settings-content section > p {
+  margin-bottom: 12px;
+}
+/* 토글이 여러 개인 동작 줄은 한 줄에 하나씩 */
+.settings-card__action:has(> label > input.toggle) {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* 동기화(16): 설정 화면 안에 두 열로 펼친다 */
+.sync-settings--sync {
+  column-span: all;
+}
+.sync-settings--storage .sync-fields {
+  display: block;
+}
+.sync-settings--sync .sync-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  align-items: start;
+  gap: 28px 32px;
+}
+.sync-settings .sync-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.sync-settings .sync-card h3 {
+  margin: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  line-height: 1.6;
+}
+.sync-settings .sync-guide {
+  order: 1;
+}
+.sync-settings .sync-state {
+  font-size: var(--fs-caption);
+  font-weight: 500;
+}
+.sync-settings .sync-rows {
+  grid-template-columns: 128px 1fr;
+  gap: 8px 10px;
+  font-size: var(--fs-caption);
+}
+.sync-settings .sync-rows dt {
+  font-size: var(--fs-small);
+}
+.sync-settings .sync-actions {
+  gap: 4px;
+}
+.sync-settings .sync-hint,
+.sync-settings .sync-steps {
+  padding: 10px;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: var(--fs-small);
+}
+.sync-settings .sync-steps {
+  padding-left: 28px;
+}
+.sync-settings .sync-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sync-settings .sync-card > .btn {
+  align-self: flex-start;
+}
+.sync-settings .sync-held {
+  border-radius: 0;
+}
+
+/* 사용자 테마(33): 색 줄 = 값 칸 + 견본 */
+.custom-theme__row {
+  display: flex;
+  gap: 4px;
+}
+.custom-theme__row output {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-height: var(--size-control);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  background: var(--hover);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+.custom-theme__preview {
+  order: -2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid;
+  font-size: var(--fs-caption);
+}
+.custom-theme__preview b {
+  font-size: var(--fs-body);
+  font-weight: 500;
+}
+.settings-card__text > p.custom-theme__warn {
+  order: -1;
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.settings-content .sync-settings label {
+  margin: 0;
+}
+/* 공용 .custom-theme(예전 창) 틀을 설정 화면 안에서는 지운다 */
+.settings-content .custom-theme {
+  max-height: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  overflow: visible;
 }

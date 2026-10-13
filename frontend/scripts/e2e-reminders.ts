@@ -9,7 +9,7 @@ const lazy=process.env.INKISM_LAZY==='1';
 const title='알림 '+Date.now();
 const content=lazy?Array.from({length:10000},(_,i)=>'<p>알림 본문 '+i+'</p>').join(''):'<p>알림 본문</p>';
 const a=await rpc('save',{note:{title,content,text:'알림 본문',reminder_at:Date.now()-1000}});
-const trash=await rpc('save',{note:{title:title+' 휴지통',reminder_at:Date.now()-2000}});
+const trash=await rpc('save',{note:{title:title+' 지운 노트',reminder_at:Date.now()-2000}});
 await rpc('patch',{id:trash.id,changes:{trashed:true}});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 const page=await browser.newPage({viewport:{width:1440,height:960}});
@@ -48,10 +48,11 @@ try{
  });
  await page.getByRole('button',{name:'알림 저장',exact:true}).click();
  await held;
- await page.locator('.ProseMirror').click();await page.keyboard.press('Control+End');await page.keyboard.insertText(' 동시입력');
+ // The reminder dialog is modal: the body is edited after the pending reminder save settles.
  await new Promise(r=>setTimeout(r,1000));assert.equal(saves,0);
  release();
  await page.getByRole('form',{name:'노트 알림',exact:true}).waitFor({state:'hidden'});
+ await page.locator('.ProseMirror').click();await page.keyboard.press('Control+End');await page.keyboard.insertText(' 동시입력');
  await page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
  await page.unroute('**/api/rpc');
  assert.equal((await rpc('get',{id:a.id})).reminder_repeat_hours,24);

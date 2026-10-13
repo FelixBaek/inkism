@@ -22,7 +22,7 @@ await page.addInitScript(()=>{
 });
 const editor=page.locator('.tiptap-prose');
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized&&Array.from(document.querySelectorAll<HTMLButtonElement>('.window-controls button')).some(button=>button.textContent==='이동'&&!button.disabled));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
 const focus=()=>editor.evaluate((el:any)=>el.editor.view.focus());
 const command=name=>editor.evaluate((el:any,name)=>el.editor.chain().focus()[name]().run(),name);
 const body=async id=>(await rpc('get',{id})).content;

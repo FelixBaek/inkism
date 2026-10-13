@@ -1,32 +1,39 @@
 import { t } from "../i18n";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
-import { X, ChevronUp, ChevronDown } from "../icons";
+import { X } from "../icons";
 import { IconButton } from "./IconButton";
 
 export function FindReplace({ editor, readOnly = false }: Readonly<{ editor: Editor; readOnly?: boolean }>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [replacement, setReplacement] = useState("");
+  // 모두 바꾸기 직후의 문서. 그 뒤로 바뀐 것이 없을 때만 "전체 바꾸기 취소"가 한 번의 실행 취소로 되돌린다.
+  const [afterAll, setAfterAll] = useState<unknown>(null);
   const input = useRef<HTMLInputElement>(null);
+  const id = useId();
   const state = useEditorState({
     editor,
     selector: ({ editor }) => {
       const s = editor.storage.findAndReplace;
-      return { count: s.results.length, index: s.currentIndex, query: s.searchTerm, caseSensitive: s.caseSensitive };
+      return { count: s.results.length, index: s.currentIndex, query: s.searchTerm, caseSensitive: s.caseSensitive, doc: editor.state.doc };
     },
   });
   useEffect(() => {
     const show = () => {
+      // 분할 화면: 초점이 있는 창의 편집기만 연다(초점이 없으면 왼쪽 창).
+      const focusedPane = document.activeElement?.closest(".split-primary,.split-secondary");
+      const ownPane = editor.view.dom.closest(".split-primary,.split-secondary");
+      if (focusedPane ? focusedPane !== ownPane : ownPane?.classList.contains("split-secondary")) return;
       setOpen(true);
       input.current?.focus();
       input.current?.select();
     };
     window.addEventListener("inkism-find-in-note", show);
     return () => window.removeEventListener("inkism-find-in-note", show);
-  }, []);
+  }, [editor]);
   useEffect(() => {
     if (open) input.current?.focus();
   }, [open]);
@@ -73,6 +80,7 @@ export function FindReplace({ editor, readOnly = false }: Readonly<{ editor: Edi
       closeHistory(tr);
       return true;
     });
+    setAfterAll(all ? editor.state.doc : null);
     // 마지막 결과를 바꾸면 누른 버튼이 비활성화되어 포커스가 창 밖으로 빠지고 Esc가 닿지 않는다.
     if (all || state.count <= 1) input.current?.focus();
   };
@@ -93,8 +101,16 @@ export function FindReplace({ editor, readOnly = false }: Readonly<{ editor: Edi
         }
       }}
     >
+      <header className="find-head">
+        <h3>{t("찾기 · 바꾸기")}</h3>
+        <IconButton label={t("문서 검색 닫기")} onClick={close}>
+          <X size={16} />
+        </IconButton>
+      </header>
+      <label className="find-label" htmlFor={`${id}-find`}>{t("찾을 내용")}</label>
       <div className="find-row">
         <input
+          id={`${id}-find`}
           ref={input}
           aria-label={t("문서에서 찾을 내용")}
           placeholder={t("찾을 내용")}
@@ -105,22 +121,29 @@ export function FindReplace({ editor, readOnly = false }: Readonly<{ editor: Edi
           }}
         />
         <output className="find-count">{countLabel}</output>
-        <IconButton
-          label={t("이전 검색 결과")}
+        <button
+          type="button"
+          className="btn btn-secondary"
+          aria-label={t("이전 검색 결과")}
           disabled={disabled}
           onClick={() => editor.commands.goToPreviousResult()}
         >
-          <ChevronUp size={16} />
-        </IconButton>
-        <IconButton label={t("다음 검색 결과")} disabled={disabled} onClick={() => editor.commands.goToNextResult()}>
-          <ChevronDown size={16} />
-        </IconButton>
-        <IconButton label={t("문서 검색 닫기")} onClick={close}>
-          <X size={16} />
-        </IconButton>
+          {t("이전")}
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          aria-label={t("다음 검색 결과")}
+          disabled={disabled}
+          onClick={() => editor.commands.goToNextResult()}
+        >
+          {t("다음")}
+        </button>
       </div>
+      <label className="find-label" htmlFor={`${id}-replace`}>{t("바꿀 내용")}</label>
       <div className="find-row">
         <input
+          id={`${id}-replace`}
           aria-label={t("바꿀 내용")}
           placeholder={t("바꿀 내용 (비우면 삭제)")}
           value={replacement}
@@ -135,14 +158,29 @@ export function FindReplace({ editor, readOnly = false }: Readonly<{ editor: Edi
         <button className="btn btn-secondary" disabled={disabled || readOnly} onClick={() => replace(true)}>
           {t("모두 바꾸기")}
         </button>
-        <label className="find-case">
-          <input
-            type="checkbox"
-            checked={state.caseSensitive}
-            onChange={(e) => editor.commands.setCaseSensitive(e.target.checked)}
-          />
-          {t("대소문자 구분")}
-        </label>
+      </div>
+      <label className="find-case">
+        <input
+          type="checkbox"
+          checked={state.caseSensitive}
+          onChange={(e) => editor.commands.setCaseSensitive(e.target.checked)}
+        />
+        {t("대소문자 구분")}
+      </label>
+      <div className="find-row find-foot">
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={readOnly || afterAll === null || afterAll !== state.doc}
+          onClick={() => {
+            if (afterAll !== editor.state.doc) return;
+            editor.commands.undo();
+            setAfterAll(null);
+            input.current?.focus();
+          }}
+        >
+          {t("전체 바꾸기 취소")}
+        </button>
       </div>
     </section>
   );

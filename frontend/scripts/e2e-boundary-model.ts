@@ -83,7 +83,7 @@ try{
    let cancelled=false;const guarded=await prepareBoundary(point,direction,{...source,check:()=>{if(cancelled)throw Error('cancelled');}});cancelled=true;
    await reject(()=>changeBoundary(guarded,direction),'cancelled edit');
    f.note=note;f.body=body;f.result=changed;f.direction=direction;f.nativeSpace=selectedAtom&&repeat===2&&direction==='forward';
-   f.reference=new Editor({element:document.getElementById('reference'),extensions:contentExtensions({trailingNode:false}),content:body,parseOptions:{preserveWhitespace:'full'},injectCSS:false});
+   f.reference=new Editor({element:document.getElementById('reference'),extensions:contentExtensions({trailingNode:false,automaticIds:false}),content:body,parseOptions:{preserveWhitespace:'full'},injectCSS:false});
    const full=segmentPositionMap({ordinal:0,byte_offset:0,source:body,start_context:[],end_context:[]});
    if(selectedAtom){let at;f.reference.state.doc.descendants((node,pos)=>{if(node.type.name==='horizontalRule')at=pos;});f.reference.commands.setNodeSelection(at);}
    else f.reference.commands.setTextSelection(full.position(point.byte,point.within));f.reference.view.focus();

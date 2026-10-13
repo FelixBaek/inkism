@@ -25,7 +25,7 @@ try{
  await page.locator('[data-window-start="0"]').waitFor();assert.equal(fullReads,0);
  assert.equal(await page.locator('.status-words').textContent(),`원문 ${(Buffer.byteLength(content)/1024).toLocaleString('ko-KR',{maximumFractionDigits:1})}KB`);
  const editor=page.locator('.tiptap-prose');
- const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+ const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
  await editor.locator('p').first().click();await page.keyboard.press('Home');await page.keyboard.insertText('보존편집 ');await page.keyboard.press('Control+s');await saved();
  const before=await rpc('get',{id:note.id});
  // MARKDOWN on an HTML note is now a view (no format-change dialog to cancel); the partial draft must still

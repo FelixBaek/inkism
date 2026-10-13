@@ -9,20 +9,24 @@ const page=await browser.newPage();const requests=[];const errors=[];
 page.on('pageerror',e=>errors.push(e.message));
 page.on('request',r=>{if(r.url().endsWith('/api/rpc'))requests.push(r.postDataJSON());});
 const root=page.locator('.tiptap-prose');
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
 try {
  await page.goto(base);await page.getByRole('button',{name:'노트 열기: '+title,exact:true}).click();await root.waitFor();
  await root.click();await page.keyboard.press('Control+End');await page.keyboard.insertText(' 첫😀');await page.keyboard.press('Control+s');await saved();
  // Rich autosave sends a raw-source splice (document_splice_source); stored text == content (raw HTML), plain text is derived lazily.
- let splices=requests.filter(x=>x.op==='document_splice_source');assert.equal(splices.length,1);assert.equal(splices[0].content_format,'html');assert.equal(splices[0].content.replacement,' 첫😀');assert.equal(splices[0].content.expected,'');assert.equal(splices[0].content.start,Buffer.byteLength('<p>앞 😀 한글 뒤'));
- let stored=await rpc('get',{id:note.id});assert.equal(stored.content,'<p>앞 😀 한글 뒤 첫😀</p>');assert.equal(stored.text,stored.content);
+ let splices=requests.filter(x=>x.op==='document_splice_source');assert.equal(splices.length,1);assert.equal(splices[0].content_format,'html');
+ // The first edit gives the touched paragraph a block id, so the minimal splice also covers the opening tag.
+ const original=Buffer.from('<p>앞 😀 한글 뒤</p>'),splice=splices[0].content,end=splice.start+Buffer.byteLength(splice.expected);
+ assert.equal(original.subarray(splice.start,end).toString(),splice.expected);assert.ok(splice.replacement.endsWith(' 첫😀'),splice.replacement);
+ let stored=await rpc('get',{id:note.id});const blockId=/^<p id="(ink-block-[0-9a-f-]{36})">앞 😀 한글 뒤 첫😀<\/p>$/.exec(stored.content)?.[1];assert.ok(blockId,stored.content);assert.equal(stored.text,stored.content);
+ assert.equal(Buffer.concat([original.subarray(0,splice.start),Buffer.from(splice.replacement),original.subarray(end)]).toString(),stored.content);
  // Hold one real engine response while the user continues typing.
  let release,started,finished;const ready=new Promise(r=>started=r),gate=new Promise(r=>release=r),handled=new Promise(r=>finished=r);
  await page.route('**/api/rpc',async route=>{const req=route.request().postDataJSON();if(req.op==='document_splice_source'){const response=await route.fetch();started();await gate;await route.fulfill({response});finished();}else await route.continue();});
  await page.keyboard.insertText(' 둘');await page.keyboard.press('Control+s');await ready;
  await page.keyboard.insertText(' 셋😁');release();await handled;await page.unroute('**/api/rpc');await page.keyboard.press('Control+s');
- await page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
- stored=await rpc('get',{id:note.id});assert.equal(stored.content,'<p>앞 😀 한글 뒤 첫😀 둘 셋😁</p>');assert.equal(stored.text,stored.content);
+ await page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
+ stored=await rpc('get',{id:note.id});assert.equal(stored.content,`<p id="${blockId}">앞 😀 한글 뒤 첫😀 둘 셋😁</p>`);assert.equal(stored.text,stored.content);
  await page.reload();await page.getByRole('button',{name:'노트 열기: '+title,exact:true}).click();await root.waitFor();assert.equal(await root.textContent(),'앞 😀 한글 뒤 첫😀 둘 셋😁');
  // Remote changes must survive a rejected local save.
  await rpc('save',{note:{id:note.id,revision:stored.revision,content:'<p>다른 기기의 변경</p>',text:'다른 기기의 변경'}});

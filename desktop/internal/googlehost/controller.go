@@ -26,6 +26,12 @@ type Store interface {
 	Save(Identity) error
 }
 
+// remover deletes the binding. Only Disable calls it, after a fresh login
+// proved the same account; stores without it cannot turn the lock off.
+type remover interface {
+	Remove() error
+}
+
 // Controller never accepts account claims from the renderer. Provider supplies
 // verified Google claims. Ephemeral tokens are consumed only by the host
 // recovery callback and never enter a policy file or renderer response.
@@ -166,6 +172,62 @@ func (c *Controller) acceptIdentity(ctx context.Context, generation uint64, iden
 		return nil, nil, err
 	}
 	return c.gate, c.recovery, nil
+}
+
+// Disable turns the lock off. There is no path without a fresh Google login:
+// the re-authenticated issuer and subject must match the binding and the app
+// must already be unlocked. Any failure keeps the lock configured.
+func (c *Controller) Disable(ctx context.Context) error {
+	c.mu.Lock()
+	if c.pending {
+		c.mu.Unlock()
+		return ErrBusy
+	}
+	if c.policyErr != nil {
+		c.mu.Unlock()
+		return ErrPolicy
+	}
+	if !c.configured || c.gate == nil || c.gate.Status().Locked || c.provider == nil || c.store == nil {
+		c.mu.Unlock()
+		return ErrUnavailable
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	c.cancel = cancel
+	c.pending = true
+	c.generation++
+	generation := c.generation
+	p := c.provider
+	c.mu.Unlock()
+	defer func() { cancel(); c.mu.Lock(); c.pending = false; c.cancel = nil; c.mu.Unlock() }()
+	identity, _, err := p.Login(ctx)
+	if err != nil {
+		if ctx.Err() != nil {
+			return ErrCancelled
+		}
+		return errors.New("Google 인증을 완료하지 못했습니다. 연결을 확인하고 다시 시도해 주세요")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if ctx.Err() != nil || generation != c.generation {
+		return ErrCancelled
+	}
+	if identity.Issuer != "https://accounts.google.com" || identity.Subject == "" || !c.configured || identity != c.binding {
+		return ErrAccount
+	}
+	if c.gate.Status().Locked {
+		return ErrUnavailable
+	}
+	r, ok := c.store.(remover)
+	if !ok {
+		return ErrUnavailable
+	}
+	if err := r.Remove(); err != nil {
+		return errors.New("Google 계정 보호 설정을 지우지 못했습니다. 잠금은 그대로 유지됩니다")
+	}
+	c.binding = Identity{}
+	c.configured = false
+	c.recoveryError = ""
+	return nil
 }
 
 func (c *Controller) Login(ctx context.Context) error {

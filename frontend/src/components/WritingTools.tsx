@@ -15,6 +15,7 @@ interface KnowledgeSettings { version:number; template_ids:string[]; daily_templ
 type MergePreview={id:string;status:string;source:Note;target:Note;merged:Note;redirect:boolean};
 type MergeChange={id:string;status:string;can_undo:boolean;created_at:number;source_title:string;target_title:string};
 type Panel="quick"|"templates"|"outline"|"merge"|null;
+export const WRITING_TOOL_EVENT="inkism-open-writing-tool";
 const RECENT_KEY="inkism.writing.recent";
 function recentNotes():string[] {try {const value=JSON.parse(readPref(RECENT_KEY)??"[]");return Array.isArray(value)?value.filter(id=>typeof id==="string").slice(0,50):[];}catch{return[];}}
 /** Mount once in the application toolbar, including when no note is selected. */
@@ -27,13 +28,19 @@ export function WritingTools() {
   const [mergeSource,setMergeSource]=useState(""),[mergeTarget,setMergeTarget]=useState(""),[mergeRedirect,setMergeRedirect]=useState(true);
   const [mergePreview,setMergePreview]=useState<MergePreview|null>(null),[mergeChanges,setMergeChanges]=useState<MergeChange[]>([]);
   const dialog=useRef<HTMLDialogElement>(null), input=useRef<HTMLInputElement>(null), seq=useRef(0), running=useRef(false);
+  // Text typed in the template popup's quick-switch field carries over into the quick switch panel.
+  const pendingQuery=useRef(""),[switchText,setSwitchText]=useState("");
   const close=()=>{seq.current++;setPanel(null);setError("");setBusy(false);};
   const recent=useMemo(recentNotes,[panel,s.selectedId]);
   useEffect(()=>{if(s.selectedId)writePref(RECENT_KEY,JSON.stringify([s.selectedId,...recentNotes().filter(id=>id!==s.selectedId)].slice(0,50)));},[s.selectedId]);
+  // 셸(사이드바 등)에서 패널을 연다: dispatchEvent(new CustomEvent(WRITING_TOOL_EVENT,{detail:"templates"})).
+  useEffect(()=>{const open=(e:Event)=>{const p=(e as CustomEvent<Panel>).detail;if(p&&!running.current)setPanel(p);};window.addEventListener(WRITING_TOOL_EVENT,open);return()=>window.removeEventListener(WRITING_TOOL_EVENT,open);},[]);
   useEffect(()=>{const key=(e:KeyboardEvent)=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="o"&&!e.altKey&&!e.shiftKey&&!e.isComposing){e.preventDefault();if(!running.current)setPanel("quick");}};window.addEventListener("keydown",key);return()=>window.removeEventListener("keydown",key);},[]);
+  // 편집기 도구줄의 [목차] 버튼이 보내는 요청.
+  useEffect(()=>{const open=()=>{if(!running.current)setPanel("outline");};window.addEventListener("inkism-open-outline",open);return()=>window.removeEventListener("inkism-open-outline",open);},[]);
   useEffect(()=>{
     if(!panel){dialog.current?.close();return;}
-    dialog.current?.showModal(); setError("");setQuery("");setActive(0);setBusy(true);
+    dialog.current?.showModal(); setError("");setQuery(pendingQuery.current);pendingQuery.current="";setActive(0);setBusy(true);
     const request=++seq.current;
     const alive=()=>request===seq.current;
     void(async()=>{
@@ -67,6 +74,7 @@ export function WritingTools() {
     try{await work();}catch(e){const message=e instanceof Error?e.message:String(e);setError(message.includes("duplicate block ID")?t("같은 문단 ID가 있어 병합하지 않았습니다. HTML id 또는 Markdown ^ID의 중복을 수정한 뒤 다시 시도해 주세요."):message);}finally{running.current=false;setBusy(false);}
   };
   const openNote=async(id:string)=>{await latest.current.selectNote(id);if(latest.current.readDraft()?.id===id)close();else throw new Error(t("저장을 완료한 뒤 다시 시도해 주세요."));};
+  const newTitled=(title:string)=>void run(async()=>{if(!await latest.current.flushNow())throw new Error(t("저장을 완료한 뒤 다시 시도해 주세요."));const note=await api.save({id:crypto.randomUUID(),title:title.trim(),content:"",content_format:defaultEditor()});latest.current.refreshList();await latest.current.refreshMeta();await openNote(note.id);});
   const daily=()=>void run(async()=>{
     if(!await latest.current.flushNow())throw new Error(t("저장을 완료한 뒤 다시 시도해 주세요."));
     const date=new Date();const note=await rpc<Note>("daily_note",{date:localDate(date),time:localTime(date),content_format:defaultEditor()});
@@ -78,7 +86,7 @@ export function WritingTools() {
   const registerTemplate=()=>void run(async()=>{
     if(!settings||!await latest.current.ensurePersisted())throw new Error(t("저장을 완료한 뒤 다시 시도해 주세요."));
     const draft=latest.current.readDraft();if(!draft?.id) return;
-    const note=await api.get(draft.id);if(note.trashed)throw new Error(t("휴지통의 노트는 템플릿으로 등록할 수 없습니다."));
+    const note=await api.get(draft.id);if(note.trashed)throw new Error(t("지운 노트는 템플릿으로 등록할 수 없습니다."));
     if(!settings.template_ids.includes(note.id))await saveConfig({template_ids:[...settings.template_ids,note.id]});
     setTemplates(rows=>rows.some(row=>row.id===note.id)?rows:[...rows,{...note,preview:""}]);
   });
@@ -97,7 +105,7 @@ export function WritingTools() {
     if(!mergeSource||!mergeTarget||mergeSource===mergeTarget)throw new Error(t("합칠 원본과 대상 노트를 다르게 선택해 주세요."));
     if(!await latest.current.flushNow())throw new Error(t("저장을 완료한 뒤 다시 시도해 주세요."));
     const [source,target]=await Promise.all([api.get(mergeSource),api.get(mergeTarget)]);
-    if(source.trashed||target.trashed)throw new Error(t("휴지통의 노트는 합칠 수 없습니다."));
+    if(source.trashed||target.trashed)throw new Error(t("지운 노트는 합칠 수 없습니다."));
     if(source.readonly||target.readonly)throw new Error(t("읽기 전용 노트는 합칠 수 없습니다."));
     if(source.content_format!==target.content_format)throw new Error(t("같은 편집기 형식의 노트만 합칠 수 있습니다."));
     setMergePreview(await rpc<MergePreview>("merge_preview",{source_id:source.id,target_id:target.id,source_revision:source.revision,target_revision:target.revision,redirect:mergeRedirect}));
@@ -150,23 +158,24 @@ export function WritingTools() {
         <p className="writing-tools-hint">{query?t("제목이 일치하는 노트"):t("최근에 연 노트가 먼저 표시됩니다.")}{limited&&` · ${t("최근 수정된 10,000개 노트에서 검색합니다.")}`}</p>
         <div id="writing-quick-results" role="listbox" className="writing-tools-list">{matched.map((note,i)=><button type="button" id={`writing-quick-${i}`} key={note.id} role="option" aria-selected={index===i} disabled={busy} onMouseMove={()=>setActive(i)} onClick={()=>void run(()=>openNote(note.id))}>{note.title||t("제목 없는 노트")}</button>)}</div>
         {!busy&&!matched.length&&<p>{t("일치하는 노트가 없습니다.")}</p>}
-        {query.trim()&&<button className="btn" disabled={busy} onClick={()=>void run(async()=>{if(!await latest.current.flushNow())throw new Error(t("저장을 완료한 뒤 다시 시도해 주세요."));const note=await api.save({id:crypto.randomUUID(),title:query.trim(),content:"",content_format:defaultEditor()});latest.current.refreshList();await latest.current.refreshMeta();await openNote(note.id);})}>{t("이 제목으로 새 노트")}</button>}
+        {query.trim()&&<button className="btn" disabled={busy} onClick={()=>newTitled(query)}>{t("이 제목으로 새 노트")}</button>}
       </>}
       {panel==="templates"&&settings&&<>
+        <label className="writing-tools-field">{t("일일 노트 템플릿")}<select disabled={busy} value={settings.daily_template_id??""} onChange={e=>void run(()=>saveConfig({daily_template_id:e.target.value||null}))}><option value="">{t("빈 노트")}</option>{templates.map(note=><option key={note.id} value={note.id}>{note.title||t("제목 없는 노트")}</option>)}</select></label>
+        <div className="writing-tools-actions"><button className="btn btn-primary" disabled={busy} onClick={daily}>{t("오늘의 노트 열기")}</button><button className="btn btn-secondary" disabled={busy||!s.draft} onClick={registerTemplate}>{t("현재 노트를 템플릿으로 등록")}</button></div>
+        <div className="writing-tools-list">{templates.map(note=><div key={note.id} className="writing-template-row"><span title={note.title}>{note.title||t("제목 없는 노트")}</span><span><button type="button" className="writing-link" disabled={busy} aria-label={t("템플릿으로 새 노트")+": "+(note.title||t("제목 없는 노트"))} onClick={()=>createTemplate(note)}>{t("새 노트 만들기")}</button> · <button type="button" className="writing-link" disabled={busy} onClick={()=>void run(async()=>{await saveConfig({template_ids:settings.template_ids.filter(id=>id!==note.id),...(settings.daily_template_id===note.id?{daily_template_id:null}:{})});setTemplates(rows=>rows.filter(row=>row.id!==note.id));})}>{t("등록 해제")}</button></span></div>)}</div>
+        {!templates.length&&!busy&&<p className="writing-tools-hint">{t("등록한 템플릿이 없습니다.")}</p>}
         <p className="writing-tools-hint">{t("템플릿의 {{title}}, {{date}}, {{time}}는 새 노트의 제목, 날짜, 시각으로 바뀝니다.")}</p>
-        <button className="btn btn-secondary" disabled={busy||!s.draft} onClick={registerTemplate}>{t("현재 노트를 템플릿으로 등록")}</button>
-        <label className="writing-tools-daily">{t("일일 노트 템플릿")}<select disabled={busy} value={settings.daily_template_id??""} onChange={e=>void run(()=>saveConfig({daily_template_id:e.target.value||null}))}><option value="">{t("빈 노트")}</option>{templates.map(note=><option key={note.id} value={note.id}>{note.title||t("제목 없는 노트")}</option>)}</select></label>
-        <div className="writing-tools-list">{templates.map(note=><div key={note.id} className="writing-template-row"><button type="button" disabled={busy} onClick={()=>createTemplate(note)}>{note.title||t("제목 없는 노트")}</button><button className="btn btn-secondary" disabled={busy} onClick={()=>void run(async()=>{await saveConfig({template_ids:settings.template_ids.filter(id=>id!==note.id),...(settings.daily_template_id===note.id?{daily_template_id:null}:{})});setTemplates(rows=>rows.filter(row=>row.id!==note.id));})}>{t("등록 해제")}</button></div>)}</div>
-        {!templates.length&&!busy&&<p>{t("등록한 템플릿이 없습니다.")}</p>}
+        <label className="writing-tools-field writing-tools-divided">{t("노트 제목으로 빠른 전환")}<span className="writing-tools-inline"><input placeholder={t("제목 또는 별칭 검색")} value={switchText} onChange={e=>setSwitchText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.nativeEvent.isComposing&&switchText.trim()){e.preventDefault();pendingQuery.current=switchText;setSwitchText("");setPanel("quick");}}}/><button type="button" className="btn btn-secondary" disabled={busy||!switchText.trim()} onClick={()=>newTitled(switchText)}>{t("이 제목으로 새 노트")}</button></span></label>
       </>}
       {panel==="merge"&&!busy&&<div className="writing-tools-merge">
-        <p className="writing-tools-hint">{t("원본 노트의 내용을 대상 노트 뒤에 붙이고 원본은 휴지통으로 이동합니다. 기존 ID 링크는 자동으로 바꾸지 않고 원본 제목을 대상의 별칭으로 보존합니다.")}</p>
+        <p className="writing-tools-hint">{t("원본 노트의 내용을 대상 노트 뒤에 붙이고 원본은 지운 노트로 옮깁니다. 기존 ID 링크는 자동으로 바꾸지 않고 원본 제목을 대상의 별칭으로 보존합니다.")}</p>
         <label>{t("원본 노트")}<select aria-label={t("원본 노트")} value={mergeSource} onChange={e=>{setMergeSource(e.target.value);setMergePreview(null);}}><option value="">{t("노트 선택")}</option>{notes.map(note=><option key={note.id} value={note.id}>{note.title||t("제목 없는 노트")}</option>)}</select></label>
         <label>{t("대상 노트")}<select aria-label={t("대상 노트")} value={mergeTarget} onChange={e=>{setMergeTarget(e.target.value);setMergePreview(null);}}><option value="">{t("노트 선택")}</option>{notes.map(note=><option key={note.id} value={note.id}>{note.title||t("제목 없는 노트")}</option>)}</select></label>
         <label><input type="checkbox" checked={mergeRedirect} onChange={e=>{setMergeRedirect(e.target.checked);setMergePreview(null);}}/>{t("원본 ID 링크를 대상 노트로 연결")}</label>
         <button className="btn" disabled={!mergeSource||!mergeTarget||mergeSource===mergeTarget} onClick={mergeNotes}>{t("합치기 미리보기")}</button>
-        {mergePreview&&<section className="merge-preview" aria-label={t("합치기 미리보기")}><p>{mergePreview.source.title} → {mergePreview.target.title}</p><p>{t("대상 본문 뒤에 원본을 추가하고 원본을 휴지통으로 이동합니다. 원본 제목은 대상 별칭에 추가됩니다.")}</p><p>{mergePreview.redirect?t("원본 ID 링크를 대상 노트로 연결"):t("원본 ID 연결을 변경하지 않음")}</p><details><summary>{t("합쳐질 본문 원문")}</summary><pre style={{maxHeight:240,overflow:"auto",whiteSpace:"pre-wrap"}}>{mergePreview.merged.content}</pre></details><p>{t("적용 후 어느 노트나 관련 메타데이터라도 변경되면 전체 취소가 거부됩니다.")}</p><button className="btn" onClick={applyMerge}>{t("미리보기대로 합치기 적용")}</button></section>}
-        {mergeChanges.length>0&&<section aria-label={t("최근 합치기")}><h3>{t("최근 합치기")}</h3><p>{t("이 기기의 최근 10개 합치기를 보관합니다. 전체 취소는 본문·휴지통·별칭·ID 연결을 함께 복원합니다.")}</p>{mergeChanges.map(change=><div key={change.id}><span>{change.source_title} → {change.target_title}</span> <time>{new Date(change.created_at).toLocaleString()}</time> <button className="btn" disabled={!change.can_undo} onClick={()=>undoMerge(change.id)}>{change.status==="undone"?t("합치기 취소됨"):t("합치기 전체 취소")}</button>{change.status==="applied"&&!change.can_undo&&<span>{t("이후 변경으로 취소할 수 없음")}</span>}</div>)}</section>}
+        {mergePreview&&<section className="merge-preview" aria-label={t("합치기 미리보기")}><p>{mergePreview.source.title} → {mergePreview.target.title}</p><p>{t("대상 본문 뒤에 원본을 추가하고 원본을 지운 노트로 옮깁니다. 원본 제목은 대상 별칭에 추가됩니다.")}</p><p>{mergePreview.redirect?t("원본 ID 링크를 대상 노트로 연결"):t("원본 ID 연결을 변경하지 않음")}</p><details><summary>{t("합쳐질 본문 원문")}</summary><pre style={{maxHeight:240,overflow:"auto",whiteSpace:"pre-wrap"}}>{mergePreview.merged.content}</pre></details><p>{t("적용 후 어느 노트나 관련 메타데이터라도 변경되면 전체 취소가 거부됩니다.")}</p><button className="btn" onClick={applyMerge}>{t("미리보기대로 합치기 적용")}</button></section>}
+        {mergeChanges.length>0&&<section aria-label={t("최근 합치기")}><h3>{t("최근 합치기")}</h3><p>{t("이 기기의 최근 10개 합치기를 보관합니다. 전체 취소는 본문·지운 상태·별칭·ID 연결을 함께 복원합니다.")}</p>{mergeChanges.map(change=><div key={change.id}><span>{change.source_title} → {change.target_title}</span> <time>{new Date(change.created_at).toLocaleString()}</time> <button className="btn" disabled={!change.can_undo} onClick={()=>undoMerge(change.id)}>{change.status==="undone"?t("합치기 취소됨"):t("합치기 전체 취소")}</button>{change.status==="applied"&&!change.can_undo&&<span>{t("이후 변경으로 취소할 수 없음")}</span>}</div>)}</section>}
       </div>}
       {panel==="outline"&&!busy&&outline&&<div className="writing-tools-list">{outline.anchors.map((anchor,index)=><div className="writing-outline-row" key={anchor.index}><button type="button" style={{paddingInlineStart:12+(anchor.level-1)*14}} onClick={()=>selectAnchor(anchor)}><span className="writing-heading-level">H{anchor.level}</span>{anchor.text||t("제목 없는 항목")}</button><span><button type="button" className="btn btn-small" disabled={outline.note.content_format==="text"||outline.note.readonly||headingSiblingIndex(outline.anchors,index,"up")<0} aria-label={t("위로 이동")} onClick={()=>moveHeading(anchor,"up")}>↑</button><button type="button" className="btn btn-small" disabled={outline.note.content_format==="text"||outline.note.readonly||headingSiblingIndex(outline.anchors,index,"down")<0} aria-label={t("아래로 이동")} onClick={()=>moveHeading(anchor,"down")}>↓</button></span></div>)}{!outline.anchors.length&&<p>{t("본문에 제목을 추가하면 목차가 표시됩니다.")}</p>}</div>}
     </dialog>

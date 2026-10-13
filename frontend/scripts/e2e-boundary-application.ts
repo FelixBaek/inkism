@@ -13,8 +13,10 @@ page.on('pageerror',e=>errors.push(e.message));
 const editor=page.locator('.tiptap-prose');
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized&&Array.from(document.querySelectorAll<any>('.window-controls button')).some(button=>button.textContent==='이동'&&!button.disabled));
 const segment=n=>page.waitForFunction(n=>document.querySelector('[data-segment-start]')?.getAttribute('data-segment-start')===String(n),n);
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
 const body=async()=>(await rpc('get',{id:note.id})).content;
+// Edited blocks acquire permanent IDs; compare edits without them (undo to source stays exact).
+const edited=async()=>(await body()).replace(/ id="ink-block-[0-9a-f-]{36}"/g,'');
 const cursor=async edge=>editor.evaluate((el: any,edge)=>{const positions=[];el.editor.state.doc.descendants((node,at)=>{if(node.isTextblock)positions.push({start:at+1,end:at+1+node.content.size});});el.editor.commands.setTextSelection(edge==='start'?positions[0].start:positions.at(-1).end);el.editor.view.focus();},edge);
 const undo=async()=>{await historyKey(page,'undo');await saved();};
 const firstSegment=async()=>{await ready();if(await page.locator('[data-segment-start]').getAttribute('data-segment-start')!=='0'){await editor.evaluate((el: any)=>el.editor.view.focus());await page.keyboard.press('Control+Home');await segment(0);await ready();}};
@@ -34,14 +36,14 @@ try{
  await page.getByRole('button',{name:'다음 구간',exact:true}).click();await segment(1);await ready();await cursor('start');
  await page.keyboard.press('Backspace');await saved();
  const backward=source.slice(0,seam-1)+source.slice(seam);
- assert.equal(await body(),backward,'backspace removes exactly the preceding source character');
+ assert.equal(await edited(),backward,'backspace removes exactly the preceding source character');
  assert.ok((await editor.textContent()).length<33000);assert.ok(await page.locator('*').count()<1500);
  await page.reload();await ready();await undo();assert.equal(await body(),source,'restart undo restores exact source');
- await historyKey(page,'redo');await saved();assert.equal(await body(),backward);await undo();
+ await historyKey(page,'redo');await saved();assert.equal(await edited(),backward);await undo();
  console.log('PASS backward deletion/restart history');
  await page.reload();await ready();
  if(await page.locator('[data-segment-start]').getAttribute('data-segment-start')!=='0'){await editor.evaluate((el: any)=>el.editor.view.focus());await page.keyboard.press('Control+Home');await segment(0);await ready();}
- await cursor('end');await page.keyboard.press('Delete');await saved();assert.equal(await body(),source.slice(0,seam)+source.slice(seam+1),'forward removes exactly following character');await undo();
+ await cursor('end');await page.keyboard.press('Delete');await saved();assert.equal(await edited(),source.slice(0,seam)+source.slice(seam+1),'forward removes exactly following character');await undo();
  console.log('PASS forward deletion');
  // Repeated keys arrive while the Rust read is deliberately held. Every key
  // must be applied after the new editor mounts, with no whole-body renderer read.
@@ -53,7 +55,7 @@ try{
  const batchStart=splices.length;
  await page.route('**/api/rpc',delayed);await page.keyboard.press('Backspace');await waitRequest(held);
  for(let i=0;i<7;i++)await page.keyboard.press('Backspace');release();await page.unroute('**/api/rpc',delayed);await saved();
- assert.equal(await body(),source.slice(0,seam-8)+source.slice(seam),'queued key repeat removes eight characters exactly');
+ assert.equal(await edited(),source.slice(0,seam-8)+source.slice(seam),'queued key repeat removes eight characters exactly');
  assert.equal(splices.length-batchStart,1,'held repeated keys use a single bounded source edit');
  await page.reload();await ready();await undo();assert.equal(await body(),source,'one restart undo restores all eight repeated keys');
  console.log('PASS delayed eight keys/single restart undo');
@@ -66,7 +68,7 @@ try{
  for(let i=0;i<7;i++)await page.keyboard.press('Backspace');failRelease();
  await page.locator('.window-error').waitFor();assert.equal(await body(),source,'failed cache read preserves the complete source');
  await page.unroute('**/api/rpc',failRead);await page.getByRole('button',{name:'다시 시도',exact:true}).click();await saved();
- assert.equal(await body(),source.slice(0,seam-8)+source.slice(seam),'retry preserves all eight queued keys');await undo();assert.equal(await body(),source);
+ assert.equal(await edited(),source.slice(0,seam-8)+source.slice(seam),'retry preserves all eight queued keys');await undo();assert.equal(await body(),source);
  console.log('PASS failed-read eight-key preservation/retry');
  const openSource=async(value,label)=>{
   source=value;note=await rpc('save',{note:{title:'경계 '+label+' '+Date.now(),content:source,content_format:'html'}});await rpc('wait_index');
@@ -82,9 +84,9 @@ try{
    await cursor('end');await page.keyboard.press('Control+End');await ready();await cursor('start');await page.keyboard.press('ArrowLeft');await page.locator('[data-window-start="0"]').waitFor();await ready();await cursor('end');
   }
   await page.keyboard.press(direction==='backward'?'Backspace':'Delete');await saved();
-  const joined=large.slice(0,-4)+'뒤 문단😀</p>';assert.equal(await body(),joined,'large/small paragraph join '+direction);
+  const joined=large.slice(0,-4)+'뒤 문단😀</p>';assert.equal(await edited(),joined,'large/small paragraph join '+direction);
   assert.ok((await editor.textContent()).length<33000);await page.reload();await ready();await undo();assert.equal(await body(),source,'restart join undo '+direction);
-  await historyKey(page,'redo');await saved();assert.equal(await body(),joined);await undo();
+  await historyKey(page,'redo');await saved();assert.equal(await edited(),joined);await undo();
   console.log('PASS paragraph join '+direction);
  }
  const tableSeed=await rpc('save',{note:{title:'표 경계 스키마 '+Date.now(),content:'<table><tbody><tr><td><p>ABCDEFGHIJKLMNOPQRSTUVWXYZ</p></td></tr></tbody></table>',content_format:'html'}});
@@ -119,7 +121,7 @@ try{
    await cursor('end');
   }
   const key=direction==='backward'?'Backspace':'Delete';await page.keyboard.press(key);await saved();await ready();
-  assert.equal(await body(),source.replace('<hr>',''),'atom key removes only the block without a filler paragraph');
+  assert.equal(await edited(),source.replace('<hr>',''),'atom key removes only the block without a filler paragraph');
   await page.reload();await ready();await undo();assert.equal(await body(),source,'atom restart undo');console.log('PASS atom deletion '+direction);
  }
  if(process.env.INKISM_BOUNDARY_LARGE==='1'){
@@ -131,7 +133,7 @@ try{
   const refusal=await rejected.json();assert.equal(refusal.ok,false);assert.match(refusal.error,/content.*(?:limit|exceed|large)|splice.*(?:limit|large)/i);assert.equal(await body(),source,'over-limit insertion preserves the original note');
   const first=(await rpc('document_segments',{id:note.id,revision:1,ordinal:0,offset:0})).segments[0],seam=Buffer.byteLength(first.source);
   await page.getByRole('button',{name:'다음 구간',exact:true}).click();await segment(1);await ready();await cursor('start');await page.keyboard.press('Backspace');await saved();
-  assert.equal(await body(),source.slice(0,seam-1)+source.slice(seam));assert.ok((await editor.textContent()).length<33000);assert.ok(await page.locator('*').count()<1500);
+  assert.equal(await edited(),source.slice(0,seam-1)+source.slice(seam));assert.ok((await editor.textContent()).length<33000);assert.ok(await page.locator('*').count()<1500);
   await page.reload();await ready();await undo();assert.equal(await body(),source);console.log('PASS 19MiB single-block boundary edit with bounded renderer/restart undo and preserved source after over-limit refusal');
  }
  assert.ok(splices.length>0);assert.deepEqual(errors,[]);

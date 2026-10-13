@@ -16,7 +16,7 @@ const title='범위 조합 검사 '+Date.now();
 const suffix=process.env.INKISM_LAZY==='0'?' 길이 확보 본문':'';
 const content=Array.from({length:10000},(_,i)=>`<p>문단 ${i} 한글😀${suffix}</p>`).join('');
 let note;
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'),undefined,{timeout:30000});
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'),undefined,{timeout:30000});
 const focus=()=>page.locator('.tiptap-prose').evaluate((el: any)=>el.editor.view.focus());
 try{
  note=await rpc('save',{note:{title,content,content_format:'html'}});await rpc('wait_index');

@@ -24,6 +24,9 @@ pub struct SecurityStatus {
     pub pending: bool,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub recovery_error: String,
+    /// Masked bound account only (`f***@example.com`), never the full address.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub account_hint: String,
 }
 
 pub type StopFn = Box<dyn Fn() -> Result<()> + Send + Sync>;

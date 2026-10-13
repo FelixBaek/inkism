@@ -1,19 +1,14 @@
 import React, { useState, useEffect } from "react";
 import {
-  Broom,
   Plus,
-  Search,
   Pin,
   Trash2,
   RotateCcw,
   Star,
-  ChevronLeft,
   ChevronRight,
   Loader2,
   SearchX,
   StickyNote,
-  Notebook as NotebookIcon,
-  Pencil,
   PencilOff,
   Archive,
 } from "../icons";
@@ -25,9 +20,10 @@ import { NoteContextMenu, type NoteMenuTarget } from "./NoteContextMenu";
 import { ReminderEditor } from "./Reminders";
 import { NoteShareDialog } from "./NoteShareDialog";
 import { CoverBanner } from "./NotebookCover";
-import { GroupHeader, useListSort } from "./NoteListSort";
+import { GroupHeader, sortLabel, useListSort } from "./NoteListSort";
 import { groupItems } from "../lib/list-sort";
 import { openInNewTab } from "./NoteTabs";
+import { ArchiveTabs, TrashRetention, TrashSelectionDialog, trashLabel, useTrashPurge, useTrashTimes } from "./TrashTools";
 import "./NoteList.css";
 import { t } from "../i18n";
 
@@ -42,7 +38,7 @@ export function NoteList() {
     window.addEventListener("inkism-open-search", open);
     return () => window.removeEventListener("inkism-open-search", open);
   }, []);
-  const title = s.view.type === "all" ? t("노트") : listTitle(s.view, s.notebooks);
+  const title = s.search ? t("검색 결과") : listTitle(s.view, s.notebooks);
   const notebook =
     s.view.type === "notebook" ? s.notebooks.find((n) => n.id === (s.view as { id: string }).id) : undefined;
   const [menu, setMenu] = useState<NoteMenuTarget | null>(null);
@@ -56,50 +52,96 @@ export function NoteList() {
     setSort(next);
     if (next.sortBy !== sort.sortBy || next.sortDirection !== sort.sortDirection) s.refreshList();
   };
+  // 전체 노트는 총 개수를 알고, 다른 보기는 마지막 쪽에 닿아야 정확한 수를 안다(음수 = "이상").
+  const total = s.view.type === "all" && !s.search ? s.stats?.notes : undefined;
+  const count = !s.pageData ? null : total ?? knownNoteCount(s.pageData.nextCursor, s.page, items.length);
+  const pages = total !== undefined ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : hasNext ? null : s.page;
+  const trash = s.view.type === "trash";
+  const shelf = trash || s.view.type === "archive";
+  useTrashPurge();
+  const [times, retention, setRetention] = useTrashTimes(items, trash);
+  // 지운 노트에서 Ctrl/Shift+클릭으로 고른 노트들. 보기가 바뀌면 비운다.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [cleanup, setCleanup] = useState(false);
+  const viewKey = JSON.stringify(s.view);
+  useEffect(() => setPicked(new Set()), [viewKey]);
+  const pick = (id: string) =>
+    setPicked((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  // 지운 노트는 편집할 수 없어 수정 시각이 곧 지운 시각이다.
+  const order = trash && sort.sortBy === "updated_at" && sort.sortDirection === "desc" ? t("지운 순") : sortLabel(sort);
 
   return (
     <section className="note-list" aria-label={t("노트 목록")}>
-      {!notebook && (
-        <div className="list-header" data-tauri-drag-region="deep">
-          <h2 className="list-title">
-            {title}
-            <span className="list-count">{s.view.type === "all" ? s.stats?.notes : items.length}</span>
-          </h2>
-          <div className="list-header-actions" data-tauri-drag-region="false">
-            {s.view.type === "trash" ? (
-              <IconButton
-                label={t("휴지통 비우기")}
-                onClick={() => void s.emptyTrash()}
-                disabled={items.length === 0 && s.page === 1}
-              >
-                <Broom size={16} aria-hidden />
-              </IconButton>
-            ) : (
-              <GroupHeader title="" sort={sort} onSort={changeSort} />
-            )}
-          </div>
+      <div className="list-header" data-tauri-drag-region="deep">
+        <h2 className="list-title">{title}</h2>
+        <div className="list-header-actions" data-tauri-drag-region="false">
+          <IconButton label={t("새 노트 만들기 (Ctrl+N)")} onClick={() => s.newNote()}>
+            <Plus size={16} aria-hidden />
+          </IconButton>
+          <GroupHeader
+            title=""
+            sort={sort}
+            onSort={changeSort}
+            extra={[
+              ...(notebook ? [{ label: t("폴더 고치기"), onSelect: () => void s.renameNotebook(notebook) }] : []),
+              ...(trash
+                ? [
+                    { label: t("지운 노트 정리…"), onSelect: () => setCleanup(true) },
+                    { label: t("지운 노트 모두 비우기"), danger: true, onSelect: () => void s.emptyTrash() },
+                  ]
+                : []),
+            ]}
+          />
         </div>
-      )}
-
+      </div>
       <div className={"list-search" + (!searchOpen && !s.searchInput ? " is-collapsed" : "")}>
-        <Search size={14} aria-hidden className="list-search-icon" />
+        <label className="list-search-label" htmlFor="note-search">
+          {t("노트 검색")}
+        </label>
         <input
           id="note-search"
           type="search"
           className="search-field"
-          placeholder={notebook ? t("{name}에서 검색", { name: notebook.name }) : t("노트 검색")}
+          placeholder={notebook ? t("{name}에서 검색", { name: notebook.name }) : ""}
           aria-label={t("노트 검색")}
           value={s.searchInput}
           onChange={(e) => s.setSearchInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== "Escape") return;
+            e.preventDefault();
+            s.setSearchInput("");
+            setSearchOpen(false);
+          }}
+          onBlur={() => !s.searchInput && setSearchOpen(false)}
         />
       </div>
-
-      {notebook && (
-        <NotebookHeader
-          notebook={notebook}
-          count={s.search || !s.pageData ? null : knownNoteCount(s.pageData.nextCursor, s.page, items.length)}
-        />
+      {shelf && (
+        <div className="list-shelf">
+          <ArchiveTabs />
+          {trash && <TrashRetention days={retention} onChange={setRetention} />}
+        </div>
       )}
+      <p className="list-info">
+        {s.search
+          ? t(hasNext ? "{count}개 이상 검색 결과" : "{count}개 검색 결과", { count: (s.page - 1) * PAGE_SIZE + items.length })
+          : order + (count === null ? "" : " · ") +
+            (count === null ? "" : count < 0 ? t("{count}개 이상", { count: -count }) : t("{count}개", { count }))}
+        {trash && picked.size > 0 && (
+          <>
+            {" · "}
+            <button type="button" className="list-info-action" onClick={() => setCleanup(true)}>
+              {t("{count}개 선택됨", { count: picked.size })}
+            </button>
+          </>
+        )}
+      </p>
+
+
+      {notebook && <NotebookHeader notebook={notebook} />}
 
       <div className="list-body" role="feed" aria-busy={s.listLoading}>
         {s.listError && (
@@ -123,41 +165,54 @@ export function NoteList() {
         {items.length > 0 &&
           groups.map((g, i) => (
             <React.Fragment key={g.title + i}>
-              {g.title && (
-                <GroupHeader
-                  title={g.title}
-                  sort={notebook && i === 0 ? sort : undefined}
-                  onSort={notebook && i === 0 ? changeSort : undefined}
-                />
-              )}
+              {g.title && <GroupHeader title={g.title} />}
               {g.items.map((n) => (
-                <NoteRow key={n.id} item={n} onMenu={setMenu} />
+                <NoteRow
+                  key={n.id}
+                  item={n}
+                  onMenu={setMenu}
+                  picked={picked.has(n.id)}
+                  onPick={trash ? () => pick(n.id) : undefined}
+                  meta={trash ? trashLabel(times[n.id], retention) : undefined}
+                />
               ))}
             </React.Fragment>
           ))}
       </div>
 
-      {(hasNext || s.page > 1) && (
-        <div className="list-pager">
-          <IconButton
-            label={t("이전 페이지")}
+      {(items.length > 0 || s.page > 1) && (
+        <nav className="list-pager" aria-label={t("노트 목록")}>
+          <button
+            type="button"
+            className="pager-btn"
+            aria-label={t("이전 페이지")}
             disabled={s.page <= 1 || s.listLoading}
             onClick={() => s.goToPage(s.page - 1)}
           >
-            <ChevronLeft size={16} aria-hidden />
-          </IconButton>
+            {t("이전")}
+          </button>
           <span className="pager-info" aria-live="polite">
-            {t("{page}페이지 · 표시 {count}개", { page: s.page, count: items.length })}
-            {hasNext ? "" : " " + t("(마지막)")}
+            {s.page} / {pages ?? "…"}
           </span>
-          <IconButton
-            label={t("다음 페이지")}
+          <button
+            type="button"
+            className="pager-btn"
+            aria-label={t("다음 페이지")}
             disabled={!hasNext || s.listLoading}
             onClick={() => s.goToPage(s.page + 1)}
           >
-            <ChevronRight size={16} aria-hidden />
-          </IconButton>
-        </div>
+            {t("다음")}
+          </button>
+        </nav>
+      )}
+      {cleanup && (
+        <TrashSelectionDialog
+          ids={[...picked]}
+          onClose={(done) => {
+            setCleanup(false);
+            if (done) setPicked(new Set());
+          }}
+        />
       )}
       {menu && (
         <NoteContextMenu
@@ -195,13 +250,8 @@ function knownNoteCount(nextCursor: unknown, page: number, shown: number): numbe
   return nextCursor === null ? (page - 1) * PAGE_SIZE + shown : -page * PAGE_SIZE;
 }
 
-function noteCountLabel(count: number | null): string {
-  if (count === null) return "";
-  return count < 0 ? t("노트 {count}개 이상", { count: -count }) : t("노트 {count}개", { count });
-}
-
-/** 노트북 머리말: 상위 노트북 경로, 아이콘, 이름, 설명, 노트 수, 둥근 버튼. */
-function NotebookHeader({ notebook, count }: Readonly<{ notebook: Notebook; count: number | null }>) {
+/** 폴더 머리말: 표지, 상위 폴더 경로, 설명. 이름·개수·버튼은 목록 머리에 있다. */
+function NotebookHeader({ notebook }: Readonly<{ notebook: Notebook }>) {
   const s = useStore();
   const crumbs: Notebook[] = [];
   for (let parent = notebook.parent_id; parent && crumbs.length < 32;) {
@@ -210,11 +260,12 @@ function NotebookHeader({ notebook, count }: Readonly<{ notebook: Notebook; coun
     crumbs.unshift(found);
     parent = found.parent_id;
   }
+  if (!notebook.cover && crumbs.length === 0 && !notebook.description) return null;
   return (
-    <header className={`notebook-header${notebook.cover ? " has-cover" : ""}`} aria-label={t("노트북 정보")}>
+    <header className={`notebook-header${notebook.cover ? " has-cover" : ""}`} aria-label={t("폴더 정보")}>
       {notebook.cover && <CoverBanner cover={notebook.cover} />}
       {crumbs.length > 0 && (
-        <nav className="notebook-crumbs" aria-label={t("상위 노트북")}>
+        <nav className="notebook-crumbs" aria-label={t("상위 폴더")}>
           {crumbs.map((c) => (
             <React.Fragment key={c.id}>
               <button type="button" onClick={() => s.setView({ type: "notebook", id: c.id })}>
@@ -226,33 +277,19 @@ function NotebookHeader({ notebook, count }: Readonly<{ notebook: Notebook; coun
           <span>{notebook.name}</span>
         </nav>
       )}
-      <NotebookIcon
-        size={22}
-        aria-hidden
-        className="notebook-header-icon"
-        style={notebook.color ? { color: notebook.color } : undefined}
-      />
-      <h2 className="notebook-header-title">{notebook.name}</h2>
       {notebook.description && <p className="notebook-header-desc">{notebook.description}</p>}
-      <div className="notebook-header-foot">
-        <span className="notebook-header-meta">{noteCountLabel(count)}</span>
-        <span className="notebook-header-actions">
-          <IconButton label={t("새 노트 만들기 (Ctrl+N)")} onClick={()=>s.newNote()} className="round-btn">
-            <Plus size={14} aria-hidden />
-          </IconButton>
-          <IconButton label={t("노트북 고치기")} onClick={() => void s.renameNotebook(notebook)} className="round-btn">
-            <Pencil size={14} aria-hidden />
-          </IconButton>
-        </span>
-      </div>
     </header>
   );
 }
 
 function listTitle(view: View, notebooks: { id: string; name: string }[]): string {
   if (view.type === "notebook") {
-    return notebooks.find((n) => n.id === view.id)?.name ?? t("노트북");
+    const name = notebooks.find((n) => n.id === view.id)?.name;
+    return name ? `${t("폴더")} · ${name}` : t("폴더");
   }
+  if (view.type === "tag") return `${t("태그")} · ${view.name}`;
+  // 보관한 노트와 지운 노트는 한 "보관함" 화면의 두 탭이다.
+  if (view.type === "trash") return t("보관함");
   return viewTitle(view);
 }
 
@@ -270,8 +307,8 @@ function EmptyList({ view, search }: Readonly<{ view: View; search: string }>) {
     all: [t("아직 노트가 없습니다"), t("새 노트 버튼이나 Ctrl+N으로 첫 노트를 만들어 보세요")],
     favorites: [t("즐겨찾기한 노트가 없습니다"), t("노트 메뉴에서 즐겨찾기를 추가할 수 있습니다")],
     archive: [t("보관함이 비어 있습니다"), t("노트 메뉴에서 보관할 수 있습니다")],
-    trash: [t("휴지통이 비어 있습니다"), t("삭제된 노트가 여기에 모입니다")],
-    notebook: [t("이 노트북에 노트가 없습니다"), t("노트를 만들면 이 노트북에 저장됩니다")],
+    trash: [t("지운 노트가 없습니다"), t("삭제된 노트가 여기에 모입니다")],
+    notebook: [t("이 폴더에 노트가 없습니다"), t("노트를 만들면 이 폴더에 저장됩니다")],
     tag: [t("이 태그의 노트가 없습니다"), t("노트 편집 화면에서 태그를 추가할 수 있습니다")],
   };
   const [title, sub] = messages[view.type] ?? messages.all;
@@ -284,17 +321,43 @@ function EmptyList({ view, search }: Readonly<{ view: View; search: string }>) {
   );
 }
 
-function NoteRow({ item, onMenu }: Readonly<{ item: Summary; onMenu: (target: NoteMenuTarget) => void }>) {
+function NoteRow({
+  item,
+  onMenu,
+  picked = false,
+  onPick,
+  meta,
+}: Readonly<{
+  item: Summary;
+  onMenu: (target: NoteMenuTarget) => void;
+  picked?: boolean;
+  /** 있으면 Ctrl/Shift+클릭이 새 탭 대신 여러 노트 고르기다(지운 노트). */
+  onPick?: () => void;
+  /** 날짜·폴더 대신 보일 줄(지운 노트: 지운 시각·삭제 예정). */
+  meta?: string;
+}>) {
   const s = useStore();
   const selected = s.selectedId === item.id;
   const trashMode = s.view.type === "trash";
+  // 날짜 옆 자리: 태그 보기면 그 태그, 아니면 폴더 이름, 폴더가 없으면 첫 태그.
+  const notebookName = s.notebooks.find((n) => n.id === item.notebook_id)?.name;
+  const tag = s.view.type === "tag" ? s.view.name : item.tags[0];
+  const place = s.view.type !== "tag" && notebookName ? notebookName : tag ? `# ${tag}` : "";
 
   return (
-    <article className={`note-row ${selected ? "is-selected" : ""}`} aria-current={selected ? "true" : undefined}>
+    <article
+      className={`note-row ${selected ? "is-selected" : ""} ${picked ? "is-picked" : ""}`}
+      aria-current={selected ? "true" : undefined}
+    >
       <button
         type="button"
         className="note-row-main"
-        onClick={(e) => void (e.ctrlKey || e.metaKey ? openInNewTab(s, item.id) : s.selectNote(item.id))}
+        aria-pressed={onPick ? picked : undefined}
+        onClick={(e) => {
+          const multi = e.ctrlKey || e.metaKey || e.shiftKey;
+          if (onPick && multi) onPick();
+          else void (e.ctrlKey || e.metaKey ? openInNewTab(s, item.id) : s.selectNote(item.id));
+        }}
         onAuxClick={(e) => {
           if (e.button === 1) {
             e.preventDefault();
@@ -306,6 +369,13 @@ function NoteRow({ item, onMenu }: Readonly<{ item: Summary; onMenu: (target: No
           onMenu({ item, x: e.clientX, y: e.clientY });
         }}
         onKeyDown={(e) => {
+          // Delete: 지운 노트로 옮기기(지운 노트는 영구 삭제, 기존 확인 창을 따른다). 컨텍스트 메뉴의 "Del"과 같다.
+          if (e.key === "Delete" && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+            e.preventDefault();
+            if (item.trashed) void s.quickDelete(item.id);
+            else void s.patchNoteById(item.id, { trashed: true }, item.revision);
+            return;
+          }
           if (e.key !== "ContextMenu" && !(e.shiftKey && e.key === "F10")) return;
           e.preventDefault();
           const r = e.currentTarget.getBoundingClientRect();
@@ -324,22 +394,13 @@ function NoteRow({ item, onMenu }: Readonly<{ item: Summary; onMenu: (target: No
           </span>
         </div>
         <p className={`note-row-preview${item.preview ? "" : " is-empty"}`}>{item.preview || t("내용 없음")}</p>
-        <div className="note-row-meta">
-          <span>{formatRelative(item.updated_at)}</span>
-          {item.tags.length > 0 && (
-            <span className="note-row-tags">
-              {item.tags.slice(0, 2).map((t) => (
-                <span key={t} className="note-row-tag">
-                  {t}
-                </span>
-              ))}
-            </span>
-          )}
-        </div>
+        <p className="note-row-meta">
+          {meta || [formatRelative(item.updated_at), place].filter(Boolean).join(" · ")}
+        </p>
       </button>
       {trashMode && (
         <div className="note-row-actions">
-          <IconButton label={t("휴지통에서 복원")} size="sm" onClick={() => void s.quickRestore(item.id)}>
+          <IconButton label={t("복원")} size="sm" onClick={() => void s.quickRestore(item.id)}>
             <RotateCcw size={13} aria-hidden />
           </IconButton>
           <IconButton label={t("영구 삭제")} size="sm" onClick={() => void s.quickDelete(item.id)} className="danger">

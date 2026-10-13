@@ -16,7 +16,7 @@ await page.route('**/api/info',async route=>{const response=await route.fetch();
 const editor=page.locator('.tiptap-prose');
 const opened=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized);
 const ready=()=>page.waitForFunction(()=>document.querySelector<any>('.tiptap-prose')?.editor?.isInitialized&&Array.from(document.querySelectorAll<any>('.window-controls button')).some(button=>button.textContent==='이동'&&!button.disabled));
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
 // Native browser selection updates can arrive after keyboard.press resolves.
 // Read each oracle position only after that specific key changed its head.
 const oracleKey=async(direction)=>{

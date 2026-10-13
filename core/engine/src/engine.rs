@@ -213,6 +213,15 @@ impl Engine {
                 value
             }
             "stats" => ops_meta::stats(conn)?,
+            "notebook_counts" => crate::notebook_counts::counts(&self.query_conn)?,
+            "trash_retention_get" => crate::trash_retention::get(conn)?,
+            "trash_retention_set" => crate::trash_retention::set(conn, &req)?,
+            "trash_times" => crate::trash_retention::times(conn, &req)?,
+            "trash_purge" => {
+                let v = crate::trash_retention::purge(conn, crate::ids::now_ms())?;
+                self.wakeup.notify();
+                v
+            }
             // Local open-tab state: no index jobs, never synced/exported.
             "split_get" => crate::editor_history::split_get(conn)?,
             "split_set" => crate::editor_history::split_set(conn, &req)?,
@@ -229,6 +238,7 @@ impl Engine {
             "history_name_current" | "history_rename" | "history_delete_named" => crate::named_versions::change(conn,&req,op)?,
             "history_body" => crate::named_versions::body(conn,&req)?,
             "history" => ops_notes::history(conn, &req)?,
+            "history_changes" => crate::history_changes::changes(conn, &req)?,
             "restore" => {
                 let v = ops_notes::restore(conn, &req)?;
                 self.wakeup.notify();

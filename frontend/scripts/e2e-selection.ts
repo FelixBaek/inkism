@@ -1,14 +1,17 @@
 import {chromium} from 'playwright-core';
 import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
 const base=process.env.INKISM_URL||'http://127.0.0.1:47846';
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 const page=await browser.newPage();
+await page.addInitScript(()=>{localStorage.setItem('inkism.lang','ko');localStorage.setItem('inkism.inspector','false');});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
 const title='선택 도구 검증 '+Date.now();
 const root=page.locator('.tiptap-prose');
-const menu=page.getByRole('group',{name:'선택한 글자 서식'});
+const menu=page.getByRole('toolbar',{name:'선택한 글자 서식'});
 try {
- await page.goto(base);await page.locator('.new-note-btn').click();
+ await page.goto(base);await page.locator('.topbar-new-note').click();
  await page.getByLabel('노트 제목',{exact:true}).fill(title);
  await root.click();await page.keyboard.insertText('한글 선택 서식');
  await page.keyboard.press('Control+a');
@@ -20,7 +23,7 @@ try {
  assert.equal(await root.locator('strong em, em strong').textContent(),'한글 선택 서식');
  await page.keyboard.press('ArrowRight');
  await menu.waitFor({state:'hidden'});
- await page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+ await page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
  await page.reload();await page.getByRole('button',{name:'노트 열기: '+title,exact:true}).click();
  assert.equal(await root.locator('strong em, em strong').textContent(),'한글 선택 서식');
  await root.click();await page.keyboard.press('Control+a');await menu.waitFor({state:'visible'});
@@ -32,7 +35,7 @@ try {
  await page.setViewportSize({width:390,height:844});
  await root.click();await page.keyboard.press('Control+a');await menu.waitFor({state:'visible'});
  await page.waitForFunction(()=>{const r=document.querySelector('.selection-toolbar')?.getBoundingClientRect();return r && r.width>0 && r.x>=0 && r.right<=390;});
- await page.screenshot({path:'../.impeccable/review/react-selection-mobile.png',fullPage:true});
+ await page.screenshot({path:path.join(os.tmpdir(),'react-selection-mobile.png'),fullPage:true});
  await menu.getByRole('button',{name:'선택 글자 굵게',exact:true}).focus();await page.keyboard.press('Escape');
  await menu.waitFor({state:'hidden'});
  assert.deepEqual(errors,[]);

@@ -1,0 +1,5 @@
+const e=/<br\s*\/?>/gi,t=/<\/(p|div|h[1-6]|li|tr|td|th|blockquote|pre|table|section|article|header|footer|ul|ol|details|summary)>/gi;function n(e){let t=``,n=0;for(;;){let r=e.indexOf(`<`,n);if(r===-1)break;let i=e.indexOf(`>`,r+1);if(i===-1)break;i===r+1?(t+=e.slice(n,r+1),n=r+1):(t+=e.slice(n,r),n=i+1)}return t+e.slice(n)}const r={"&amp;":`&`,"&lt;":`<`,"&gt;":`>`,"&quot;":`"`,"&#39;":`'`,"&apos;":`'`,"&nbsp;":` `,"&mdash;":`—`,"&hellip;":`…`};self.onmessage=e=>{let{id:t,html:n}=e.data,r=``;try{r=i(n)}catch{self.postMessage({id:t,error:`검색용 텍스트를 추출하지 못했습니다.`});return}self.postMessage({id:t,text:r})};function i(i){let a=i.replace(/<(script|style)[\s\S]*?<\/\1>/gi,` `).replace(/<!--[\s\S]*?-->/g,``).replace(/<(input|img|hr|embed|video|audio)\b[^>]*\/?>/gi,` `);return a=a.replace(e,`
+`).replace(t,`
+`),a=n(a),a=a.replace(/&(amp|lt|gt|quot|#39|apos|nbsp|mdash|hellip);/g,e=>r[e]??e),a=a.replace(/&#(\d+);/g,(e,t)=>{try{return String.fromCodePoint(Number(t))}catch{return``}}),a=a.replace(/[ \t]+/g,` `).replace(/\n{3,}/g,`
+
+`),a.trim()}

@@ -11,7 +11,7 @@ const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors
 const title='전체 선택 검사 '+Date.now();
 const content=Array.from({length:10000},(_,i)=>`<p><strong>블록 ${i}</strong> 한글😀</p>`).join('');
 const note=await rpc('save',{note:{title,content,text:'선택'}});await rpc('wait_index');
-const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.textContent.includes('모든 변경 사항 저장됨'));
+const saved=()=>page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
 const formatted=()=>page.waitForFunction(()=>!document.querySelector<any>('.window-error')&&Array.from(document.querySelectorAll<any>('.window-controls button')).some(b=>b.textContent==='이동'&&!b.disabled));
 const focus=()=>page.locator('.tiptap-prose').evaluate((el: any)=>{el.editor.view.focus();});
 try{
@@ -53,7 +53,8 @@ try{
  assert.equal(await page.locator('.tiptap-prose p').count(),32);
  await focus();await page.keyboard.press('Control+a');await page.keyboard.insertText('대체😀');
  await page.waitForFunction(()=>document.querySelector('.tiptap-prose')?.textContent==='대체😀');await saved();
- assert.equal((await rpc('get',{id:note.id})).content,'<p><strong>대체😀</strong></p>');
+ // A typed replacement block acquires its permanent ID; every other byte is canonical.
+ assert.match((await rpc('get',{id:note.id})).content,/^<p id="ink-block-[0-9a-f-]{36}"><strong>대체😀<\/strong><\/p>$/);
  await focus();await page.keyboard.press('Control+z');await saved();assert.equal((await rpc('get',{id:note.id})).content,content);
  await focus();await page.keyboard.press('Control+a');await page.keyboard.press('Escape');assert.equal(await page.locator('.document-selection-status').count(),0);
  // Shift selection retains an anchor in the first window while displaying the end.

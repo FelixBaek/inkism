@@ -1,18 +1,16 @@
-/* 노트북 머리말과 노트 메뉴 보조 요소 */
+/* 폴더 머리말과 노트 메뉴 보조 요소 */
 .notebook-header {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 12px 14px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  padding: 0 12px 12px;
 }
 .notebook-crumbs {
   display: flex;
   align-items: center;
   gap: 2px;
   min-width: 0;
-  font-size: 11.5px;
+  font-size: var(--fs-small);
   color: var(--faint);
 }
 .notebook-crumbs button {
@@ -37,48 +35,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.notebook-header-icon {
-  color: var(--muted);
-}
-.notebook-header-title {
-  margin: 2px 0 0;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  overflow-wrap: anywhere;
-}
 .notebook-header-desc {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-small);
   line-height: 1.5;
   color: var(--muted);
   overflow-wrap: anywhere;
-}
-.notebook-header-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 28px;
-}
-.notebook-header-meta {
-  font-size: 11.5px;
-  color: var(--faint);
-}
-.notebook-header-actions {
-  display: flex;
-  gap: 6px;
-}
-.notebook-header .round-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background: var(--hover);
-  color: var(--muted);
-}
-.notebook-header .round-btn:hover:not(:disabled) {
-  background: var(--active);
-  color: var(--text);
 }
 .note-row-color {
   flex: none;
@@ -95,12 +57,208 @@
   right: auto;
   top: 0;
 }
-.note-list > .list-search:first-child:not(.is-collapsed) {
-  padding-top: 12px;
-}
-.note-list > .list-search:first-child:not(.is-collapsed) .list-search-icon {
-  top: calc(50% + 2px);
-}
 .note-row-preview.is-empty {
   color: var(--faint);
+}
+
+/* nocturne 목록 열 (Figma 34:3 "노트 목록"). 전역 styles.css·shell.css보다 뒤에 읽히지 않아 .note-list로 범위를 올린다. */
+section.note-list {
+  background: var(--raised);
+}
+.note-list .list-header {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.note-list .list-title {
+  flex: 1;
+  font-size: var(--fs-body);
+  font-weight: 500;
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+.note-list .list-header-actions {
+  gap: 8px;
+}
+.note-list .list-header-actions .icon-btn {
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  color: var(--text);
+}
+.note-list .list-info {
+  margin: 0;
+  padding: 12px 12px 6px;
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.note-list .list-body {
+  padding: 0;
+}
+.note-list .group-label {
+  padding: 12px 12px 4px;
+  font-size: var(--fs-small);
+  color: var(--faint);
+}
+.note-list .note-row {
+  border-bottom: 0;
+}
+.note-list .note-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* Figma 행은 높이 76 고정이라 아래 여백이 없다. */
+  padding: 12px 12px 0;
+  height: 76px;
+  line-height: 1.5;
+}
+.note-list .note-row-title {
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  color: var(--text);
+}
+.note-list .note-row.is-selected .note-row-title {
+  color: var(--accent-text);
+}
+.note-list .note-row-preview,
+.note-list .note-row-meta {
+  margin: 0;
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.note-list .note-row-preview {
+  display: block;
+  color: var(--muted);
+}
+.note-list .note-row-meta,
+.note-list .note-row.is-selected .note-row-meta,
+.note-list .note-row-preview.is-empty {
+  color: var(--faint);
+}
+.note-list .list-pager {
+  height: 36px;
+  padding: 4px;
+  gap: 8px;
+  border-top: 0;
+}
+.note-list .pager-btn {
+  width: 64px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  cursor: pointer;
+}
+.note-list .pager-btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+.note-list .pager-btn:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+.note-list .pager-info {
+  flex: 1;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* 보관함 탭과 지운 노트 자동 삭제 (Figma 08 "보관함 탭"): 1px 틀 + 선택 칸 --active */
+.note-list .list-shelf {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px 2px;
+}
+.list-segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  background: var(--hover);
+}
+.list-segmented > button {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.list-segmented > button:hover {
+  color: var(--text);
+}
+.list-segmented > [aria-selected="true"],
+.list-segmented > [aria-checked="true"] {
+  background: var(--active);
+  color: var(--text);
+}
+.trash-retention {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.trash-retention > span {
+  flex: none;
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+.trash-retention > .list-segmented {
+  flex: 1;
+}
+.note-list .note-row.is-picked .note-row-main {
+  background: var(--active);
+}
+.note-list .note-row.is-picked .note-row-title {
+  color: var(--accent-text);
+}
+.list-info-action {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* 목록 검색 (Figma 03 "목록 검색"): 12px 라벨 + 32px 입력칸, 아이콘 없음 */
+.note-list .list-search:not(.is-collapsed),
+.note-list .list-search:focus-within {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  height: auto;
+  padding: 12px;
+}
+.note-list .list-search-label {
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  color: var(--muted);
+}
+.note-list .list-search .search-field {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--hover);
+  color: var(--text);
+  font-size: var(--fs-caption);
 }

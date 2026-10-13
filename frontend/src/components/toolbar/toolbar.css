@@ -1,10 +1,24 @@
-/* 편집기 서식 도구 모음 (Figma EditorToolbar 33:5340 · 펼침 상태 34:5873) */
+/* 편집기 서식 도구 모음 (Figma 01 문서 편집 도구줄 74:7315): 높이 40, 안쪽 4, 버튼 30, 사이 4, 구분선 없음 */
 .editor-toolbar.tb-row {
   flex-wrap: nowrap;
-  gap: 8px;
-  padding: 0 12px;
-  min-height: 44px;
+  gap: 4px;
+  padding: 4px;
+  min-height: 40px;
   overflow: visible;
+}
+.tb-row > .tb-divider {
+  display: none;
+}
+.tb-row .icon-btn,
+.tb-row-pinned .icon-btn,
+.tb-pop .icon-btn {
+  border-radius: 0;
+  color: var(--text);
+}
+.tb-row .icon-btn.is-active,
+.tb-row-pinned .icon-btn.is-active,
+.tb-pop .icon-btn.is-active {
+  color: var(--accent-text);
 }
 .tb-group {
   display: inline-flex;
@@ -18,10 +32,11 @@
   background: var(--border);
   flex-shrink: 0;
 }
+/* Figma는 30이지만 1440 창에서 넓은 배치(글꼴·크기 선택)가 한 줄에 들어가도록 너비만 28 */
 .tb-row .icon-btn,
 .tb-pop .icon-btn {
   width: 28px;
-  height: 28px;
+  height: 30px;
   flex-shrink: 0;
 }
 .tb-hidden-host {
@@ -42,13 +57,13 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 28px;
+  height: 30px;
   padding: 0 6px 0 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   color: var(--text);
-  font: 500 12.5px/1 var(--font-sans);
+  font: 500 var(--fs-caption)/1 var(--font-sans);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -62,7 +77,7 @@
   background: var(--active);
 }
 .tb-select.is-open svg {
-  color: var(--green);
+  color: var(--accent-text);
 }
 .tb-select:disabled {
   opacity: 0.4;
@@ -71,7 +86,7 @@
 
 .tb-split {
   display: inline-flex;
-  border-radius: 6px;
+  border-radius: 0;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -79,7 +94,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 28px;
+  height: 30px;
   border: 0;
   padding: 0;
   background: transparent;
@@ -100,12 +115,12 @@
   color: var(--text);
 }
 .tb-split-main.is-active {
-  color: var(--green);
+  color: var(--accent-text);
   background: var(--active);
 }
 .tb-split.is-open .tb-split-toggle {
   background: var(--active);
-  color: var(--green);
+  color: var(--accent-text);
 }
 .tb-split button:disabled {
   opacity: 0.4;
@@ -124,7 +139,7 @@
   z-index: 60;
   background: var(--raised);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 0;
   box-shadow: var(--shadow);
   color: var(--text);
   font-family: var(--font-sans);
@@ -170,7 +185,7 @@
   height: 30px;
   padding: 0 10px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 0;
   background: transparent;
   color: var(--text);
   font-size: 13px;
@@ -182,7 +197,7 @@
 }
 .tb-menu button.is-active {
   background: var(--active);
-  color: var(--green);
+  color: var(--accent-text);
   font-weight: 500;
 }
 
@@ -271,7 +286,7 @@
   gap: 6px;
   padding: 8px 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   cursor: pointer;
 }
@@ -296,7 +311,7 @@
 .tb-list-line {
   width: 72px;
   height: 6px;
-  border-radius: 5px;
+  border-radius: 0;
   background: var(--border);
 }
 .tb-list-styles button.is-active .tb-list-marker {
@@ -334,7 +349,7 @@
   box-sizing: border-box;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--surface);
   color: var(--muted);
 }
@@ -366,7 +381,7 @@
   width: 30px;
   height: 30px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   font-size: 18px;
   line-height: 1;
@@ -408,7 +423,7 @@
   width: 36px;
   height: 36px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   font-size: 22px;
   line-height: 1;
@@ -466,7 +481,7 @@
   height: 33px;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--surface);
 }
 .tb-note-picker input:focus {
@@ -485,7 +500,7 @@
   gap: 2px;
   padding: 7px 10px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 0;
   background: transparent;
   color: var(--text);
   text-align: left;
@@ -527,7 +542,7 @@
   box-sizing: border-box;
   padding: 4px 4px 4px 10px;
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--surface);
   color: var(--text);
 }
@@ -544,7 +559,7 @@
   width: 28px;
   height: 28px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 0;
   background: var(--green);
   color: var(--on-accent);
   display: inline-flex;
@@ -578,7 +593,7 @@
   height: 32px;
   padding: 0 10px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 0;
   background: transparent;
   color: var(--text);
   font: 13px var(--font-sans);
@@ -636,7 +651,7 @@
   height: 30px;
   padding: 0 12px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   color: var(--text);
   font: 500 12.5px var(--font-sans);
@@ -901,10 +916,10 @@
 .tb-row-pinned {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px 12px;
+  gap: 4px;
+  padding: 4px;
   border-bottom: 1px solid var(--border);
-  background: var(--canvas);
+  background: var(--raised);
   overflow-x: auto;
 }
 .tb-row-pinned .icon-btn {
@@ -914,4 +929,96 @@
 }
 .tb-row-pinned .tb-divider {
   margin: 0 6px;
+}
+
+/* 블록 삽입 판 (Figma 04 34:6): 348 폭, 안쪽 20, 3칸 격자 */
+.tb-insert {
+  box-sizing: border-box;
+  width: 348px;
+  max-height: min(560px, 75vh);
+  overflow-y: auto;
+  padding: 0 20px 20px;
+}
+.tb-insert > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.tb-insert h3 {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 500;
+}
+.tb-insert-close {
+  display: inline-flex;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.tb-insert-close:hover {
+  background: var(--hover);
+}
+.tb-insert-search {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+.tb-insert-search input {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  background: var(--hover);
+  color: var(--text);
+  font-size: var(--fs-caption);
+}
+.tb-insert section {
+  margin-bottom: 12px;
+}
+.tb-insert h4 {
+  margin: 0 0 6px;
+  font-size: var(--fs-small);
+  font-weight: 400;
+  color: var(--muted);
+}
+.tb-insert-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.tb-insert-grid button,
+.tb-insert-ai {
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  background: var(--hover);
+  color: var(--text);
+  font-size: var(--fs-caption);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.tb-insert-grid button:hover:not(:disabled),
+.tb-insert-ai:hover:not(:disabled) {
+  background: var(--active);
+}
+.tb-insert-grid button:disabled,
+.tb-insert-ai:disabled {
+  cursor: default;
+  color: var(--faint);
+}
+.tb-insert-ai {
+  width: 100%;
+  height: 38px;
+  font-size: var(--fs-small);
 }

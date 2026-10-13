@@ -67,7 +67,8 @@ try{
   await root.evaluate((el: any)=>{el.editor.commands.setTextSelection(2);el.editor.view.focus();});await page.keyboard.insertText('입력보존');
  }finally{release();}
  const withInput=[...raceBlocks];withInput[0]=withInput[0].replace('블록 0','블입력보존록 0');
- await stored(withInput.join(''));await page.locator('.window-error').waitFor();
+ // The typed block acquires its permanent ID; every other byte stays exact.
+ await waitForPredicate(async()=>((await rpc('get',{id:note.id})).content.replace(/^(<p) id="ink-block-[0-9a-f-]{36}"/,'$1')===withInput.join('')),'typing during a drag must survive the cancelled move',10000);await ready();await page.locator('.window-error').waitFor();
  assert.match(await page.locator('.window-error').textContent(),/변경|충돌|revision|version/i);
  await page.unroute('**/api/rpc');assert.deepEqual(errors,[]);console.log('PASS real pointer block drag across windows, giant paragraph both directions, exact HTML, restart selection/input, undo/redo, self drop, typing cancellation and bounded reads; lazy='+process.env.INKISM_LAZY);
 }catch(e){console.error(await page.evaluate(()=>({error:document.querySelector('.window-error')?.textContent,selection:document.querySelector<any>('.tiptap-prose')?.editor?.state.selection.toJSON(),events:(window as any).dragEvents})));if(note){const saved=await rpc('get',{id:note.id});console.error(saved.content.slice(0,250));}throw e;}finally{await browser.close();}

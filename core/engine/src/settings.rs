@@ -22,6 +22,7 @@ pub fn is_known_key(key: &str) -> bool {
     crate::workspace_tools::is_key(key) || crate::resources::is_key(key) || crate::knowledge::is_key(key)
         || key == DEFAULT_NOTEBOOK
         || key == DEFAULT_TAG
+        || key == crate::trash_retention::KEY
         || key.strip_prefix(VAULT_KEY_PREFIX).is_some_and(ids::valid_id)
 }
 
@@ -37,6 +38,7 @@ pub fn validate(key: &str, value: Option<&str>) -> Result<()> {
         (_, None) => Ok(()),
         (DEFAULT_NOTEBOOK, Some(id)) if ids::valid_id(id) => Ok(()),
         (DEFAULT_TAG, Some(tag)) => crate::ops_notes::check_tags(&[tag.to_string()]),
+        (crate::trash_retention::KEY, Some(days)) => crate::trash_retention::validate(days),
         (_, Some(envelope))
             if key.starts_with(VAULT_KEY_PREFIX)
                 && !envelope.is_empty()

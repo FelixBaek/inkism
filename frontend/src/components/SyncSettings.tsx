@@ -1,6 +1,6 @@
 import { lang, t } from "../i18n";
 import { useEffect, useReducer, useRef, useState } from "react";
-import { RefreshCw, X, CloudCheck, AlertTriangle, LockKeyhole } from "../icons";
+import { RefreshCw, CloudCheck, AlertTriangle, LockKeyhole } from "../icons";
 import { formatRelative } from "../lib/date";
 import { rpc } from "../api";
 import { useStore } from "../store";
@@ -180,14 +180,16 @@ function StorageDetails({
   );
 }
 
-export function SyncSettings() {
+/** part="sync": 동기화 연결·상태(설정 › 동기화), part="storage": 이 기기의 저장 보호(설정 › 백업과 복원). */
+export function SyncSettings({ part = "sync" }: Readonly<{ part?: "sync" | "storage" }>) {
   const store = useStore();
   const [copying, setCopying] = useState(false);
   const [opening, setOpening] = useState(false);
   const working = copying || opening;
   const copyRunning = useRef(false);
   const [copyMessage, setCopyMessage] = useState("");
-  const [open, setOpen] = useState(false);
+  // 설정 화면 안에 펼쳐 둔다: 보이는 동안이 곧 열린 상태.
+  const open = part === "sync";
   const [status, setStatus] = useState<Status | null>(null);
   const [storage, setStorage] = useState<Storage | null>(null);
   const [storageError, setStorageError] = useState(false);
@@ -202,7 +204,12 @@ export function SyncSettings() {
   const [editing, setEditing] = useState(false);
   const editingRef = useRef(false);
   editingRef.current = editing;
-  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    // 복사·저장소 열기 중에는 설정 화면을 떠나지 않는다(예전 창의 Esc·닫기 막기와 같음).
+    const leave = (e: Event) => (e as CustomEvent<Promise<boolean>[]>).detail.push(Promise.resolve(!copyRunning.current));
+    window.addEventListener("inkism-settings-leave", leave);
+    return () => window.removeEventListener("inkism-settings-leave", leave);
+  }, []);
   useEffect(() => {
     if (!open || working) return;
     const update = () =>
@@ -221,7 +228,7 @@ export function SyncSettings() {
     return () => clearInterval(timer);
   }, [open, working]);
   useEffect(() => {
-    if (!open) return;
+    if (part !== "storage") return;
     let active = true;
     setStorage(null);
     setStorageError(false);
@@ -235,11 +242,7 @@ export function SyncSettings() {
     return () => {
       active = false;
     };
-  }, [open]);
-  useEffect(() => {
-    if (open) dialog.current?.showModal();
-    else dialog.current?.close();
-  }, [open]);
+  }, [part]);
   const copyEncrypted = async () => {
     if (copyRunning.current) return;
     copyRunning.current = true;
@@ -322,39 +325,11 @@ export function SyncSettings() {
   };
   return (
     <>
-      <button className="side-item" onClick={() => setOpen(true)}>
-        <RefreshCw size={15} aria-hidden />
-        <span>{t("기기 동기화")}</span>
-      </button>
-      <dialog
-        ref={dialog}
-        className="sync-dialog"
-        onCancel={(e) => {
-          if (copyRunning.current) e.preventDefault();
-          else {
-            setOpen(false);
-            setEditing(false);
-          }
-        }}
-        aria-labelledby="sync-title"
-      >
-        <header>
-          <h2 id="sync-title">{t("기기 동기화")}</h2>
-          <button
-            className="icon-btn"
-            aria-label={t("동기화 설정 닫기")}
-            disabled={working}
-            onClick={() => {
-              setOpen(false);
-              setEditing(false);
-            }}
-          >
-            <X size={20} />
-          </button>
-        </header>
+      <div className={"sync-settings sync-settings--" + part}>
         <fieldset className="sync-fields" disabled={working}>
-          {status?.configured && !editing ? (
+          {part === "sync" && (status?.configured && !editing ? (
             <section className="sync-card" aria-label={t("동기화 상태")}>
+              <h3>{t("동기화 상태")}</h3>
               <p className="sync-state">
                 <span className={dotClass(status)} aria-hidden />
                 <output>{stateLabel(status)}</output>
@@ -388,8 +363,8 @@ export function SyncSettings() {
               </div>
               <section className="sync-scope" aria-label={t("동기화 범위")}>
                 <strong>{t("동기화 범위")}</strong>
-                <p className="sync-hint">{t("비워 두면 전체 노트를 동기화합니다. 둘 다 입력하면 노트북과 태그를 모두 만족하는 노트만 선택합니다.")}</p>
-                <label>{t("노트북 ID")}
+                <p className="sync-hint">{t("비워 두면 전체 노트를 동기화합니다. 둘 다 입력하면 폴더와 태그를 모두 만족하는 노트만 선택합니다.")}</p>
+                <label>{t("폴더 ID")}
                   <input value={scopeNotebooks} onChange={e => { scopeDirty.current = true; setScopeNotebooks(e.target.value); }} placeholder="id1, id2" />
                 </label>
                 <label>{t("태그")}
@@ -397,7 +372,7 @@ export function SyncSettings() {
                 </label>
                 <button type="button" className="btn" disabled={busy || status.running} onClick={() => void saveScope()}>{t("동기화 범위 저장")}</button>
               </section>
-              {open && <SyncHeldNotices status={status} onNavigate={() => setOpen(false)} />}
+              <SyncHeldNotices status={status} onNavigate={() => window.dispatchEvent(new Event("inkism-close-settings"))} />
               {status.paused && (
                 <p className="sync-hint">{t("이 기기의 변경은 보관됩니다. 다시 시작하면 그때 보냅니다.")}</p>
               )}
@@ -405,7 +380,8 @@ export function SyncSettings() {
           ) : (
             <>
               {!status?.configured && (
-                <section className="sync-card" aria-label={t("동기화 안내")}>
+                <section className="sync-card sync-guide" aria-label={t("동기화 안내")}>
+                  <h3>{t("동기화 안내")}</h3>
                   <p className="sync-state">
                     <span className="connection-dot off" aria-hidden />
                     <output>{t("꺼져 있음 — 노트는 이 기기에만 저장됩니다.")}</output>
@@ -428,7 +404,8 @@ export function SyncSettings() {
                   <p className="sync-hint">{t("노트는 기기에서 암호화한 뒤 보내므로 서버는 내용을 볼 수 없습니다.")}</p>
                 </section>
               )}
-              <form className="sync-card" onSubmit={configure}>
+              <form className="sync-card" onSubmit={configure} aria-label={t("연결 설정")}>
+                <h3>{t("연결 설정")}</h3>
                 {editing && (
                   <p className="sync-hint">
                     {t(
@@ -504,8 +481,8 @@ export function SyncSettings() {
                 </div>
               </form>
             </>
-          )}
-          <section className="sync-card" aria-labelledby="storage-title">
+          ))}
+          {part === "storage" && <section className="sync-card" aria-labelledby="storage-title">
             <h3 id="storage-title">{t("이 기기의 저장 보호")}</h3>
             <p>
               <output>{storageLine(storageError, storage)}</output>
@@ -532,7 +509,7 @@ export function SyncSettings() {
                 <p className="sync-hint">{t("고른 저장소로 앱을 다시 열고, 다음에도 그 저장소를 씁니다.")}</p>
               </>
             )}
-          </section>
+          </section>}
         </fieldset>
         {opening && (
           <p>
@@ -554,7 +531,7 @@ export function SyncSettings() {
             {error || status?.error}
           </p>
         )}
-      </dialog>
+      </div>
     </>
   );
 }

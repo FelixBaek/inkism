@@ -1304,14 +1304,16 @@ export function WindowedRichEditor({
       releaseDragElement.current?.();
       const rect = element.getBoundingClientRect();
       event.dataTransfer.setDragImage(element, 0, 0);
-      scroll.current.appendChild(element);
+      const host = scroll.current;
       const opacity = element.style.opacity,
         pointer = element.style.pointerEvents,
         width = element.style.width,
         height = element.style.height;
       element.style.width = rect.width + "px";
       element.style.height = rect.height + "px";
+      // Chromium aborts a native drag whose source moves during dragstart.
       const frame = requestAnimationFrame(() => {
+        host.appendChild(element);
         element.style.opacity = "0";
         element.style.pointerEvents = "none";
       });
@@ -1830,6 +1832,9 @@ export function WindowedRichEditor({
     return true;
   };
   const acceptPendingTransaction = (capture: NonNullable<typeof composition.current>, tr: Transaction) => {
+    // Plugin follow-ups (e.g. block IDs) start from the not-yet-shown state; they
+    // must not rewrite the provisional projection.
+    if (tr.before !== capture.editor.state.doc) return true;
     try {
       capture.pending!.accept(capture.editor.state, tr);
       // Reproject before an accepted transaction could grow the visible DOM.
@@ -1916,6 +1921,17 @@ export function WindowedRichEditor({
   const documentTransaction = (tr: Transaction) => {
     if (tr.docChanged && isReadOnly()) return true;
     const capture = composition.current;
+    // An appended block-ID transaction that does not fit the captured input
+    // (it is checked against the pre-input view) is dropped, never an input error.
+    if (capture && tr.getMeta("blockIdentity")) {
+      if (!capture.pending) return tr.steps.some((step) => stepOutside(step, step.getMap(), capture.from, capture.to));
+      try {
+        capture.pending.accept(capture.editor.state, tr);
+        return false;
+      } catch {
+        return true;
+      }
+    }
     if (capture)
       return capture.pending ? acceptPendingTransaction(capture, tr) : rejectCompositionTransaction(capture, tr);
     if (!documentSelected.current) return false;

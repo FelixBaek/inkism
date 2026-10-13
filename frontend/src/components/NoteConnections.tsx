@@ -16,7 +16,8 @@ const indexedReference=(item:IndexedReference):NoteReference=>({...parseReferenc
 const escape=(s:string)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 
-export function NoteConnections({onClose}:{onClose:()=>void}) {
+/** compact: the note-info panel form only; it skips the reference and mention scans that the full view runs on every save. */
+export function NoteConnections({onClose,compact=false}:{onClose:()=>void;compact?:boolean}) {
   const s=useStore(),id=s.note!.id,latest=useRef(s);latest.current=s;
   const [refs,setRefs]=useState<NoteReference[]>([]),[unlinked,setUnlinked]=useState<{id:string;title:string}[]>([]),[error,setError]=useState(''),[target,setTarget]=useState(''),[anchor,setAnchor]=useState(''),[label,setLabel]=useState(''),[embed,setEmbed]=useState(false),[busy,setBusy]=useState(false),[attempt,setAttempt]=useState(0);
   const [refPage,setRefPage]=useState(0),[mentionPage,setMentionPage]=useState(0),[indexCursor,setIndexCursor]=useState<string|null>(null),[mentionCursor,setMentionCursor]=useState<string|null>(null);
@@ -26,7 +27,7 @@ export function NoteConnections({onClose}:{onClose:()=>void}) {
   const readMentions=async(cursor?:string)=>{const controller=reads.current;const items:{id:string;title:string}[]=[];let next=cursor;do{const result: {ready:boolean;items:{id:string;title:string}[];next_cursor:string|null}=await rpc('unlinked_mentions',{id,revision:indexedRevision.current,...(next?{cursor:next}:{})},{signal:controller?.signal});if(!result.ready)throw new Error(t('문서를 준비 중입니다. 잠시 후 다시 열어 주세요.'));items.push(...result.items);next=result.next_cursor??undefined;}while(next&&items.length<20&&!controller?.signal.aborted);return {items,cursor:next??null};};
   const nextMentions=async()=>{if(busy)return;const nextPage=mentionPage+1,required=(nextPage+1)*20;if(unlinked.length>=required||!mentionCursor){if(unlinked.length>nextPage*20)setMentionPage(nextPage);return;}const controller=reads.current;setBusy(true);try{let cursor:string|null=mentionCursor;const added:{id:string;title:string}[]=[];do{const result=await readMentions(cursor??undefined);if(controller!==reads.current||controller?.signal.aborted)return;added.push(...result.items);cursor=result.cursor;}while(cursor&&unlinked.length+added.length<required);setUnlinked(v=>[...v,...added]);setMentionCursor(cursor);if(unlinked.length+added.length>nextPage*20)setMentionPage(nextPage);}catch(e){if(controller===reads.current&&!controller?.signal.aborted)setError(errorText(e));}finally{if(controller===reads.current&&!controller?.signal.aborted)setBusy(false);}};
   const [suggestions,setSuggestions]=useState<{id:string;title:string}[]>([]),[anchors,setAnchors]=useState<string[]>([]);
-  useEffect(()=>{let live=true;const controller=new AbortController();reads.current=controller;indexedRevision.current=undefined;const load=async()=>{setBusy(false);setRefs([]);setUnlinked([]);setRefPage(0);setMentionPage(0);setIndexCursor(null);setMentionCursor(null);setError('');if(!await latest.current.flushNow()||!live)return;
+  useEffect(()=>{if(compact)return;let live=true;const controller=new AbortController();reads.current=controller;indexedRevision.current=undefined;const load=async()=>{setBusy(false);setRefs([]);setUnlinked([]);setRefPage(0);setMentionPage(0);setIndexCursor(null);setMentionCursor(null);setError('');if(!await latest.current.flushNow()||!live)return;
     let note:Note;try{note=await rpc<Note>('get',{id,max_body_bytes:2*1024*1024},{signal:controller.signal});}catch(e){if(!(e instanceof Error)||!e.message.includes('note body exceeds read budget'))throw e;const result=await readIndexed();if(live){setRefs(result.items.map(indexedReference));setIndexCursor(result.next_cursor);}const mentions=await readMentions();if(live){setUnlinked(mentions.items);setMentionCursor(mentions.cursor);}return;}if(!live)return;
     let result:NoteReference[]=[], plainContent='';
     if((note.content_format??'html')==='html'){
@@ -50,7 +51,7 @@ export function NoteConnections({onClose}:{onClose:()=>void}) {
     do{const metadata=await rpc<Awaited<ReturnType<typeof api.list>>>('list',{view:'all',limit:100,...(cursor?{cursor}:{})},{signal:controller.signal});if(!live)return;
       mentions.push(...metadata.items.filter(item=>item.id!==id&&item.title.trim().length>=2&&lowered.includes(item.title.trim().toLocaleLowerCase())&&!linked.has(item.title.trim().toLocaleLowerCase())).map(item=>({id:item.id,title:item.title})));cursor=metadata.next_cursor??undefined;
     }while(cursor&&live);if(live)setUnlinked(mentions);
-  };load().catch(e=>{if(live)setError(errorText(e));});return()=>{live=false;controller.abort();};},[id,attempt,s.note?.revision]);
+  };load().catch(e=>{if(live)setError(errorText(e));});return()=>{live=false;controller.abort();};},[id,attempt,s.note?.revision,compact]);
   useEffect(()=>{let live=true;knowledge.list().then(x=>{if(live)setSuggestions(x.items.map(n=>({id:n.id,title:n.title})));}).catch(()=>{});return()=>{live=false;};},[]);
   useEffect(()=>{let live=true;setAnchors([]);if(target)api.get(target,{max_body_bytes:2*1024*1024}).then(n=>{if(live&&new TextEncoder().encode(n.content).length<=2*1024*1024)setAnchors(noteAnchors(n.content,n.content_format).map(a=>a.kind==='heading'?a.text:`^${a.id}`));}).catch(()=>{});return()=>{live=false;};},[target]);
   const prepareLinks=async()=>{if(busy)return;setBusy(true);setError('');try{
@@ -77,6 +78,15 @@ export function NoteConnections({onClose}:{onClose:()=>void}) {
     if(!await s.flushNow())throw new Error(t('연결을 저장하지 못했습니다. 편집 내용에서 다시 저장해 주세요.'));
     setAttempt(x=>x+1);
   }catch(e){setError(errorText(e));}finally{setBusy(false);}};
+  if(compact)return <fieldset className="plain-fieldset note-connections-form" disabled={busy||Boolean(s.draft?.readonly)}>
+    <label>{t('연결할 노트')}<select value={target} onChange={e=>{setTarget(e.target.value);setAnchor('');}}><option value="">{t('노트 선택')}</option>{suggestions.filter(n=>n.id!==id).map(n=><option key={n.id} value={n.id}>{n.title||t('제목 없음')}</option>)}</select></label>
+    <label>{t('제목 또는 문단')}<select aria-label={t('연결할 제목 또는 문단')} value={anchor} onChange={e=>setAnchor(e.target.value)}><option value="">{t('노트 전체')}</option>{anchors.map((a,i)=><option key={`${a}-${i}`} value={a}>{a}</option>)}</select></label>
+    <label>{t('링크 표시 이름')}<input value={label} onChange={e=>setLabel(e.target.value)}/></label>
+    <button type="button" className="btn" aria-pressed={embed} onClick={()=>setEmbed(v=>!v)}>{t('내용 가져와 보기')}</button>
+    {(s.note?.content_format??"html")==="html"&&<button type="button" className="btn" onClick={()=>void prepareLinks()}>{t("이 노트의 문단 링크 준비")}</button>}
+    <button type="button" className="btn btn-primary" disabled={!target} onClick={()=>void append()}>{t('노트 끝에 연결 추가')}</button>
+    {error&&<p role="alert">{error}</p>}
+  </fieldset>;
   return <section><h3>{t('노트 연결과 내용 재사용')}</h3><p>{t('참조한 원본의 최신 내용을 아래에서 확인합니다. 중첩 참조는 펼치지 않습니다.')}</p>
     <fieldset className="plain-fieldset" disabled={busy||Boolean(s.draft?.readonly)}><div className="knowledge-row">
       <select aria-label={t('연결할 노트')} value={target} onChange={e=>{setTarget(e.target.value);setAnchor('');}}><option value="">{t('노트 선택')}</option>{suggestions.map(n=><option key={n.id} value={n.id}>{n.title||t('제목 없음')}</option>)}</select>
