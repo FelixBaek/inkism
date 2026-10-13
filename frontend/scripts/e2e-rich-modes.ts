@@ -1,6 +1,6 @@
 // Production React + actual Go/Rust runtime, using a dedicated synthetic DB.
 // Run against the current built preview; this does not verify native Windows IME.
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48285';
 const rpc=async(op,args={})=>{
@@ -73,7 +73,7 @@ try{
  await page.route('**/api/rpc',route=>route.request().postDataJSON().op==='save'?route.fulfill({json:{ok:false,error:'synthetic copy failure'}}):route.continue());
  dialog=await startCopy();await dialog.getByRole('button',{name:'사본 만들기',exact:true}).click();
  await page.getByRole('dialog',{name:'서식 사본 만들기 실패',exact:true}).waitFor();assert.deepEqual(await rpc('get',{id:unknown.id}),unknown);
- await page.getByRole('dialog',{name:'서식 사본 만들기 실패',exact:true}).getByRole('button').click();await page.unroute('**/api/rpc');
+ await page.getByRole('dialog',{name:'서식 사본 만들기 실패',exact:true}).getByRole('button',{name:'확인',exact:true}).click();await page.unroute('**/api/rpc');
  dialog=await startCopy();await dialog.getByRole('button',{name:'사본 만들기',exact:true}).click();
  await until(async()=>await page.getByRole('textbox',{name:'노트 제목',exact:true}).inputValue()===unknown.title+' (서식 편집 사본)','copy opened');
  await rich().waitFor();assert.equal(await rich().getAttribute('contenteditable'),'true');
@@ -102,7 +102,7 @@ try{
  dialog=await startCopy();await dialog.getByRole('button',{name:'사본 만들기',exact:true}).click();await seen;
  await page.getByRole('textbox',{name:'노트 제목',exact:true}).fill('변경된 원본 제목');release();
  await page.getByRole('dialog',{name:'서식 사본 만들기 실패',exact:true}).waitFor();assert.equal(copySaves,0);
- await page.getByRole('dialog',{name:'서식 사본 만들기 실패',exact:true}).getByRole('button').click();await page.unroute('**/api/rpc');await page.keyboard.press('Control+s');await saved();
+ await page.getByRole('dialog',{name:'서식 사본 만들기 실패',exact:true}).getByRole('button',{name:'확인',exact:true}).click();await page.unroute('**/api/rpc');await page.keyboard.press('Control+s');await saved();
  assert.equal((await rpc('get',{id:unknown.id})).content,raw);assert.equal((await rpc('get',{id:unknown.id})).title,'변경된 원본 제목');
 
  // New notes are genuinely rich, and their canonical HTML survives immediate save.

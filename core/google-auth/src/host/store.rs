@@ -78,9 +78,21 @@ impl FileStore {
         }
     }
 
+    /// Display-only masked address, stored next to the binding (`<file>.hint`).
+    /// A separate file keeps the binding format readable by older versions.
+    fn hint_path(&self) -> PathBuf {
+        let mut name = self.path.file_name().unwrap_or_default().to_owned();
+        name.push(".hint");
+        self.path.with_file_name(name)
+    }
+
     /// Returns the plaintext of an existing file; `Ok(None)` when absent.
     fn load_plain(&self, limit: u64) -> Result<Option<Zeroizing<Vec<u8>>>, HostError> {
-        let raw = match bounded_file(&self.path, limit) {
+        self.load_plain_at(&self.path, limit)
+    }
+
+    fn load_plain_at(&self, path: &Path, limit: u64) -> Result<Option<Zeroizing<Vec<u8>>>, HostError> {
+        let raw = match bounded_file(path, limit) {
             Err(HostError::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
             other => other?,
         };
@@ -116,8 +128,12 @@ impl FileStore {
     }
 
     fn save_protected(&self, raw: &[u8]) -> Result<(), HostError> {
+        self.save_protected_at(&self.path, raw)
+    }
+
+    fn save_protected_at(&self, path: &Path, raw: &[u8]) -> Result<(), HostError> {
         let protect = self.protect.as_ref().ok_or(HostError::Unavailable)?;
-        match fs::symlink_metadata(&self.path) {
+        match fs::symlink_metadata(path) {
             Err(e) if e.kind() == io::ErrorKind::NotFound => {}
             _ => {
                 return Err(HostError::Failed(
@@ -126,7 +142,7 @@ impl FileStore {
             }
         }
         let encrypted = protect(raw).map_err(|_| HostError::Policy)?;
-        if let Some(dir) = self.path.parent() {
+        if let Some(dir) = path.parent() {
             create_private_dir(dir)?;
         }
         // Exclusive creation never replaces an existing account. Interrupted
@@ -135,7 +151,7 @@ impl FileStore {
         options.write(true).create_new(true);
         #[cfg(unix)]
         std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-        let mut file = options.open(&self.path)?;
+        let mut file = options.open(path)?;
         file.write_all(&encrypted)?;
         file.sync_all()?;
         Ok(())
@@ -164,6 +180,43 @@ impl Store for FileStore {
     fn save(&self, identity: &Identity) -> Result<(), HostError> {
         let raw = Zeroizing::new(serde_json::to_vec(identity).map_err(|_| HostError::Policy)?);
         self.save_protected(&raw)
+    }
+
+    fn load_hint(&self) -> String {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Hint {
+            email_hint: String,
+        }
+        match self.load_plain_at(&self.hint_path(), 1024) {
+            Ok(Some(plain)) => strict_json::<Hint>(&plain)
+                .map(|h| h.email_hint)
+                .filter(|h| super::valid_hint(h))
+                .unwrap_or_default(),
+            _ => String::new(),
+        }
+    }
+
+    fn save_hint(&self, hint: &str) -> Result<(), HostError> {
+        if !super::valid_hint(hint) {
+            return Err(HostError::Policy);
+        }
+        let path = self.hint_path();
+        remove_if_present(&path)?;
+        let raw = serde_json::to_vec(&serde_json::json!({ "email_hint": hint })).map_err(|_| HostError::Policy)?;
+        self.save_protected_at(&path, &raw)
+    }
+
+    fn remove(&self) -> Result<(), HostError> {
+        remove_if_present(&self.hint_path())?;
+        remove_if_present(&self.path)
+    }
+}
+
+fn remove_if_present(path: &Path) -> Result<(), HostError> {
+    match fs::remove_file(path) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(HostError::Io(e)),
+        _ => Ok(()),
     }
 }
 

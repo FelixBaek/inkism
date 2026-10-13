@@ -1,4 +1,5 @@
 import type {Note} from '../types';
+import {hasRpcDiagnostic} from '../api';
 import {parseReference} from './knowledge';
 import {markdownToHTML} from './markdown';
 import {sourcePosition} from './search-document-core';
@@ -32,7 +33,7 @@ export function backlinkLocation(note:Note,target:string,names:string[]):Backlin
 export async function readBacklinkLocation(id:string,target:string,names:string[],signal:AbortSignal):Promise<BacklinkLocation|undefined>{
  const {rpc}=await import('../api');
  try{const note=await rpc<Note>('get',{id,max_body_bytes:2*1024*1024},{signal});if(('locked'in note&&note.locked)||note.trashed)return;return backlinkLocation(note,target,names);}
- catch(error){if(signal.aborted||!(error instanceof Error)||!error.message.includes('note body exceeds read budget'))throw error;}
+ catch(error){if(signal.aborted||!hasRpcDiagnostic(error,'body_read_budget'))throw error;}
  const info=await rpc<import('../types').DocumentInfo>('document_info',{id},{signal});
  if(('locked'in info.summary&&info.summary.locked)||info.summary.trashed)return;
  if(info.summary.content_format==='markdown'){const result=await rpc<{ready:boolean;item:{byte_offset:number;byte_end:number;label:string}|null}>('backlink_location',{id,target,revision:info.revision},{signal});if(!result.ready||!result.item)return;const item=result.item;return {revision:info.revision,context:item.label,anchor:{kind:'block',text:item.label,index:0,level:0,sourceOffset:0,byteOffset:item.byte_offset,byteEnd:item.byte_end,searchText:item.label}};}

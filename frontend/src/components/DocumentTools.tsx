@@ -19,7 +19,8 @@ export function useDocumentMetadata(id:string|undefined,isNew:boolean) {
  },[id,isNew]);
  return {metadata,items,error,truncated,setError};
 }
-export function DocumentTools({data}:{data:ReturnType<typeof useDocumentMetadata>}) {
+/** 문서 설정 판 (Figma 30): 편집기 도구줄의 [문서 설정]이 open을 바꾼다. */
+export function DocumentTools({data,open:panelOpen,onOpenChange}:{data:ReturnType<typeof useDocumentMetadata>;open:boolean;onOpenChange:(open:boolean)=>void}) {
  const s=useStore(),id=s.draft!.id;
  const [style,setStyle]=useState<DocumentSettings>({}),[busy,setBusy]=useState(false),[title,setTitle]=useState(''),[childId,setChildId]=useState(()=>crypto.randomUUID()),[saved,setSaved]=useState(false);
  useEffect(()=>{setStyle(data.metadata?.document??{});},[data.metadata]);
@@ -65,28 +66,37 @@ export function DocumentTools({data}:{data:ReturnType<typeof useDocumentMetadata
  const children=data.items.filter(n=>n.document?.parent_id===id).sort((a,b)=>a.title.localeCompare(b.title));
  return <div className="document-tools">
   {ancestors.length>0&&<nav className="document-breadcrumbs" aria-label={t('상위 페이지 경로')}>{ancestors.map(n=><button type="button" key={n.id} onClick={()=>void open(n.id)}>{n.title||t('제목 없음')} /</button>)}</nav>}
-  <details><summary>{t('문서 구성과 꾸미기')}</summary>
+  <details id="document-settings-panel" open={panelOpen} onToggle={e=>{if(e.currentTarget.open!==panelOpen)onOpenChange(e.currentTarget.open);}}><summary tabIndex={-1} aria-hidden="true">{t('문서 설정')}</summary>
    {data.error&&<p role="alert">{data.error}</p>}
    <fieldset className="plain-fieldset" disabled={blocked}>
-    <div className="document-controls" aria-label={t('문서 스타일 보관함')}>
-     <select aria-label={t('저장한 문서 스타일')} value={presetId} onChange={e=>{setPresetId(e.target.value);setPresetName(config?.style_presets?.find(p=>p.id===e.target.value)?.name??'');}}><option value="">{t('새 문서 스타일')}</option>{config?.style_presets?.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
-     <input aria-label={t('문서 스타일 이름')} placeholder={t('문서 스타일 이름')} value={presetName} maxLength={128} onChange={e=>setPresetName(e.target.value)}/>
-     <button type="button" className="btn" disabled={!presetId} onClick={()=>{const preset=config?.style_presets?.find(p=>p.id===presetId);if(preset){setStyle({...preset.style,parent_id:style.parent_id});setSaved(false);}}}>{t('스타일 불러오기')}</button>
-     <button type="button" className="btn" disabled={!config||!presetName.trim()} onClick={()=>void presetAction('save')}>{t('현재 스타일 저장')}</button>
-     <button type="button" className="btn" disabled={!presetId} onClick={()=>void presetAction('remove')}>{t('문서 스타일 삭제')}</button>
-     <button type="button" className="btn" onClick={()=>void knowledge.settings().then(setConfig).catch(e=>data.setError(errorText(e)))}>{t('새로고침')}</button>
-     <span>{t('불러온 스타일은 문서 설정 저장으로 적용합니다.')}</span>
-    </div>
-    <div className="document-controls">
-     <label>{t('상위 페이지')}<select aria-label={t('상위 페이지')} value={style.parent_id??''} onChange={e=>change({parent_id:e.target.value||null})}><option value="">{t('상위 페이지 없음')}</option>{style.parent_id&&!data.items.some(n=>n.id===style.parent_id)&&<option value={style.parent_id}>{t('사용할 수 없는 노트')}</option>}{data.items.filter(n=>eligible(n.id)).map(n=><option key={n.id} value={n.id}>{n.title||t('제목 없음')}</option>)}</select></label>
+    <section className="document-controls" aria-label={t('문서 스타일')}>
+     <h3>{t('문서 스타일')}</h3>
      <label>{t('문서 너비')}<select aria-label={t('문서 너비')} value={style.width??'standard'} onChange={e=>change({width:e.target.value as DocumentSettings['width']})}><option value="standard">{t('기본')}</option><option value="wide">{t('넓게')}</option><option value="full">{t('전체 너비')}</option></select></label>
      <label>{t('문단 간격')}<select aria-label={t('문단 간격')} value={style.spacing??'normal'} onChange={e=>change({spacing:e.target.value as DocumentSettings['spacing']})}><option value="compact">{t('좁게')}</option><option value="normal">{t('기본')}</option><option value="relaxed">{t('여유롭게')}</option></select></label>
      <label>{t('문서 배경')}<select aria-label={t('문서 배경')} value={style.tone??'default'} onChange={e=>change({tone:e.target.value as DocumentSettings['tone']})}><option value="default">{t('기본')}</option><option value="paper">{t('종이')}</option><option value="soft">{t('부드럽게')}</option></select></label>
      <label>{t('카드 크기')}<select aria-label={t('카드 크기')} value={style.card_size??'medium'} onChange={e=>change({card_size:e.target.value as DocumentSettings['card_size']})}><option value="small">{t('작게')}</option><option value="medium">{t('기본')}</option><option value="large">{t('크게')}</option></select></label>
      <label><input type="checkbox" checked={style.card_shadow??false} onChange={e=>change({card_shadow:e.target.checked})}/>{t('카드 그림자')}</label>
-     <button type="button" className="btn" onClick={()=>void save()}>{t('문서 설정 저장')}</button>{saved&&<output>{t('저장됨')}</output>}
+    </section>
+    <div className="document-controls" aria-label={t('문서 스타일 보관함')}>
+     <label>{t('저장한 문서 스타일')}<select aria-label={t('저장한 문서 스타일')} value={presetId} onChange={e=>{setPresetId(e.target.value);setPresetName(config?.style_presets?.find(p=>p.id===e.target.value)?.name??'');}}><option value="">{t('새 문서 스타일')}</option>{config?.style_presets?.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+     <input aria-label={t('문서 스타일 이름')} placeholder={t('문서 스타일 이름')} value={presetName} maxLength={128} onChange={e=>setPresetName(e.target.value)}/>
+     <div className="document-control-buttons">
+      <button type="button" className="btn" disabled={!presetId} onClick={()=>{const preset=config?.style_presets?.find(p=>p.id===presetId);if(preset){setStyle({...preset.style,parent_id:style.parent_id});setSaved(false);}}}>{t('스타일 불러오기')}</button>
+      <button type="button" className="btn" disabled={!config||!presetName.trim()} onClick={()=>void presetAction('save')}>{t('현재 스타일 저장')}</button>
+      <button type="button" className="btn document-danger" disabled={!presetId} onClick={()=>void presetAction('remove')}>{t('문서 스타일 삭제')}</button>
+      <button type="button" className="btn" onClick={()=>void knowledge.settings().then(setConfig).catch(e=>data.setError(errorText(e)))}>{t('새로고침')}</button>
+     </div>
+     <span>{t('불러온 스타일은 문서 설정 저장으로 적용합니다.')}</span>
     </div>
-    <div className="document-controls"><input aria-label={t('하위 페이지 제목')} placeholder={t('하위 페이지 제목')} value={title} maxLength={256} onChange={e=>setTitle(e.target.value)}/><button type="button" className="btn" disabled={!title.trim()} onClick={()=>void create()}>{t('하위 페이지 만들기')}</button></div>
+    <section className="document-controls" aria-label={t('페이지 관계')}>
+     <h3>{t('페이지 관계')}</h3>
+     <label>{t('상위 페이지')}<select aria-label={t('상위 페이지')} value={style.parent_id??''} onChange={e=>change({parent_id:e.target.value||null})}><option value="">{t('상위 페이지 없음')}</option>{style.parent_id&&!data.items.some(n=>n.id===style.parent_id)&&<option value={style.parent_id}>{t('사용할 수 없는 노트')}</option>}{data.items.filter(n=>eligible(n.id)).map(n=><option key={n.id} value={n.id}>{n.title||t('제목 없음')}</option>)}</select></label>
+     <label>{t('하위 페이지 제목')}<input aria-label={t('하위 페이지 제목')} placeholder={t('하위 페이지 제목')} value={title} maxLength={256} onChange={e=>setTitle(e.target.value)}/></label>
+     <button type="button" className="btn" disabled={!title.trim()} onClick={()=>void create()}>{t('하위 페이지 만들기')}</button>
+    </section>
+    <div className="document-controls document-save">
+     <button type="button" className="btn btn-primary" onClick={()=>void save()}>{t('문서 설정 저장')}</button>{saved&&<output>{t('저장됨')}</output>}
+    </div>
    </fieldset>
    <p>{t('문서 스타일은 노트 설정으로 저장됩니다. Markdown 파일에는 포함되지 않습니다.')}</p>
    {data.truncated&&<p>{t('큰 보관함의 일부만 불러왔습니다.')}</p>}

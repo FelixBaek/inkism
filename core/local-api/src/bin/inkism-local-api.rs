@@ -502,7 +502,7 @@ mod tests {
             let r = recovered.expect("recovered note");
             assert!(
                 r["id"] != manifest["source_id"]
-                    && r["content"].as_str().map(strip_block_ids) == manifest["expectedContent"].as_str().map(strip_block_ids)
+                    && r["content"] == manifest["expectedContent"]
                     && r["content_format"] == manifest["format"]
                     && r["notebook_id"] == manifest["notebook_id"]
                     && r["tags"] == manifest["tags"],
@@ -515,20 +515,6 @@ mod tests {
             );
         }
         notes
-    }
-
-    /// Editing a block gives it a random `ink-block-` id, so the paged scenario
-    /// compares recovered bodies without those ids.
-    fn strip_block_ids(html: &str) -> String {
-        let mut out = String::with_capacity(html.len());
-        let mut rest = html;
-        while let Some(i) = rest.find(" id=\"ink-block-") {
-            out.push_str(&rest[..i]);
-            let tail = &rest[i + 5..];
-            rest = tail.find('"').map_or("", |end| &tail[end + 1..]);
-        }
-        out.push_str(rest);
-        out
     }
 
     /// Port of `crash_draft_application_test.go`: kills the renderer and the

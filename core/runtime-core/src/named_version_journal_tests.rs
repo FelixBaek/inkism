@@ -177,3 +177,48 @@ fn unknown_entity_kinds_are_not_decodable() {
     let named = json!({"version":1,"entity":{"kind":"namedversion","id":"x","data":{},"deleted":false},"device_id":"d","counter":1,"ts":1,"vclock":{"d":1}});
     assert_eq!(sync_core::ChangePayload::decode(named.to_string().as_bytes()).unwrap().entity.kind, EntityKind::NamedVersion);
 }
+
+#[test]
+fn single_row_vault_apply_keeps_the_per_note_limits() {
+    let dir = tempfile::tempdir().unwrap();
+    let (a, b) = (open(&dir, "a.db"), open(&dir, "b.db"));
+    let n = ok(a.execute(json!({"op":"save","note":{"title":"t","content":"<p>x</p>","text":"x"}})));
+    let note = crate::host::build_raw_entity(a.connection(), "note", n["id"].as_str().unwrap()).unwrap();
+    crate::host::apply_one(b.connection(), &incoming("n1", note)).unwrap();
+    let vault = |label: &str, plain_bytes: u64| {
+        let id = inkism_engine::ids::new_id();
+        let mut data = sealed(label, 5);
+        data["id"] = json!(id);
+        data["note_id"] = n["id"].clone();
+        data["plain_bytes"] = json!(plain_bytes);
+        Entity::new(EntityKind::NamedVersion, &id, data)
+    };
+    let count = |c: &rusqlite::Connection| -> i64 { c.query_row("SELECT count(*) FROM encrypted_named_versions", [], |r| r.get(0)).unwrap() };
+    // Declared plaintext over 64 MiB in total is refused and rolled back.
+    crate::host::apply_one(b.connection(), &incoming("big", vault("big", 60 << 20))).unwrap();
+    assert!(crate::host::apply_one(b.connection(), &incoming("over", vault("over", 5 << 20))).is_err());
+    assert_eq!(count(b.connection()), 1);
+    for i in 1..100 {
+        crate::host::apply_one(b.connection(), &incoming(&format!("e{i}"), vault(&format!("v{i}"), 1))).unwrap();
+    }
+    // The 101st snapshot of one note is refused; nothing is stored.
+    assert!(crate::host::apply_one(b.connection(), &incoming("e101", vault("v101", 1))).is_err());
+    assert_eq!(count(b.connection()), 100);
+    // A rename of a held snapshot still applies at the cap.
+    let held: String = b.connection().query_row("SELECT id FROM encrypted_named_versions WHERE json_extract(data,'$.label')='v1'", [], |r| r.get(0)).unwrap();
+    let mut renamed = crate::host::build_raw_entity(b.connection(), "namedversion", &held).unwrap();
+    renamed.data["label"] = json!("renamed");
+    crate::host::apply_one(b.connection(), &incoming("rename", renamed)).unwrap();
+    let label: String = b.connection().query_row("SELECT json_extract(data,'$.label') FROM encrypted_named_versions WHERE id=?1", [&held], |r| r.get(0)).unwrap();
+    assert_eq!(label, "renamed");
+    // A snapshot of another note cannot be claimed through a single row.
+    let other = ok(b.execute(json!({"op":"save","note":{"title":"o","content":"o"}})));
+    let mut moved = crate::host::build_raw_entity(b.connection(), "namedversion", &held).unwrap();
+    moved.data["note_id"] = other["id"].clone();
+    assert!(crate::host::apply_one(b.connection(), &incoming("move", moved)).is_err());
+    let mut row = crate::host::build_raw_entity(b.connection(), "namedversion", &held).unwrap().data;
+    for key in ["note_id", "scope_note"] {
+        row.as_object_mut().unwrap().remove(key);
+    }
+    assert!(inkism_engine::encrypted_versions::upsert(b.connection(), other["id"].as_str().unwrap(), &row).is_err());
+}

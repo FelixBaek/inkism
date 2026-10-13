@@ -37,7 +37,7 @@ root = pathlib.Path(out)
   ensure_ascii=False, indent=2) + '\n')
 PY
 cargo run --locked --manifest-path core/app-update/Cargo.toml --bin inkism-update-sign -- sign "$key" "$out/latest.json"
-cargo run --locked --manifest-path core/app-update/Cargo.toml --bin inkism-update-sign -- verify desktop/internal/appupdate/pubkey.txt "$out/latest.json"
+cargo run --locked --manifest-path core/app-update/Cargo.toml --bin inkism-update-sign -- verify core/app-update/pubkey.txt "$out/latest.json"
 if [[ -z "$dest" ]]; then
   echo "built $out (INKISM_UPDATE_DIR unset; not published)"; exit 0
 fi

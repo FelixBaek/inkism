@@ -1,5 +1,6 @@
+import { libraryTool } from "./library-tools.ts";
 import assert from "node:assert/strict";
-import { chromium } from "playwright-core";
+import { chromium } from './browser-env.ts';
 
 const base = process.env.INKISM_URL || "http://127.0.0.1:49323";
 const rpc = async (op: string, args: Record<string, unknown> = {}) => {
@@ -16,12 +17,13 @@ try {
   const source = await rpc("save", { note: { title: `Merge source ${stamp}`, content: "source body", content_format: "text" } });
   const target = await rpc("save", { note: { title: `Merge target ${stamp}`, content: "target body", content_format: "text" } });
   await rpc("workspace_set", { ids: [source.id, target.id], active: source.id, locations: {} });
-  await page.goto(base); await page.locator(".writing-tools").waitFor();
-  await page.getByRole("button", { name: "노트 합치기", exact: true }).click();
+  await page.goto(base); await page.locator(".writing-tools").waitFor({ state: "attached" });
+  await libraryTool(page, "노트 합치기");
   const dialog = page.getByRole("dialog", { name: "노트 합치기", exact: true }); await dialog.waitFor();
   await dialog.locator("label").filter({ hasText: "원본 노트" }).locator("select").selectOption(source.id);
   await dialog.locator("label").filter({ hasText: "대상 노트" }).locator("select").selectOption(target.id);
-  await dialog.getByRole("button", { name: "합치고 원본을 휴지통으로 이동", exact: true }).click();
+  await dialog.getByRole("button", { name: "합치기 미리보기", exact: true }).click();
+  await dialog.getByRole("button", { name: "미리보기대로 합치기 적용", exact: true }).click();
   for (let i = 0; i < 100; i++) { const note = await rpc("get", { id: target.id }); if (note.content.includes("source body")) break; await page.waitForTimeout(80); }
   if (!(await rpc("get", { id: target.id })).content.includes("source body")) throw new Error(`merge UI did not commit: ${await dialog.textContent()}`);
   const merged = await rpc("get", { id: target.id }); const trashed = await rpc("get", { id: source.id });

@@ -1,4 +1,4 @@
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import assert from 'node:assert/strict';
 const base=process.env.INKISM_URL||'http://127.0.0.1:48139';
 const rpc=async(op,args={})=>{const v=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
@@ -15,7 +15,7 @@ const edit=async(pane,text)=>{if(pane===left)await source();await pane.locator('
 const waitContent=async(id,expected)=>{for(let i=0;i<60;i++){if((await rpc('get',{id})).content===expected)return;await page.waitForTimeout(100);}assert.equal((await rpc('get',{id})).content,expected);};
 const durable=async(id,revision?)=>{for(let i=0;i<100;i++){const expected=revision??(await rpc('get',{id})).revision;if((await rpc('editor_history_get')).some(h=>h.id===id&&h.kind==='split-source'&&h.revision===expected))return;await page.waitForTimeout(100);}throw new Error('split history persistence timeout');};
 try{
- await page.addInitScript(()=>{if(window.top!==window||!/^https?:$/.test(location.protocol))return;localStorage.setItem('inkism.lang','ko');if(localStorage.getItem('inkism.inspector')===null)localStorage.setItem('inkism.inspector','false');});await page.goto(base);await page.getByLabel('노트 제목',{exact:true}).waitFor();if(await page.getByRole('button',{name:'대용량 원문',exact:true}).count())await page.getByRole('button',{name:'대용량 원문',exact:true}).click();await right.getByLabel('분할 노트',{exact:true}).selectOption(b.id);await right.getByRole('heading',{name:b.title}).waitFor();
+ await page.addInitScript(()=>{if(window.top!==window||!/^https?:$/.test(location.protocol))return;localStorage.setItem('inkism.lang','ko');if(localStorage.getItem('inkism.split.mode')===null)localStorage.setItem('inkism.split.mode','source');if(localStorage.getItem('inkism.inspector')===null)localStorage.setItem('inkism.inspector','false');});await page.goto(base);await page.getByLabel('노트 제목',{exact:true}).waitFor();if(await page.getByRole('button',{name:'대용량 원문',exact:true}).count())await page.getByRole('button',{name:'대용량 원문',exact:true}).click();await right.getByLabel('분할 노트',{exact:true}).selectOption(b.id);await right.getByRole('heading',{name:b.title}).waitFor();
  await edit(right,' saved');await page.keyboard.press('Control+s');await waitContent(b.id,'<p>right</p> saved');
  await edit(left,' saved');await page.keyboard.press('Control+s');await waitContent(a.id,'<p>left</p> saved');
  await durable(b.id);await page.reload();await right.getByRole('heading',{name:b.title}).waitFor();assert.equal(await right.locator('.cm-content').innerText(),'<p>right</p> saved');

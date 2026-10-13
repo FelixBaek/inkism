@@ -6,7 +6,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 const root = path.resolve(import.meta.dirname, '../..');
-const tests=['rich-modes','window-edge-input','restart-rich-history','rich-compat','source-first','format-race','inspector','inspector-split','preview-export','markdown-export','editor-settings','plugins','knowledge','document-tools','table-quality','mermaid-tools','model-loading','media-recovery','waveform-budget','collection-management','block-links','writing-tools','merge-preview','html-outline','markdown-outline','workspace-tools','note-preview','web-reader','web-viewer','mobile-dialogs','backlink-context','backlinks-paged','connections-paged','reference-bounded','canvas-attachments','canvas-groups','whiteboard','math-diagnostics','global-search-navigation','global-search-paged','discovery-commands','command-history','footnote-navigation','term-definition','presentation','presentation-export','settings-resources','executable-plugin','portable-library','portable-sync','portable-sync-ui','sync-held-previews','security-boundary','custom-theme','tabs-layout','reminders','reminder-actions','encrypted-copy-ui','encrypted-versions','named-versions','named-restore-race','metadata','tags','tags-preview','notebook-delete','source-attachments','source-pane-focus','split','split-search','restart-history','history-errors','google-security-ui'];
+const tests=['selection-tag-input','rich-modes','window-edge-input','restart-rich-history','rich-compat','source-first','format-race','inspector','inspector-split','preview-export','markdown-export','editor-settings','plugins','knowledge','document-tools','table-quality','mermaid-tools','model-loading','media-recovery','waveform-budget','collection-management','block-links','writing-tools','merge-preview','html-outline','markdown-outline','workspace-tools','note-preview','web-reader','web-viewer','mobile-dialogs','backlink-context','backlinks-paged','connections-paged','reference-bounded','canvas-attachments','canvas-groups','whiteboard','math-diagnostics','global-search-navigation','global-search-paged','discovery-commands','command-history','footnote-navigation','term-definition','presentation','presentation-export','settings-resources','executable-plugin','portable-library','portable-sync','portable-sync-ui','sync-held-previews','security-boundary','custom-theme','tabs-layout','reminders','reminder-actions','encrypted-copy-ui','encrypted-versions','named-versions','named-restore-race','metadata','tags','tags-preview','notebook-delete','source-attachments','source-pane-focus','split','split-search','restart-history','history-errors','google-security-ui'];
 const forbiddenPorts = new Set([47831, 47851, 47861, 47871, 47881]);
 async function freePort() {
   for (;;) {
@@ -27,7 +27,9 @@ for (const test of tests) {
   const suffix = process.platform === 'win32' ? '.exe' : '';
   const preview = process.env.INKISM_TEST_PREVIEW || path.join(root, 'core/local-api/target/release/inkism-local-api' + suffix);
   const engine = process.env.INKISM_TEST_ENGINE || path.join(root, 'core/runtime-core/target/release/inkism-engine' + suffix);
-  const server = spawn(preview, ['--listen', `127.0.0.1:${port}`, '--db', path.join(temporary, 'notes.db'), '--engine', engine], {cwd: root, stdio: ['ignore', 'ignore', 'pipe']});
+  // INKISM_TEST_ASSETS: a fresh frontend build to serve instead of frontend/dist.
+  const assets = process.env.INKISM_TEST_ASSETS ? ['--assets', process.env.INKISM_TEST_ASSETS] : [];
+  const server = spawn(preview, ['--listen', `127.0.0.1:${port}`, '--db', path.join(temporary, 'notes.db'), '--engine', engine, ...assets], {cwd: root, stdio: ['ignore', 'ignore', 'pipe']});
   let serverLog = '';
   server.stderr.on('data', data => { serverLog += data; });
   const stopped = new Promise<void>(resolve => { server.once('close', () => resolve()); });

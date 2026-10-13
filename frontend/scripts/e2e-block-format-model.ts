@@ -7,7 +7,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createServer} from 'vite';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 
 assert.ok(process.env.INKISM_SEGMENT_ENGINE,'current Rust executable required');
 const dir=await mkdtemp(join(tmpdir(),'inkism-selection-segments-'));
@@ -46,6 +46,19 @@ try{
   // @ts-expect-error -- served by Vite in the browser
   const {segmentPositionMap}=await import('/src/lib/segment-selection.ts');
   const enc=new TextEncoder(),dec=new TextDecoder();
+  const generated=/ id="ink-block-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"/g;
+  const withoutIds=(html:string)=>html.replace(generated,'');
+  const ids=(html:string)=>Array.from(html.matchAll(generated),m=>m[0]);
+  // A type/level change edits the text block and each containing block. A
+  // repeated command on the same format is a no-op, unlike Tiptap's extra
+  // attribute-reset transaction; it must leave an unedited block without id.
+  const changedIdentities=(before:any,after:any):{changed:boolean;count:number}=>{
+    const attributes=(node:any)=>{const {id,...attrs}=node.attrs??{};return attrs;};
+    const children=(after.content??[]).map((node:any,index:number)=>changedIdentities(before?.content?.[index],node));
+    const changed=!before || before.type!==after.type || JSON.stringify(attributes(before))!==JSON.stringify(attributes(after)) ||
+      children.some((child:any)=>child.changed) || (before.content??[]).length!==(after.content??[]).length;
+    return {changed,count:children.reduce((sum:number,child:any)=>sum+child.count,0)+(changed&&Object.prototype.hasOwnProperty.call(after.attrs??{},'id')?1:0)};
+  };
   const eq=(a,b,label)=>{if(a!==b)throw Error(label+': '+String(a).slice(0,160)+' != '+String(b).slice(0,160));};
   const ok=(value,label)=>{if(!value)throw Error(label);};
   const rejects=async(fn,label)=>{try{await fn();}catch{return;}throw Error('accepted '+label);};
@@ -83,15 +96,18 @@ try{
     }
     const changed=await m.changeSelectionAsync(p,operation);
     // Independent native Tiptap command on the complete test-only document.
-    const native=new Editor({extensions:contentExtensions({trailingNode:false}),content:whole,parseOptions:{preserveWhitespace:'full'}});
+    const native=new Editor({extensions:contentExtensions({trailingNode:false,automaticIds:false}),content:whole,parseOptions:{preserveWhitespace:'full'}});
     const map=segmentPositionMap({ordinal:0,byte_offset:0,source:whole,start_context:[],end_context:[]},native.schema);
     const from=map.position(a.byte,a.within),to=map.position(b.byte,b.within);
     native.view.dispatch(native.state.tr.setSelection(TextSelection.between(native.state.doc.resolve(reverse?to:from),native.state.doc.resolve(reverse?from:to))));
+    const beforeNative=native.getJSON();
     if(operation.type==='paragraph')native.commands.setParagraph();
     else if(operation.toggle)native.commands.toggleHeading({level:operation.level});
     else native.commands.setHeading({level:operation.level});
     const assembled=dec.decode(enc.encode(whole).subarray(0,changed.start))+changed.replacement+dec.decode(enc.encode(whole).subarray(changed.start+enc.encode(changed.expected).length));
-    eq(canonicalRichHTML(assembled),native.getHTML(),name+' native '+operation.type+' reverse='+reverse);
+    eq(withoutIds(canonicalRichHTML(assembled)),withoutIds(native.getHTML()),name+' native '+operation.type+' reverse='+reverse);
+    eq(ids(assembled).length,changedIdentities(beforeNative,native.getJSON()).count,name+' changed block identity count');
+    eq(new Set(ids(assembled)).size,ids(assembled).length,name+' unique identities');
     ok(assembled.startsWith(prefix)&&assembled.endsWith(suffix),name+' exact outside source');
     ok(enc.encode(changed.previewWindow.raw).length<=32768,name+' bounded preview');
     native.destroy();cases++;
@@ -104,7 +120,8 @@ try{
     const full=await m.prepareSelection(short,source,{completeBlocks:true});
     const result=await m.changeSelectionAsync(full,operations[0]);
     eq(result.expected,body,'complete long paragraph read');
-    eq(result.replacement,body.replace(/^<p>/,'<h1>').replace(/<\/p>$/,'</h1>'),'entire paragraph heading tags');
+    eq(withoutIds(result.replacement),body.replace(/^<p>/,'<h1>').replace(/<\/p>$/,'</h1>'),'entire paragraph heading tags');
+    eq(ids(result.replacement).length,1,'one edited giant paragraph identity');
     let stopped=false;const cancel={...source,check:()=>{if(stopped)throw Error('cancelled');},segments:async(...args: any[])=>{const p=await (source as any).segments(...args);stopped=true;return p;}};
     await rejects(()=>m.prepareSelection(short,cancel,{completeBlocks:true}),'cancelled complete-block read');
     cases+=3;

@@ -1,2 +1,12 @@
-.global-search-panel,.bookmark-panel{padding:14px;overflow:auto}.global-search-form{display:flex;gap:8px;align-items:center}.global-search-form input[type=search],.global-search-form>input{min-width:0;flex:1}.global-search-results{padding-left:20px}.global-search-results button{display:grid;grid-template-columns:1fr auto;gap:3px 10px;width:100%;padding:9px;border:0;background:transparent;text-align:left;cursor:pointer}.global-search-results button span{grid-column:1/-1;font-size:12px;color:var(--muted,#756b63)}.global-search-results small{color:var(--muted,#756b63)}.search-error{color:#a42519}.search-empty{color:var(--muted,#756b63)}
-.global-search-results mark { color: var(--accent); background: var(--bg-selected); font-weight: 600; }
+.global-search-panel,.bookmark-panel{padding:12px;overflow:auto}
+.global-search-form{display:flex;gap:8px;align-items:center;font-size:var(--fs-small);color:var(--muted)}
+.global-search-form label{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.global-search-form input[type=search],.global-search-form>input{min-width:0;flex:1;min-height:32px;padding:0 14px;border:1px solid var(--border);border-radius:0;background:var(--hover);color:var(--text);font-size:var(--fs-caption)}
+.global-search-form>input:focus{outline:none;border-color:var(--accent-text);box-shadow:inset 0 0 0 1px var(--accent-text)}
+.global-search-results{margin:12px -12px 0;padding:0;list-style:none}
+.global-search-results button{display:grid;grid-template-columns:1fr auto;gap:4px 10px;width:100%;padding:12px;border:0;border-radius:0;background:transparent;color:var(--text);font-size:var(--fs-caption);font-weight:500;text-align:left;cursor:pointer}
+.global-search-results button:hover{background:var(--hover)}
+.global-search-results button span{grid-column:1/-1;font-size:var(--fs-small);font-weight:400;line-height:1.5;color:var(--muted)}
+.global-search-results small{font-size:var(--fs-small);font-weight:400;color:var(--faint)}
+.search-error{color:var(--danger)}.search-empty{color:var(--muted)}
+.global-search-results mark { color: var(--accent-text); background: transparent; font-weight: 500; }

@@ -98,6 +98,7 @@ impl SecurityController for Security {
             setup_required: s.setup_required,
             pending: s.pending,
             recovery_error: s.recovery_error,
+            account_hint: s.account_hint,
         }
     }
     fn login(&self, deadline: Deadline) -> local_api::Result<()> {
@@ -108,6 +109,9 @@ impl SecurityController for Security {
     }
     fn lock(&self) -> local_api::Result<()> {
         Ok(self.0.lock()?)
+    }
+    fn disable(&self, deadline: Deadline) -> local_api::Result<()> {
+        Ok(self.0.disable(&context(deadline))?)
     }
 }
 

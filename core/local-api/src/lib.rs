@@ -1,4 +1,4 @@
-//! Local API for the renderer. Ported from the Go `desktop/internal/bridge`.
+//! Local API for the renderer. Ported from the former Go implementation's bridge.
 //!
 //! `Handler::handle` takes one complete request and returns one complete
 //! response. The Tauri shell calls it from its custom protocol, and the
@@ -96,6 +96,11 @@ pub trait SecurityController: Send + Sync {
     fn login(&self, deadline: Deadline) -> Result<()>;
     fn cancel(&self);
     fn lock(&self) -> Result<()>;
+    /// Turns the lock off after a fresh login proves the same account.
+    /// Hosts without that flow refuse.
+    fn disable(&self, _deadline: Deadline) -> Result<()> {
+        Err("app lock cannot be turned off here".into())
+    }
 }
 
 /// Native capabilities only the shell can provide. Each is optional; `None`

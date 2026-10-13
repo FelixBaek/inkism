@@ -1,10 +1,9 @@
 //! Encrypted sync relay: opaque encrypted sync records, attachment ciphertext,
 //! explicitly published sanitized snapshots and optional owner key recovery.
-//! Wire-compatible with the Go relay in desktop/internal/relay.
+//! Wire-compatible with the original Go relay it replaced.
 mod blobs;
 mod gojson;
 mod publications;
-mod publication_merge;
 mod recovery;
 mod sanitize;
 pub mod store;
@@ -44,7 +43,6 @@ pub struct Relay {
     store: Arc<Mutex<Store>>,
     token: Arc<str>,
     recovery: Option<Arc<recovery::OwnerRecovery>>,
-    presence: Arc<Mutex<Vec<publications::Presence>>>,
 }
 
 impl Relay {
@@ -52,7 +50,7 @@ impl Relay {
         if token.len() < 32 {
             return Err("relay token must be at least 32 characters".into());
         }
-        Ok(Relay { store: Arc::new(Mutex::new(Store::open(path.as_ref())?)), token: token.into(), recovery: None, presence: Arc::new(Mutex::new(Vec::new())) })
+        Ok(Relay { store: Arc::new(Mutex::new(Store::open(path.as_ref())?)), token: token.into(), recovery: None })
     }
 
     /// Runs a store operation off the async runtime under the single DB lock.

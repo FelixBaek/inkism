@@ -8,7 +8,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createServer} from 'vite';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 
 assert.ok(process.env.INKISM_SEGMENT_ENGINE,'current Rust executable required');
 const dir=await mkdtemp(join(tmpdir(),'inkism-selection-segments-'));
@@ -70,14 +70,24 @@ try{
     ok(pieces<=2 && reads<=2 && readBytes<=65536,label+' bounded reads');
     ok(p.byteStart>enc.encode(before).length,label+' starts inside giant block');
     maxBytes=Math.max(maxBytes,readBytes);maxPieces=Math.max(maxPieces,pieces);
-    const assembled=value=>dec.decode(enc.encode(whole).subarray(0,value.start))+value.replacement+dec.decode(enc.encode(whole).subarray(value.start+enc.encode(value.expected).length));
+    const assembled=value=>{
+     let bytes=enc.encode(whole);
+     const edits=[...value.tags,{start:value.start,expected:value.expected,replacement:value.replacement}];
+     for(const edit of edits){eq(dec.decode(bytes.subarray(edit.start,edit.start+enc.encode(edit.expected).length)),edit.expected,'exact splice precondition');bytes=enc.encode(dec.decode(bytes.subarray(0,edit.start))+edit.replacement+dec.decode(bytes.subarray(edit.start+enc.encode(edit.expected).length)));}
+     return dec.decode(bytes);
+    };
     for(const op of [{kind:'delete'},{kind:'text',text:'교체😀'},{kind:'mark',mark:'italic'}]){
      const result=m.changeSelection(p,op);
      const expected=whole.replace(target,(options?.prefix??'')+(op.kind==='delete'?'':op.kind==='text'?op.text:'<em>'+(options?.text??target)+'</em>'));
      // Canonicalizing this giant DOM would defeat the test. Plain paragraph
      // operations must match exact bytes; smaller structured fixtures also
      // compare against the complete standard rich representation.
-     eq(label==='19MiB'?assembled(result):canonicalRichHTML(assembled(result)),label==='19MiB'?expected:canonicalRichHTML(expected),label+' '+op.kind+' outside source');
+     const actual=assembled(result),ids=[...actual.matchAll(/ id="(ink-block-[0-9a-f-]{36})"/g)];
+     eq(ids.length,op.kind==='mark'?0:label==='list'?3:label==='table'?4:1,label+' exactly edited paragraph and block ancestors receive identities');
+     eq(new Set(ids.map(v=>v[1])).size,ids.length,label+' unique edited block identities');
+     const clean=actual.replace(/ id="ink-block-[0-9a-f-]{36}"/g,'');
+     eq(label==='19MiB'?clean:canonicalRichHTML(clean),label==='19MiB'?expected:canonicalRichHTML(expected),label+' '+op.kind+' outside source');
+     ok(actual.startsWith(before)&&actual.endsWith(after),label+' untouched neighbouring blocks never receive identities');
      ok(enc.encode(result.previewWindow.raw).length<=32768,label+' bounded displayed source');
      ok(result.previewWindow.byteStart>=p.byteStart,label+' displayed byte');
      ok(result.selection.type==='text',label+' local caret');

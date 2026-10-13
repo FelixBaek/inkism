@@ -1,6 +1,6 @@
 import { t } from "../i18n";
 import React, { useState } from "react";
-import { SortAscending } from "../icons";
+import { DotsThreeIcon as DotsThree } from "@phosphor-icons/react";
 import { readSort, sortKey, writeSort, type GroupBy, type ListSort, type SortBy } from "../lib/list-sort";
 import type { View } from "../types";
 import { IconButton } from "./IconButton";
@@ -35,15 +35,26 @@ const GROUP_LABELS: [GroupBy, string][] = [
   ["abc", t("가나다")],
 ];
 
-/** 첫 묶음 머리 오른쪽의 정렬·묶기 메뉴. 목록이 스크롤 영역이라 고정 위치 메뉴로 띄운다. */
+/** 목록 정보 줄의 "최근 수정 순" 같은 정렬 이름. */
+export function sortLabel(sort: ListSort): string {
+  const desc = sort.sortDirection === "desc";
+  if (sort.sortBy === "title") return desc ? t("제목 역순") : t("제목 순");
+  if (sort.sortBy === "created_at") return desc ? t("최근 만든 순") : t("먼저 만든 순");
+  return desc ? t("최근 수정 순") : t("오래된 수정 순");
+}
+
+/** 목록 머리 오른쪽의 정렬·묶기(더보기) 메뉴. 목록이 스크롤 영역이라 고정 위치 메뉴로 띄운다. */
 export function GroupHeader({
   title,
   sort,
   onSort,
+  extra = [],
 }: Readonly<{
   title: string;
   sort?: ListSort;
   onSort?: (next: ListSort) => void;
+  /** 정렬 메뉴 뒤에 붙는 보기별 항목(예: 폴더 고치기). */
+  extra?: MenuItemSpec[];
 }>) {
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   const items = (): MenuItemSpec[] => {
@@ -81,6 +92,7 @@ export function GroupHeader({
           onSelect: () => onSort({ ...sort, groupBy: value }),
         })),
       },
+      ...extra.map((item, i) => (i === 0 ? { ...item, separatorBefore: true } : item)),
     ];
   };
   return (
@@ -89,7 +101,6 @@ export function GroupHeader({
       {sort && onSort && (
         <IconButton
           label={t("정렬·묶기")}
-          size="sm"
           aria-haspopup="menu"
           aria-expanded={!!at}
           onClick={(e) => {
@@ -97,7 +108,7 @@ export function GroupHeader({
             setAt({ x: r.right - 220, y: r.bottom + 4 });
           }}
         >
-          <SortAscending size={14} aria-hidden />
+          <DotsThree size={16} aria-hidden />
         </IconButton>
       )}
       {at && <ContextMenu x={at.x} y={at.y} items={items()} label={t("정렬·묶기")} onClose={() => setAt(null)} />}

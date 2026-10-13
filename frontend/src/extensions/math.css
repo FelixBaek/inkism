@@ -7,7 +7,7 @@
 }
 .inkism-math:focus-visible,
 .inkism-math.ProseMirror-selectednode {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 .inkism-math[data-type="block-math"] {

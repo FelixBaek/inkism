@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 const bundle=await build({stdin:{contents:`import {Editor} from '@tiptap/core';import {contentExtensions} from './extensions/content-schema';import {BLOCK_ITEMS,setBlockContext} from './extensions/block-items';window.start=()=>{window.problem='';window.done=false;window.editor?.destroy();window.editor=new Editor({element:document.body.appendChild(document.createElement('div')),extensions:contentExtensions(),content:'<p>Keep original</p>'});setBlockContext(window.editor,{prompt:async()=>null,showError:(_,message)=>{window.problem=message;}});Promise.resolve(BLOCK_ITEMS.find(x=>x.id==='table').run(window.editor,{choice:'csv'})).then(()=>window.done=true).catch(error=>{window.problem="EXCEPTION: "+error.stack;window.done=true;});};`,resolveDir:new URL('../src/',import.meta.url).pathname,loader:'ts'},bundle:true,write:false,format:'iife',platform:'browser',loader:{'.css':'empty'},logLevel:'silent'});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 try{

@@ -47,6 +47,8 @@ export interface SegmentAncestor {
   tag: string;
   open: string;
   prelude?: string;
+  /** UTF-8 byte offset of `open` in the note, when the source scanner knows it. */
+  at?: number;
 }
 export interface DocumentSegment {
   ordinal: number;
@@ -94,7 +96,7 @@ export interface Notebook {
   cover?: NotebookCover | null;
 }
 
-/** 노트북 표지: Unsplash 사진(핫링크 + 작가 표기) 또는 이 기기에 올린 첨부 이미지. */
+/** 폴더 표지: Unsplash 사진(핫링크 + 작가 표기) 또는 이 기기에 올린 첨부 이미지. */
 export type NotebookCover =
   | { kind: "unsplash"; url: string; thumb: string; author: string; author_url: string; unsplash_id: string }
   | { kind: "attachment"; url: string };
@@ -108,7 +110,7 @@ export interface UnsplashPhoto {
   author_url: string;
 }
 
-/** 노트북·태그 밖에서 만든 새 노트에 붙는 기본값(원본 settings). */
+/** 폴더·태그 밖에서 만든 새 노트에 붙는 기본값(원본 settings). */
 export interface Defaults {
   notebook_id: string | null;
   tag: string | null;

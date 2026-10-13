@@ -1,5 +1,6 @@
+import { libraryTool } from "./library-tools.ts";
 import assert from "node:assert/strict";
-import { chromium } from "playwright-core";
+import { chromium } from './browser-env.ts';
 const base = process.env.INKISM_URL!;
 const rpc = async (op: string, args: Record<string, unknown> = {}) => { const r = await fetch(base + "/api/rpc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op, ...args }) }); const v = await r.json(); assert.equal(v.ok, true, JSON.stringify(v)); return v.data; };
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, args: ["--no-sandbox"] });
@@ -10,7 +11,7 @@ const note = await rpc("save", { note: { title: "Canvas attachment fixture", con
 await rpc("workspace_set", { ids: [note.id], active: note.id, locations: {} });
 try {
   await page.goto(base); await page.locator(".tiptap").waitFor();
-  await page.getByRole("button", { name: "캔버스", exact: true }).click(); await page.waitForTimeout(500); console.log("buttons", await page.getByRole("button").allTextContents());
+  await libraryTool(page, "캔버스"); await page.waitForTimeout(500); console.log("buttons", await page.getByRole("button").allTextContents());
   const dialog = page.getByRole("dialog", { name: "라이브러리 도구", exact: true });
   const file = dialog.locator('input[type="file"]').first();
   await file.setInputFiles({ name: "pixel.png", mimeType: "image/png", buffer: Buffer.from("\x89PNG\r\n\x1a\n", "binary") });
@@ -20,7 +21,7 @@ try {
   const card = dialog.locator(".canvas-card").first(); assert.equal(await card.locator("a").count(), 1);
   await dialog.getByRole("button", { name: "작업공간 저장", exact: true }).click(); await dialog.getByText("저장됨", { exact: true }).waitFor();
   const saved = await rpc("workspace_tools_get"); const asset = saved.canvas.value.nodes.find((n: { kind: string }) => n.kind === "file"); assert.match(asset.attachmentId, /^[0-9a-f-]{36}$/); assert.equal(asset.offline, false);
-  await dialog.getByRole("button", { name: "닫기", exact: true }).click(); await page.reload(); await page.locator(".tiptap").waitFor(); await page.getByRole("button", { name: "캔버스", exact: true }).click(); const reopened = page.getByRole("dialog", { name: "라이브러리 도구", exact: true }); await reopened.locator(".canvas-card").first().waitFor(); assert.equal(await reopened.locator(".canvas-card").count(), 1);
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click(); await page.reload(); await page.locator(".tiptap").waitFor(); await libraryTool(page, "캔버스"); const reopened = page.getByRole("dialog", { name: "라이브러리 도구", exact: true }); await reopened.locator(".canvas-card").first().waitFor(); assert.equal(await reopened.locator(".canvas-card").count(), 1);
   // Undo and redo are real state transitions, not only visual buttons.
   await reopened.getByRole("button", { name: "텍스트 카드", exact: true }).click(); assert.equal(await reopened.locator(".canvas-card").count(), 2); await reopened.getByRole("button", { name: "실행 취소", exact: true }).click(); assert.equal(await reopened.locator(".canvas-card").count(), 1); await reopened.getByRole("button", { name: "다시 실행", exact: true }).click(); assert.equal(await reopened.locator(".canvas-card").count(), 2);
   // Unknown fields require explicit confirmation and a dismissal must preserve the canvas.

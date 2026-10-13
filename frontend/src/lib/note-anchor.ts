@@ -91,3 +91,14 @@ export async function navigateNoteAnchor(note:Note, target:NoteAnchor|string,red
 /** Count non-overlapping occurrences of `search` in visual `text`. */
 export function textOccurrence(text:string,search:string):number {let occurrence=0,at=0;if(search)while((at=text.indexOf(search,at))>=0){occurrence++;at+=search.length;}return occurrence;}
 export function sourceOffsetForByte(source:string,byte:number):number {let offset=0,size=0;while(offset<source.length&&size<byte){const cp=source.codePointAt(offset)!;size+=cp<128?1:cp<2048?2:cp<65536?3:4;offset+=cp>65535?2:1;}return offset;}
+
+/** Wait until an asynchronously mounted window can accept anchor navigation. */
+export async function waitForAnchorEditor() {
+  await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  const deadline = Date.now() + 10000;
+  while (document.querySelector(".windowed-editor") && !document.querySelector(".windowed-editor .ProseMirror")) {
+    if (Date.now() > deadline) throw new Error(t("문서를 준비 중입니다. 잠시 후 다시 열어 주세요."));
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+}

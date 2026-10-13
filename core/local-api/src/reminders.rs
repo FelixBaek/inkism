@@ -73,7 +73,7 @@ pub(crate) fn mutation(raw: &[u8]) -> bool {
         return false;
     };
     let fields = match req.op.as_str() {
-        "delete" | "restore" | "import" | "sync_now" | "delete_notebook" | "trash_notebook" | "restore_notebook" | "merge_notes" | "merge_apply" | "merge_undo" => return true,
+        "delete" | "trash_purge" | "restore" | "import" | "sync_now" | "delete_notebook" | "trash_notebook" | "restore_notebook" | "merge_notes" | "merge_apply" | "merge_undo" => return true,
         "save" => req.note,
         "patch" => req.changes,
         _ => return false,

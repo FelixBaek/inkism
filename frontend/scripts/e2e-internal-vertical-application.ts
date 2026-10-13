@@ -2,8 +2,9 @@ import {waitForAsync} from './async-browser-condition.ts';
 // Oversized-paragraph navigation and range integrity. This does not claim that
 // arbitrary source splits have the same soft-wrap phase as a full paragraph.
 import assert from 'node:assert/strict';
-import {chromium} from 'playwright-core';
+import {chromium} from './browser-env.ts';
 import {historyKey} from './history-keys.ts';
+import {assertBlockBytes} from './block-identity-bytes.ts';
 const base=process.env.INKISM_URL;assert.ok(base);
 const rpc=async(op,args={})=>{
  const response=await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})});
@@ -54,7 +55,8 @@ try{
   assert.ok(reads.every(input=>(input.limit??1)<=32));assert.ok(await page.locator('*').count()<1500);
   await page.keyboard.type('z');await saved();
   const start=(shift?origin.head:target.head)-prefix.length,end=target.head-prefix.length;
-  assert.equal((await rpc('get',{id:note.id})).content,prefix+text.slice(0,start)+'z'+text.slice(end)+suffix,'exact insertion/range replacement and outside formatting');
+  // The edited giant paragraph gains its identity; every other byte is exact.
+  assertBlockBytes((await rpc('get',{id:note.id})).content,prefix+text.slice(0,start)+'z'+text.slice(end)+suffix,{added:1,message:'exact insertion/range replacement and outside formatting'});
   await historyKey(page,'undo');await saved();
   assert.equal((await rpc('get',{id:note.id})).content,source,'undo preserves original oversized source');
   await page.unroute('**/api/rpc',bounded);

@@ -20,6 +20,11 @@ pub struct Ancestor {
     pub open: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub prelude: String,
+    /// Byte offset of `open` (block-relative in the cache, note-absolute in
+    /// pages). Lets an edit inside a large block give the enclosing block an
+    /// identity with a bounded splice of just this opening tag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<u64>,
 }
 #[derive(Clone, Debug)]
 pub struct Segment {
@@ -122,15 +127,20 @@ fn child_allowed(stack: &[Ancestor], tag: &str) -> bool {
 // Scan exact source positions rather than infer them from the HTML tokenizer's
 // normalized strings. Restrict to balanced editor markup, avoiding tree-builder
 // recovery (implied end tags, table foster parenting, raw text, foreign content).
-fn tag_at(source: &str, at: usize) -> Option<(usize, String, bool)> {
+fn tag_at(source: &str, at: usize) -> Option<(usize, String, bool, bool)> {
     let (mut i, name, closing) = tag_name(source, at)?;
     let bytes = source.as_bytes();
     let mut attrs = HashSet::new();
+    let (mut math, mut latex) = (false, false);
     loop {
         let before_space = i;
         i = skip_whitespace(bytes, i);
         if let Some(end) = tag_end(bytes, i, &name, closing) {
-            return (name != "input" || attrs.contains("type")).then_some((end, name, closing));
+            let limit = if math { MAX_SOURCE_BYTES } else { TARGET_BYTES };
+            return ((name != "input" || attrs.contains("type"))
+                && (!math || latex)
+                && end - at <= limit)
+                .then_some((end, name, closing, math));
         }
         if closing || before_space == i {
             return None;
@@ -141,7 +151,13 @@ fn tag_at(source: &str, at: usize) -> Option<(usize, String, bool)> {
         }
         let value;
         (i, value) = attr_value(source, attr_end)?;
-        if !attr_allowed(&name, &attr, value) || i - at > TARGET_BYTES {
+        if attr == "data-type" {
+            math = math_type(&name, value);
+        }
+        if attr == "data-latex" {
+            latex = value.is_some();
+        }
+        if !attr_allowed(&name, &attr, value) || i - at > MAX_SOURCE_BYTES {
             return None;
         }
     }
@@ -246,13 +262,21 @@ fn unquoted_value(source: &str, begin: usize) -> Option<(usize, &str)> {
     Some((i, &source[begin..i]))
 }
 
+fn math_type(name: &str, value: Option<&str>) -> bool {
+    matches!(
+        (name, value),
+        ("span", Some("inline-math")) | ("div", Some("block-math"))
+    )
+}
+
 fn attr_allowed(name: &str, attr: &str, value: Option<&str>) -> bool {
-    // Only the known task list schema has a lossless custom-node layout.
+    // Only known task layouts and opaque canonical math leaves map losslessly.
     if attr == "data-type"
         && !matches!(
             (name, value),
             ("ul", Some("taskList")) | ("li", Some("taskItem"))
         )
+        && !math_type(name, value)
     {
         return false;
     }
@@ -276,8 +300,8 @@ pub fn split(source: &str) -> Option<Vec<Segment>> {
     };
     let mut at = 0;
     while at < source.len() {
-        let (end, tag_action) = next_token(source, at, &splitter.stack)?;
-        if end - at > TARGET_BYTES {
+        let (end, tag_action, math) = next_token(source, at, &splitter.stack)?;
+        if end - at > if math { MAX_SOURCE_BYTES } else { TARGET_BYTES } {
             return None;
         }
         if end - splitter.start > MAX_SOURCE_BYTES {
@@ -308,7 +332,11 @@ pub fn split(source: &str) -> Option<Vec<Segment>> {
 type TagAction = (bool, Ancestor);
 
 /// The token at `at`: its end and the stack change it causes, if any.
-fn next_token(source: &str, at: usize, stack: &[Ancestor]) -> Option<(usize, Option<TagAction>)> {
+fn next_token(
+    source: &str,
+    at: usize,
+    stack: &[Ancestor],
+) -> Option<(usize, Option<TagAction>, bool)> {
     let bytes = source.as_bytes();
     if bytes[at..].starts_with(b"<!--") {
         let end = at + 4 + source[at + 4..].find("-->")? + 3;
@@ -316,19 +344,19 @@ fn next_token(source: &str, at: usize, stack: &[Ancestor]) -> Option<(usize, Opt
         if source[at + 4..end - 3].contains("--") {
             return None;
         }
-        Some((end, None))
+        Some((end, None, false))
     } else if bytes[at] == b'<' {
         tag_token(source, at, stack)
     } else if bytes[at] == b'&' {
-        Some((reference_end(bytes, at, stack)?, None))
+        Some((reference_end(bytes, at, stack)?, None, false))
     } else if bytes[at] == b'\r' && bytes.get(at + 1) == Some(&b'\n') {
-        Some((at + 2, None))
+        Some((at + 2, None, false))
     } else {
         let c = source[at..].chars().next()?;
         if !c.is_whitespace() && !in_text(stack) {
             return None;
         }
-        Some((at + c.len_utf8(), None))
+        Some((at + c.len_utf8(), None, false))
     }
 }
 
@@ -338,8 +366,18 @@ fn in_text(stack: &[Ancestor]) -> bool {
         .any(|a| textblock(&a.tag) || a.tag == "summary")
 }
 
-fn tag_token(source: &str, at: usize, stack: &[Ancestor]) -> Option<(usize, Option<TagAction>)> {
-    let (end, name, closing) = tag_at(source, at)?;
+fn tag_token(
+    source: &str,
+    at: usize,
+    stack: &[Ancestor],
+) -> Option<(usize, Option<TagAction>, bool)> {
+    let (end, name, closing, math) = tag_at(source, at)?;
+    if math {
+        if closing || !child_allowed(stack, &name) || (name == "span" && !in_text(stack)) {
+            return None;
+        }
+        return Some((math_leaf_end(source, at, end, &name)?, None, true));
+    }
     let action = if closing {
         if void(&name) || stack.last()?.tag != name {
             return None;
@@ -350,6 +388,7 @@ fn tag_token(source: &str, at: usize, stack: &[Ancestor]) -> Option<(usize, Opti
                 tag: name,
                 open: String::new(),
                 prelude: String::new(),
+                at: None,
             },
         ))
     } else if !child_allowed(stack, &name) {
@@ -366,10 +405,31 @@ fn tag_token(source: &str, at: usize, stack: &[Ancestor]) -> Option<(usize, Opti
                 tag: name,
                 open: source[at..end].to_string(),
                 prelude: String::new(),
+                at: Some(at as u64),
             },
         ))
     };
-    Some((end, action))
+    Some((end, action, false))
+}
+
+/// Keep a canonical math atom whole, including its text and closing tag.
+/// Its first subsequent `<` must be the matching close, never nested HTML.
+fn math_leaf_end(source: &str, at: usize, opening_end: usize, name: &str) -> Option<usize> {
+    let bytes = source.as_bytes();
+    let limit = source.len().min(at + MAX_SOURCE_BYTES);
+    let close = opening_end
+        + bytes
+            .get(opening_end..limit)?
+            .iter()
+            .position(|b| *b == b'<')?;
+    let (mut end, closing_name, closing) = tag_name(source, close)?;
+    if !closing || closing_name != name {
+        return None;
+    }
+    while end < limit && bytes[end].is_ascii_whitespace() {
+        end += 1;
+    }
+    (end < limit && bytes[end] == b'>').then_some(end + 1)
 }
 
 /// End of a character reference starting with `&` at `at`.
@@ -657,8 +717,9 @@ fn read_segments(
         blob.read_at_exact(&mut bytes, start as usize)?;
         let source = String::from_utf8(bytes)
             .map_err(|_| EngineError::internal("invalid cached segment UTF-8"))?;
-        let start_context = segment_context(&row.get::<_, String>(3)?)?;
-        let end_context = segment_context(&row.get::<_, String>(4)?)?;
+        let start_context =
+            absolute_context(segment_context(&row.get::<_, String>(3)?)?, byte_start);
+        let end_context = absolute_context(segment_context(&row.get::<_, String>(4)?)?, byte_start);
         if start_context
             .iter()
             .chain(&end_context)
@@ -674,6 +735,17 @@ fn read_segments(
         return Err(EngineError::internal("incomplete cached segment page"));
     }
     Ok(out)
+}
+
+/// Cached ancestor offsets are block-relative; pages report note offsets.
+fn absolute_context(context: Vec<Ancestor>, byte_start: i64) -> Vec<Ancestor> {
+    context
+        .into_iter()
+        .map(|a| Ancestor {
+            at: a.at.map(|at| at + byte_start as u64),
+            ..a
+        })
+        .collect()
 }
 
 fn segment_context(json: &str) -> Result<Vec<Ancestor>> {

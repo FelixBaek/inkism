@@ -4,6 +4,8 @@
 
 mod integrate;
 mod launch;
+#[cfg(any(windows, test))]
+mod note_link;
 mod reminders;
 mod security;
 mod shell;
@@ -96,9 +98,27 @@ fn run_with(root: &Path, opts: &mut LaunchOptions, default_db: &Path, security: 
     if !opts.resolve_library(&preference, default_db, cfg!(windows), recover_library_selection)? {
         return Ok(());
     }
+    #[cfg(windows)]
+    if !opts.open.is_empty() && note_link::forward(&opts.database, &opts.open)? {
+        return Ok(());
+    }
     launch::validate_protected_library(&opts.database, locked, opts.initialize_encrypted)?;
     launch::create_private_dir(opts.database.parent().unwrap_or(Path::new(".")))?;
-    let library_lock = inkism_reminders::applock::acquire(&opts.database)?;
+    let library_lock = match inkism_reminders::applock::acquire(&opts.database) {
+        Ok(lock) => lock,
+        Err(error) => {
+            #[cfg(windows)]
+            if error.is_busy() && !opts.open.is_empty() {
+                // A first process may still be starting its window after taking the lock.
+                let deadline = Instant::now() + Duration::from_secs(2);
+                while Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(50));
+                    if note_link::forward(&opts.database, &opts.open)? { return Ok(()); }
+                }
+            }
+            return Err(error.into());
+        }
+    };
     opts.resolve_engine();
     if !opts.copy_encrypted_to.is_empty() {
         return copy_encrypted(opts, locked);

@@ -13,7 +13,7 @@ self.onmessage = (
       content: bodySplice(before.content, after.content),
       text: bodySplice(before.text, after.text),
     });
-  } catch {
-    self.postMessage({ id, error: "변경 구간을 계산하지 못했습니다." });
+  } catch (error) {
+    self.postMessage({ id, error_code: "splice_compute_failed", error: error instanceof Error ? error.message : String(error) });
   }
 };

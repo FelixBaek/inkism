@@ -90,29 +90,36 @@ export function EditorSettings() {
   };
   return (
     <>
-      {mode === "html" && <FontFileSettings />}
       <div className="settings-card">
         <div className="settings-card__text">
           <strong>{t("기본 에디터")}</strong>
           <p>{t("새 노트에 적용합니다. 기존 노트는 편집 화면의 MD/HTML 버튼으로 변환할 수 있습니다.")}</p>
+          <p>
+            {mode === "html"
+              ? t("HTML 에디터는 폰트·색상·크기와 다양한 블록 서식을 지원합니다.")
+              : t(
+                  "MARKDOWN 에디터는 제목·목록·표·이미지를 블록으로 편집합니다. 폰트·글자색·크기 서식은 제공하지 않습니다.",
+                )}
+          </p>
         </div>
-        <select
-          className="settings-select"
-          aria-label={t("기본 에디터")}
-          value={mode}
-          onChange={(e) => void chooseMode(e.target.value as EditorCompatibility)}
-        >
-          <option value="html">{t("HTML 에디터")}</option>
-          <option value="markdown">{t("MARKDOWN 에디터")}</option>
-        </select>
+        <div className="settings-card__action">
+          <div className="settings-segmented" role="radiogroup" aria-label={t("기본 에디터")}>
+            {(["html", "markdown"] as const).map((m) => (
+              <label key={m}>
+                <input
+                  type="radio"
+                  name="inkism-editor-mode"
+                  value={m}
+                  checked={mode === m}
+                  onChange={() => void chooseMode(m)}
+                />
+                {m === "html" ? t("HTML 에디터") : t("MARKDOWN 에디터")}
+              </label>
+            ))}
+          </div>
+        </div>
       </div>
-      <p className="settings-editor-help">
-        {mode === "html"
-          ? t("HTML 에디터는 폰트·색상·크기와 다양한 블록 서식을 지원합니다.")
-          : t(
-              "MARKDOWN 에디터는 제목·목록·표·이미지를 블록으로 편집합니다. 폰트·글자색·크기 서식은 제공하지 않습니다.",
-            )}
-      </p>
+      {mode === "html" && <FontFileSettings />}
       {mode === "html" && (
         <>
           <section className="settings-editor-list" aria-label={t("폰트 목록")}>
