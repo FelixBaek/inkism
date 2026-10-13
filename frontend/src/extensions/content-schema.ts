@@ -1,3 +1,4 @@
+import {TermDefinition} from "./term-definition";
 import {BlockIdentity} from "./block-identity";
 import { t } from "../i18n";
 import { InkismDetails, DetailsContent, DetailsSummary } from "./details";
@@ -191,6 +192,7 @@ const TableAppearance = Extension.create({
 
 /** The editor and Markdown conversion must use exactly the same document schema. */
 export const contentExtensions = (options: { trailingNode?: boolean; automaticIds?: boolean } = {}) => [
+  TermDefinition,
   InkismBlockMath,
   InkismInlineMath,
   Attachment,
