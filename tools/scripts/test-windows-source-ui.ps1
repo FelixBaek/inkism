@@ -367,6 +367,31 @@ function Invoke-Element($element) {
         Click-Element $element
     }
 }
+function Invoke-NoteCommand([string[]]$path) {
+    Invoke-Element (Find-Element '명령창 열기' ([System.Windows.Automation.ControlType]::Button))
+    foreach ($label in $path) {
+        # CommandPalette exposes role=listbox/option, mapped to UIA List and
+        # ListItem. Search inside the command list, never a hidden toolbar
+        # trigger or a similarly named text node elsewhere in the app.
+        $condition = [System.Windows.Automation.AndCondition]::new(
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $label),
+            [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ListItem))
+        $deadline = [DateTime]::UtcNow.AddSeconds(20)
+        $option = $null
+        do {
+            $list = Find-Element '노트 명령' ([System.Windows.Automation.ControlType]::List)
+            try { $option = $list.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition) }
+            catch {
+                if ($_.Exception.GetBaseException() -isnot [System.Windows.Automation.ElementNotAvailableException]) { throw }
+            }
+            if ($null -ne $option) { break }
+            Start-Sleep -Milliseconds 50
+        } while ([DateTime]::UtcNow -lt $deadline)
+        if ($null -eq $option) { throw "Native command option not found in 노트 명령: $label" }
+        Write-Output "Native command option: $($option.Current.Name) [$($option.Current.ControlType.ProgrammaticName)]"
+        Invoke-Element $option
+    }
+}
 function Click-Element($element) {
     # A first pointer click can be consumed solely by window activation. Do not
     # send the actual action until the intended app owns the foreground.
@@ -717,12 +742,12 @@ try {
         if((Read-Field (Find-Element '노트 제목')) -ne $title){throw 'Active source tab did not restore'}
         Wait-SourceMarker $format 'native_typed'
         $before=[DateTime]::UtcNow
-        Invoke-Element (Find-Element '원문 내보내기' ([System.Windows.Automation.ControlType]::Button))
+        Invoke-NoteCommand @('Export as', '원문')
         $extension=switch($format){'html'{'html'}'markdown'{'md'}default{'txt'}}
         $download=Wait-TestDownload $title $extension $before {param([byte[]]$data) [System.Text.Encoding]::UTF8.GetString($data) -ceq $content}
         if([System.IO.File]::ReadAllText($download,[System.Text.Encoding]::UTF8) -cne $content){throw 'Downloaded source differs from canonical content'}
         # Observe preview open/close without silently reinterpreting the source.
-        Invoke-Element (Find-Element '미리보기' ([System.Windows.Automation.ControlType]::Button))
+        Invoke-NoteCommand @('미리보기')
         Find-Element '미리보기 · 내보내기' | Out-Null
         Find-Element '저장된 원문의 미리보기' | Out-Null
         $before=[DateTime]::UtcNow
@@ -744,7 +769,7 @@ try {
         Wait-SourceMarker $format 'native_typed'
         # Cancel a fresh preview request; regardless of request timing the
         # current canonical source must remain unchanged after dismissal.
-        Invoke-Element (Find-Element '미리보기' ([System.Windows.Automation.ControlType]::Button))
+        Invoke-NoteCommand @('미리보기')
         Invoke-Element (Find-Element '미리보기 닫기' ([System.Windows.Automation.ControlType]::Button))
         Wait-SourceMarker $format 'native_typed'
         Save-Screenshot ('windows-ui-source-'+$format)
