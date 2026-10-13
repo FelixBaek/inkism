@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';import {build} from 'esbuild';
-const b=await build({stdin:{contents:"export * from './lib/portable-session';",resolveDir:new URL('../src/',import.meta.url).pathname,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'node',logLevel:'error'});
+const b=await build({stdin:{contents:"export * from './lib/portable-session';",resolveDir:new URL('../src/',import.meta.url).pathname,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'node',logLevel:'error',loader:{'.css':'empty'}});
 let interval:(()=>void)|undefined;const originalSet=globalThis.setInterval,originalClear=globalThis.clearInterval;globalThis.setInterval=((fn:()=>void)=>{interval=fn;return 1;}) as any;globalThis.clearInterval=(()=>{interval=undefined;}) as any;
 const m={exports:{} as any};new Function('module','exports',b.outputFiles[0].text)(m,m.exports);const s=m.exports;let permission='granted',flushes=0;
 const folder={name:'test',kind:'directory',queryPermission:async()=>permission,async *values(){yield {kind:'file',name:'.inkism-portable.json',getFile:async()=>new File([JSON.stringify({version:1,notes:[],attachments:[]})],'.inkism-portable.json')}}};
