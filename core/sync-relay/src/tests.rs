@@ -451,7 +451,7 @@ fn foreign_database_file_is_refused_unchanged() {
     bolt[16..20].copy_from_slice(&0xED0CDAEDu32.to_le_bytes());
     std::fs::write(dir.db(), &bolt).unwrap();
     let err = Store::open(&dir.db()).err().expect("bbolt file opened").to_string();
-    assert!(err.contains("not a SQLite database") && err.contains("3ca693d"), "{err}");
+    assert!(err.contains("not a SQLite database") && err.contains("6958e78"), "{err}");
     assert_eq!(std::fs::read(dir.db()).unwrap(), bolt, "bbolt file was modified");
     for suffix in ["-wal", "-shm"] {
         assert!(!std::path::Path::new(&format!("{}{suffix}", dir.db().display())).exists());

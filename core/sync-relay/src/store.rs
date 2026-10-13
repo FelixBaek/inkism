@@ -97,7 +97,7 @@ fn refuse_foreign_file(file: &File, path: &Path) -> Result<(), Error> {
     }
     Err(format!(
         "{}: not a SQLite database. A relay.db from the old Go (bbolt) relay is no longer opened or converted by this version; \
-         migrate it once with the relay package built from commit 3ca693d (relay-export + --import-bolt-dump), then upgrade. \
+         migrate it once with the relay package built from commit 6958e78 (relay-export + --import-bolt-dump), then upgrade. \
          The file was left unchanged.",
         path.display()
     )

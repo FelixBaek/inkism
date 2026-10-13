@@ -66,7 +66,7 @@ npm --prefix frontend run test:unit:coverage:core
 
 Rust 테스트에 `--features encrypted-storage`를 붙이면 암호화 저장소까지 시험합니다.
 브라우저 테스트는 Playwright Chromium을 씁니다: `tools/scripts/test-browser.sh`.
-알려진 문제: 편집기 브라우저 테스트 상당수가 최근 화면 변경을 따라가지 못해 실패합니다.
+브라우저 검사는 각 스크립트에 명시된 경로를 확인합니다. 실제 IME·OS 키 보관소·설치 동작은 대상 플랫폼에서 검증합니다.
 
 ## 동기화 중계 서버
 
@@ -76,7 +76,7 @@ Rust 테스트에 `--features encrypted-storage`를 붙이면 암호화 저장�
 
 중계 서버는 Rust 크레이트 `core/sync-relay`이고 데이터를 SQLite에 저장합니다. 예전 Go(bbolt) 중계 서버의
 `relay.db`는 더 이상 열거나 변환하지 않습니다. 한 번만 쓰는 변환 도구(`desktop/cmd/relay-export`,
-`inkism-sync-relay --import-bolt-dump`)는 git 기록의 커밋 `3ca693d`에 남아 있습니다. 그 커밋으로 패키지를
+`inkism-sync-relay --import-bolt-dump`)는 git 기록의 커밋 `6958e78`에 남아 있습니다. 그 커밋으로 패키지를
 만들어(Go 도구도 필요) 예전 DB를 한 번 변환하세요.
 
 ## 라이선스
