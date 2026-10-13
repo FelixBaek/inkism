@@ -37,14 +37,16 @@ try {
  // HTML notes open in the rich view; the non-lazy run edits the exact source in the explicit HTML view.
  const openEditor=async()=>{if(!lazy){const html=page.getByRole('button',{name:'HTML',exact:true});await html.waitFor();if(await html.getAttribute('aria-pressed')!=='true')await html.click();}await editor.waitFor();};
  const expected=suffix=>lazy?content.slice(0,-4)+suffix+'</p>':content+suffix;
+ // Editing a block gives it an identity (BlockIdentity), so the lazily edited last paragraph gains an id.
+ const durable=body=>lazy?body.replace(/<p id="ink-block-[0-9a-f-]{36}">([^<]*)<\/p>$/,'<p>$1</p>'):body;
  const stored=async suffix=>{
   const deadline=Date.now()+10000;
   while(Date.now()<deadline){
-   if((await rpc('get',{id:active.id})).content===expected(suffix))return;
+   if(durable((await rpc('get',{id:active.id})).content)===expected(suffix))return;
    await new Promise(resolve=>setTimeout(resolve,25));
   }
   const actual=(await rpc('get',{id:active.id})).content;
-  assert.ok(actual===expected(suffix),'exact durable body; tail='+actual.slice(-180));
+  assert.ok(durable(actual)===expected(suffix),'exact durable body; tail='+actual.slice(-180));
  };
  const append=async text=>{
   if(lazy){
