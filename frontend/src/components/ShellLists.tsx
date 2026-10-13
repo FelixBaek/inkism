@@ -220,7 +220,7 @@ export function ReminderBanner() {
   if (!note?.reminder_at || note.reminder_at > now) return null;
   const hours = note.reminder_repeat_hours;
   return (
-    <div className="reminder-banner" role="status">
+    <output className="reminder-banner">
       <Bell size={16} aria-hidden />
       <span className="reminder-banner-text">
         {[t("알림"), formatDateTime(note.reminder_at), hours ? t("{label} 반복", { label: repeatLabel(hours) }) : repeatLabel(hours)].join("  ·  ")}
@@ -240,6 +240,6 @@ export function ReminderBanner() {
       >
         {t("알림 처리")}
       </button>
-    </div>
+    </output>
   );
 }

@@ -1,7 +1,6 @@
 /* 외부 편집 폴더 (nocturne 28): 두 열(폴더 동작, 변경 비교)이 설정 화면의 2단 칸에 그대로 들어가도록 감싸개는 상자를 만들지 않는다. */
 .portable-library-settings { display: contents; }
-.portable-column { font-size: var(--fs-caption); line-height: 1.5; }
-.portable-column { display: flex; flex-direction: column; align-items: stretch; gap: 12px; min-width: 0; }
+.portable-column { font-size: var(--fs-caption); line-height: 1.5; display: flex; flex-direction: column; align-items: stretch; gap: 12px; min-width: 0; }
 .portable-column > h3 { margin: 0; padding-bottom: 12px; border-bottom: 1px solid var(--border); font-size: var(--fs-body); font-weight: 500; }
 .portable-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .portable-library-settings .btn { min-height: 30px; border: 1px solid var(--border); border-radius: 0; background: var(--hover); color: var(--text); font-size: var(--fs-caption); }

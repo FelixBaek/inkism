@@ -2,10 +2,9 @@
    areas without caching document bodies or introducing a separate data store. */
 @media (max-width: 760px) {
   .app { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; }
-  .mobile-header { flex-shrink: 0; padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
   .mobile-header button { min-height: 44px; min-width: 44px; }
   /* 좁은 화면: 위 머리줄 하나(탐색/뒤로 · 제목 · 새 노트/노트 정보 · 더보기)와 아래 상태 바만 둔다. */
-  .mobile-header { min-height: 52px; gap: 8px; background: var(--canvas); }
+  .mobile-header { flex-shrink: 0; padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); min-height: 52px; gap: 8px; background: var(--canvas); }
   .mobile-header strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-body); font-weight: 500; }
   .mobile-header .icon-btn { color: var(--text); }
   /* shell.css가 이 파일보다 뒤에 읽히므로 .app 을 붙여 우선한다. */

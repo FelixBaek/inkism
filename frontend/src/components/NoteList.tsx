@@ -14,6 +14,7 @@ import {
 } from "../icons";
 import { useStore, viewTitle, PAGE_SIZE } from "../store";
 import { formatRelative } from "../lib/date";
+import type { TrashDays } from "../api";
 import type { Notebook, Summary, View } from "../types";
 import { IconButton } from "./IconButton";
 import { NoteContextMenu, type NoteMenuTarget } from "./NoteContextMenu";
@@ -23,26 +24,64 @@ import { CoverBanner } from "./NotebookCover";
 import { GroupHeader, sortLabel, useListSort } from "./NoteListSort";
 import { groupItems } from "../lib/list-sort";
 import { openInNewTab } from "./NoteTabs";
-import { ArchiveTabs, TrashRetention, TrashSelectionDialog, trashLabel, useTrashPurge, useTrashTimes } from "./TrashTools";
+import {
+  ArchiveTabs,
+  TrashRetention,
+  TrashSelectionDialog,
+  trashLabel,
+  useTrashPurge,
+  useTrashTimes,
+} from "./TrashTools";
 import "./NoteList.css";
 import { t } from "../i18n";
+
+function trashRowLabel(at: number | undefined, archived: boolean, retention: TrashDays) {
+  return trashLabel(at, archived ? null : retention);
+}
 
 function pageCount(total: number | undefined, hasNext: boolean, page: number) {
   if (total !== undefined) return Math.max(1, Math.ceil(total / PAGE_SIZE));
   return hasNext ? null : page;
 }
 function listInfo(search: string, hasNext: boolean, page: number, length: number, order: string, count: number | null) {
-  if (search) return t(hasNext ? "{count}개 이상 검색 결과" : "{count}개 검색 결과", { count: (page - 1) * PAGE_SIZE + length });
+  if (search)
+    return t(hasNext ? "{count}개 이상 검색 결과" : "{count}개 검색 결과", { count: (page - 1) * PAGE_SIZE + length });
   if (count === null) return order;
   const amount = count < 0 ? t("{count}개 이상", { count: -count }) : t("{count}개", { count });
   return order + " · " + amount;
 }
-function ListStatus({ error, loading, empty, view, search, retry }: Readonly<{
-  error: string | null; loading: boolean; empty: boolean; view: View; search: string; retry: () => void;
+function ListStatus({
+  error,
+  loading,
+  empty,
+  view,
+  search,
+  retry,
+}: Readonly<{
+  error: string | null;
+  loading: boolean;
+  empty: boolean;
+  view: View;
+  search: string;
+  retry: () => void;
 }>) {
-  if (error) return <div className="list-state" role="alert"><p>{error}</p><button type="button" className="btn" onClick={retry}>{t("다시 시도")}</button></div>;
+  if (error)
+    return (
+      <div className="list-state" role="alert">
+        <p>{error}</p>
+        <button type="button" className="btn" onClick={retry}>
+          {t("다시 시도")}
+        </button>
+      </div>
+    );
   if (!empty) return null;
-  if (loading) return <div className="list-state" aria-live="polite"><Loader2 size={18} className="spin" aria-hidden /><p>{t("불러오는 중…")}</p></div>;
+  if (loading)
+    return (
+      <div className="list-state" aria-live="polite">
+        <Loader2 size={18} className="spin" aria-hidden />
+        <p>{t("불러오는 중…")}</p>
+      </div>
+    );
   return <EmptyList view={view} search={search} />;
 }
 
@@ -73,7 +112,7 @@ export function NoteList() {
   };
   // 전체 노트는 총 개수를 알고, 다른 보기는 마지막 쪽에 닿아야 정확한 수를 안다(음수 = "이상").
   const total = s.view.type === "all" && !s.search ? s.stats?.notes : undefined;
-  const count = !s.pageData ? null : total ?? knownNoteCount(s.pageData.nextCursor, s.page, items.length);
+  const count = !s.pageData ? null : (total ?? knownNoteCount(s.pageData.nextCursor, s.page, items.length));
   const pages = pageCount(total, hasNext, s.page);
   const trash = s.view.type === "trash";
   const shelf = trash || s.view.type === "archive";
@@ -156,11 +195,17 @@ export function NoteList() {
         )}
       </p>
 
-
       {notebook && <NotebookHeader notebook={notebook} />}
 
       <div className="list-body" role="feed" aria-busy={s.listLoading}>
-        <ListStatus error={s.listError} loading={s.listLoading} empty={items.length === 0} view={s.view} search={s.search} retry={s.refreshList} />
+        <ListStatus
+          error={s.listError}
+          loading={s.listLoading}
+          empty={items.length === 0}
+          view={s.view}
+          search={s.search}
+          retry={s.refreshList}
+        />
 
         {items.length > 0 &&
           groups.map((g, i) => (
@@ -173,7 +218,7 @@ export function NoteList() {
                   onMenu={setMenu}
                   picked={picked.has(n.id)}
                   onPick={trash ? () => pick(n.id) : undefined}
-                  meta={trash ? trashLabel(times[n.id], n.archived ? null : retention) : undefined}
+                  meta={trash ? trashRowLabel(times[n.id], n.archived, retention) : undefined}
                 />
               ))}
             </React.Fragment>
@@ -342,7 +387,8 @@ function NoteRow({
   // 날짜 옆 자리: 태그 보기면 그 태그, 아니면 폴더 이름, 폴더가 없으면 첫 태그.
   const notebookName = s.notebooks.find((n) => n.id === item.notebook_id)?.name;
   const tag = s.view.type === "tag" ? s.view.name : item.tags[0];
-  const place = s.view.type !== "tag" && notebookName ? notebookName : tag ? `# ${tag}` : "";
+  const tagLabel = tag ? `# ${tag}` : "";
+  const place = s.view.type !== "tag" && notebookName ? notebookName : tagLabel;
 
   return (
     <article
@@ -394,9 +440,7 @@ function NoteRow({
           </span>
         </div>
         <p className={`note-row-preview${item.preview ? "" : " is-empty"}`}>{item.preview || t("내용 없음")}</p>
-        <p className="note-row-meta">
-          {meta || [formatRelative(item.updated_at), place].filter(Boolean).join(" · ")}
-        </p>
+        <p className="note-row-meta">{meta || [formatRelative(item.updated_at), place].filter(Boolean).join(" · ")}</p>
       </button>
       {trashMode && (
         <div className="note-row-actions">

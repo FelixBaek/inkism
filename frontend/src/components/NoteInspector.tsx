@@ -1,7 +1,7 @@
-import {readBacklinkLocation,type BacklinkLocation} from '../lib/backlink-location';
-import {navigateNoteAnchor} from '../lib/note-anchor';
-import {knowledge} from '../lib/knowledge';
-import type {Note} from '../types';
+import { readBacklinkLocation, type BacklinkLocation } from "../lib/backlink-location";
+import { navigateNoteAnchor } from "../lib/note-anchor";
+import { knowledge } from "../lib/knowledge";
+import type { Note } from "../types";
 import React, { useEffect, useRef, useState } from "react";
 import { X, Pin, Star, Archive, PencilOff, FileText } from "../icons";
 import { KNOWLEDGE_EVENT, PropertyEditor } from "./KnowledgeTools";
@@ -113,33 +113,120 @@ function InspectorResize({
 }
 
 export function BacklinkList({ s }: Readonly<{ s: Store }>) {
-  const [contexts,setContexts]=useState<Record<string,BacklinkLocation|undefined>>({}),[error,setError]=useState('');
-  const cache=useRef<{target:string;items:Record<string,BacklinkLocation|undefined>}>({target:'',items:{}});
-  const selected=useRef(s.note?.id),pending=useRef<Promise<void>>(Promise.resolve());selected.current=s.note?.id;
-  useEffect(()=>{const controller=new AbortController(),target=s.note?.id;if(!target)return;
-    if(cache.current.target!==target||!s.backlinks){cache.current={target,items:{}};setContexts({});setError('');}
-    const items=(s.backlinks??[]).filter(n=>!cache.current.items[n.id]);
-    pending.current=(async()=>{const metadata=await knowledge.get(target).catch(()=>null);if(controller.signal.aborted)return;
-      const names=[s.note?.title??'',...(metadata?.aliases??[])];let next=0;
-      await Promise.all(Array.from({length:Math.min(4,items.length)},async()=>{while(!controller.signal.aborted){const item=items[next++];if(!item)return;
-        try{const location=await readBacklinkLocation(item.id,target,names,controller.signal);if(controller.signal.aborted)return;cache.current.items[item.id]=location;setContexts({...cache.current.items});
-        }catch{/* Locked/deleted/oversized notes retain their indexed preview without reading a full body. */}
-      }}));
-    })();return()=>controller.abort();
-  },[s.note?.id,s.note?.title,s.backlinks]);
-  const open=async(id:string)=>{const target=s.note?.id;setError('');try{
-    if(!await s.flushNow()||selected.current!==target)return;
-    await pending.current;if(selected.current!==target)return;const location=cache.current.items[id];
-    if(!location)throw new Error(t('연결 위치를 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.'));
-    const note=location.anchor.byteOffset===undefined?await api.get(id,{max_body_bytes:2*1024*1024}):await api.documentInfo(id,location.revision).then(info=>({...info.summary,content:'',text:''}));if(selected.current!==target)return;
-    if(('locked'in note&&note.locked)||note.trashed||note.revision!==location.revision)throw new Error(t('문서가 변경되었습니다. 다시 시도해 주세요.'));
-    await s.selectNote(id);await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
-    if(location.anchor.byteOffset!==undefined){const deadline=Date.now()+10000;while(document.querySelector('.windowed-editor')&&!document.querySelector('.windowed-editor .ProseMirror')){if(Date.now()>deadline)throw new Error(t('문서를 준비 중입니다. 잠시 후 다시 열어 주세요.'));await new Promise(resolve=>setTimeout(resolve,25));}await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));}
-    const draft=s.readDraft();const locatedNote=note.content_format==='markdown'&&draft?.id===id&&draft.revision===note.revision?{...note,content:draft.content,text:draft.text}:note;
-    await navigateNoteAnchor(locatedNote,location.anchor);
-  }catch(e){setError(e instanceof Error?t(e.message):String(e));}};
-  if(s.backlinks===null)return <p className="inspector-hint">{t('연결 정보를 확인하는 중…')}</p>;
-  return <>{(error||s.backlinksError)&&<p role="alert">{error||s.backlinksError}</p>}{!s.backlinks.length&&<p className="inspector-hint">{t('이 노트를 가리키는 노트가 없습니다.')}</p>}<ul className="inspector-list">{s.backlinks.map(note=><li key={note.id}><button type="button" aria-label={t('역링크 노트 열기: {title}',{title:note.title||t('제목 없음')})} onClick={()=>void open(note.id)}><FileText size={16} aria-hidden/><span>{note.title||t('제목 없음')}</span></button><p className="inspector-hint" aria-label={t('역링크 문맥')}>{contexts[note.id]?.context??note.preview}</p></li>)}</ul>{s.backlinksCursor&&<button className="btn" disabled={s.backlinksBusy} onClick={()=>void s.loadMoreBacklinks()}>{s.backlinksBusy?t('불러오는 중…'):t('역링크 더 불러오기')}</button>}</>;
+  const [contexts, setContexts] = useState<Record<string, BacklinkLocation | undefined>>({}),
+    [error, setError] = useState("");
+  const cache = useRef<{ target: string; items: Record<string, BacklinkLocation | undefined> }>({
+    target: "",
+    items: {},
+  });
+  const selected = useRef(s.note?.id),
+    pending = useRef<Promise<void>>(Promise.resolve());
+  selected.current = s.note?.id;
+  useEffect(() => {
+    const controller = new AbortController(),
+      target = s.note?.id;
+    if (!target) return;
+    if (cache.current.target !== target || !s.backlinks) {
+      cache.current = { target, items: {} };
+      setContexts({});
+      setError("");
+    }
+    const items = (s.backlinks ?? []).filter((n) => !cache.current.items[n.id]);
+    pending.current = (async () => {
+      const metadata = await knowledge.get(target).catch(() => null);
+      if (controller.signal.aborted) return;
+      const names = [s.note?.title ?? "", ...(metadata?.aliases ?? [])];
+      let next = 0;
+      await Promise.all(
+        Array.from({ length: Math.min(4, items.length) }, async () => {
+          while (!controller.signal.aborted) {
+            const item = items[next++];
+            if (!item) return;
+            try {
+              const location = await readBacklinkLocation(item.id, target, names, controller.signal);
+              if (controller.signal.aborted) return;
+              cache.current.items[item.id] = location;
+              setContexts({ ...cache.current.items });
+            } catch {
+              /* Locked/deleted/oversized notes retain their indexed preview without reading a full body. */
+            }
+          }
+        }),
+      );
+    })();
+    return () => controller.abort();
+  }, [s.note?.id, s.note?.title, s.backlinks]);
+  const open = async (id: string) => {
+    const target = s.note?.id;
+    setError("");
+    try {
+      if (!(await s.flushNow()) || selected.current !== target) return;
+      await pending.current;
+      if (selected.current !== target) return;
+      const location = cache.current.items[id];
+      if (!location) throw new Error(t("연결 위치를 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요."));
+      const note =
+        location.anchor.byteOffset === undefined
+          ? await api.get(id, { max_body_bytes: 2 * 1024 * 1024 })
+          : await api.documentInfo(id, location.revision).then((info) => ({ ...info.summary, content: "", text: "" }));
+      if (selected.current !== target) return;
+      if (("locked" in note && note.locked) || note.trashed || note.revision !== location.revision)
+        throw new Error(t("문서가 변경되었습니다. 다시 시도해 주세요."));
+      await s.selectNote(id);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      if (location.anchor.byteOffset !== undefined) {
+        const deadline = Date.now() + 10000;
+        while (document.querySelector(".windowed-editor") && !document.querySelector(".windowed-editor .ProseMirror")) {
+          if (Date.now() > deadline) throw new Error(t("문서를 준비 중입니다. 잠시 후 다시 열어 주세요."));
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      }
+      const draft = s.readDraft();
+      const locatedNote =
+        note.content_format === "markdown" && draft?.id === id && draft.revision === note.revision
+          ? { ...note, content: draft.content, text: draft.text }
+          : note;
+      await navigateNoteAnchor(locatedNote, location.anchor);
+    } catch (e) {
+      setError(e instanceof Error ? t(e.message) : String(e));
+    }
+  };
+  if (s.backlinks === null) return <p className="inspector-hint">{t("연결 정보를 확인하는 중…")}</p>;
+  return (
+    <>
+      {(error || s.backlinksError) && <p role="alert">{error || s.backlinksError}</p>}
+      {!s.backlinks.length && <p className="inspector-hint">{t("이 노트를 가리키는 노트가 없습니다.")}</p>}
+      <ul className="inspector-list">
+        {s.backlinks.map((note) => (
+          <li key={note.id}>
+            <button
+              type="button"
+              aria-label={t("역링크 노트 열기: {title}", { title: note.title || t("제목 없음") })}
+              onClick={() => void open(note.id)}
+            >
+              <FileText size={16} aria-hidden />
+              <span>{note.title || t("제목 없음")}</span>
+            </button>
+            <p className="inspector-hint" aria-label={t("역링크 문맥")}>
+              {contexts[note.id]?.context ?? note.preview}
+            </p>
+          </li>
+        ))}
+      </ul>
+      {s.backlinksCursor && (
+        <button className="btn" disabled={s.backlinksBusy} onClick={() => void s.loadMoreBacklinks()}>
+          {s.backlinksBusy ? t("불러오는 중…") : t("역링크 더 불러오기")}
+        </button>
+      )}
+    </>
+  );
+}
+
+function historyLabel(entry: HistoryEntry, change: {added: number | null; removed: number | null} | undefined) {
+  if (entry.label) return t("보관: {name}", {name: entry.label});
+  if (change?.added != null) return t("{added}개 추가 / {removed}개 삭제", {added: change.added, removed: change.removed!});
+  return entry.title || t("제목 없음");
 }
 
 function HistoryBody({
@@ -230,18 +317,19 @@ function HistoryBody({
                 {shortTime(entry.created_at)}
               </time>
               <span title={entry.title}>
-                {entry.label
-                  ? t("보관: {name}", { name: entry.label })
-                  : changes[entry.id]?.added != null
-                    ? t("{added}개 추가 / {removed}개 삭제", { added: changes[entry.id].added!, removed: changes[entry.id].removed! })
-                    : entry.title || t("제목 없음")}
+                {historyLabel(entry, changes[entry.id])}
               </span>
             </button>
           </li>
         ))}
       </ul>
       <div className="inspector-actions">
-        <button type="button" className="btn" aria-label={t("버전 비교: {time}", { time })} onClick={() => s.openHistory(selected.id)}>
+        <button
+          type="button"
+          className="btn"
+          aria-label={t("버전 비교: {time}", { time })}
+          onClick={() => s.openHistory(selected.id)}
+        >
           {t("비교")}
         </button>
         <button type="button" className="btn" disabled={copying} onClick={() => void saveCopy(selected)}>

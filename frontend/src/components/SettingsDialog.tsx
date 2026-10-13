@@ -95,7 +95,7 @@ function GeneralSettings() {
             onChange={(e) => setWrap(e.target.checked)}
           />
         </label>
-        <div className="settings-segmented" role="group" aria-label={t("화면 밝기")}>
+        <fieldset className="settings-segmented semantic-group" aria-label={t("화면 밝기")}>
           <button
             type="button"
             aria-pressed={s.theme === "dark"}
@@ -112,7 +112,7 @@ function GeneralSettings() {
           >
             {t("라이트 모드")}
           </button>
-        </div>
+        </fieldset>
         <p>{t("HTML·Markdown 원문 편집에서 긴 줄을 창 너비에 맞춰 접습니다.")}</p>
       </div>
     </div>
