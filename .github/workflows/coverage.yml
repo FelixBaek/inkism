@@ -1,0 +1,33 @@
+name: Coverage
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/coverage.yml'
+      - 'codecov.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/coverage.yml'
+      - 'codecov.yml'
+permissions:
+  contents: read
+jobs:
+  core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # The core coverage set imports no packages, so no npm install is needed.
+      - name: Core unit coverage
+        run: npm --prefix frontend run test:unit:coverage:core
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: frontend/lcov.info
+          fail_ci_if_error: true
