@@ -58,6 +58,31 @@ fn each_existing_kind_checks_the_envelope_version_and_keeps_older_compatibility(
 }
 
 #[test]
+fn future_schema_is_identified_before_requiring_current_fields() {
+    for version in [PAYLOAD_VERSION + 1, u32::MAX] {
+        for future in [
+            json!({"version": version}),
+            json!({"version": version, "entity": {"kind": "futurekind"}, "clock": [1, 2]}),
+            json!({"version": version, "entity": 7, "vclock": "new representation"}),
+        ] {
+            assert!(matches!(
+                ChangePayload::decode(&serde_json::to_vec(&future).unwrap()),
+                Err(SyncError::UnsupportedPayloadVersion {version: actual, supported})
+                    if actual == version && supported == PAYLOAD_VERSION
+            ));
+        }
+    }
+    for current in [
+        br#"{"version":1}"#.as_slice(),
+        br#"{"version":2,"version":1}"#.as_slice(),
+        br#"{"version":1,"version":2}"#.as_slice(),
+        br#"{"version":"2"}"#.as_slice(),
+    ] {
+        assert!(matches!(ChangePayload::decode(current), Err(SyncError::Protocol(_))));
+    }
+}
+
+#[test]
 fn future_record_cannot_be_acknowledged_directly_and_keeps_its_pending_bytes() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("state.db");
@@ -69,9 +94,12 @@ fn future_record_cannot_be_acknowledged_directly_and_keeps_its_pending_bytes() {
     );
     let engine = SyncEngine::open(config).unwrap();
     let db = Connection::open(&path).unwrap();
-    let bytes = payload(PAYLOAD_VERSION + 1, EntityKind::Note)
-        .encode()
-        .unwrap();
+    // This future schema omits v1's clock/device/counter and changes its entity.
+    let bytes = serde_json::to_vec(&json!({
+        "version": PAYLOAD_VERSION + 1,
+        "entity": {"kind": "futurekind", "id": "existing-kind"},
+        "clock": [1, 2],
+    })).unwrap();
     db.execute("INSERT INTO incoming(event_id,seq,state,created_at,payload) VALUES('future',1,'pending',0,?1)", params![bytes]).unwrap();
     assert!(matches!(
         engine.resolve_pending("future"),
