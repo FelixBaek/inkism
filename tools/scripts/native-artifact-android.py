@@ -2,7 +2,7 @@
 """Install the existing ARM64 debug APK in an isolated, disposable emulator.
 
 This is Android emulator acceptance, not physical-device or human IME proof.
-Google APIs API 30 x86_64 supports ARM translation; the actual ABI list is
+Google APIs x86_64 images can support ARM translation; the actual ABI list is
 checked before installation. No app is rebuilt and no storage key is exported.
 """
 import argparse
@@ -22,7 +22,6 @@ import zipfile
 
 
 PACKAGE = "dev.felixbaek.inkism"
-IMAGE = "system-images;android-30;google_apis;x86_64"
 NEW_NOTE = {"New note", "New note (Ctrl+N)", "새 노트 만들기", "새 노트 만들기 (Ctrl+N)"}
 TITLE = {"Note title", "노트 제목"}
 BODY = {"Note body (rich text editor)", "노트 본문 (리치 텍스트 편집기)"}
@@ -42,8 +41,11 @@ def main():
     parser.add_argument("--sdk", required=True, type=Path)
     parser.add_argument("--apk", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--api", type=int, choices=[30, 35], default=35,
+                        help="API35 provides the supported current WebView; API30 is reserved for explicit legacy-runtime checks")
     options = parser.parse_args()
     sdk, apk, output = options.sdk.resolve(), options.apk.resolve(), options.output.resolve()
+    image = f"system-images;android-{options.api};google_apis;x86_64"
     adb = sdk / "platform-tools/adb"
     emulator = sdk / "emulator/emulator"
     managers = list((sdk / "cmdline-tools").glob("*/bin/avdmanager"))
@@ -58,9 +60,9 @@ def main():
         if "lib/arm64-v8a/libinkism_mobile.so" not in bundle.namelist():
             parser.error("The selected APK does not contain the expected ARM64 mobile host")
     output.mkdir(parents=True, exist_ok=True)
-    report = {"environment": "disposable Android API30 Google APIs emulator",
+    report = {"environment": f"disposable Android API{options.api} Google APIs emulator",
               "apk_sha256": hashlib.sha256(apk.read_bytes()).hexdigest(),
-              "package": PACKAGE, "system_image": IMAGE, "accepted": False,
+              "package": PACKAGE, "system_image": image, "accepted": False,
               "physical_device": False, "checkpoints": []}
     child = None
     serial = None
@@ -171,7 +173,7 @@ def main():
             raise RuntimeError("No unused emulator console/ADB port pair")
         serial = f"emulator-{port}"
         report["serial"] = serial
-        command([str(manager), "create", "avd", "-n", avd_name, "-k", IMAGE, "-d", "pixel_4"],
+        command([str(manager), "create", "avd", "-n", avd_name, "-k", image, "-d", "pixel_4"],
                 timeout=90, env=env, input="no\n")
         config = Path(env["ANDROID_AVD_HOME"]) / f"{avd_name}.avd/config.ini"
         with config.open("a") as file:
