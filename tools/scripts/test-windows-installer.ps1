@@ -7,6 +7,19 @@ $setup = Join-Path $root 'dist/Inkism-validation-setup.exe'
 $installLog = Join-Path $root 'dist/installer-install.log'
 $updateLog = Join-Path $root 'dist/installer-update.log'
 $uninstallLog = Join-Path $root 'dist/installer-uninstall.log'
+function Write-InstallerLogDiagnostic([string]$arguments) {
+    $match = [regex]::Match($arguments, '(?:^|\s)/LOG="([^"]+)"')
+    if (-not $match.Success) { return }
+    $logPath = [System.IO.Path]::GetFullPath($match.Groups[1].Value)
+    $ownedLogDirectory = [System.IO.Path]::GetFullPath((Join-Path $root 'dist'))
+    if ([System.IO.Path]::GetDirectoryName($logPath) -ine $ownedLogDirectory -or
+        [System.IO.Path]::GetFileName($logPath) -notlike 'installer-*.log') { return }
+    Write-Output ("Installer diagnostic log: $logPath")
+    if (Test-Path -LiteralPath $logPath) {
+        try { Get-Content -LiteralPath $logPath -Tail 40 | Write-Output }
+        catch { Write-Warning ("Could not read installer log: " + $_.Exception.Message) }
+    } else { Write-Output 'Installer did not create its diagnostic log' }
+}
 function Run-Checked([string]$binary, [string]$arguments) {
     $info = New-Object System.Diagnostics.ProcessStartInfo
     $info.FileName = $binary
@@ -25,7 +38,38 @@ function Run-Checked([string]$binary, [string]$arguments) {
         if ($stdout.Result) { Write-Output $stdout.Result }
         if ($stderr.Result) { Write-Output $stderr.Result }
         if ($process.ExitCode -ne 0) { throw "Validation process failed ($binary): $($process.ExitCode)" }
+    } catch {
+        Write-InstallerLogDiagnostic $arguments
+        throw
     } finally { $process.Dispose() }
+}
+function Run-Uninstall([string]$binary, [string]$logPath) {
+    Run-Checked $binary ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + $logPath + '"')
+    # Inno's clone can still be deleting the original EXE after exit 0. Observe
+    # only this fixture's uninstall files; never launch the uninstaller twice.
+    $data = [System.IO.Path]::ChangeExtension($binary, '.dat')
+    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    while ((Test-Path -LiteralPath $binary) -or (Test-Path -LiteralPath $data)) {
+        if ([DateTime]::UtcNow -ge $deadline) {
+            Write-InstallerLogDiagnostic ('/LOG="' + $logPath + '"')
+            throw "Uninstaller exited successfully but its owned EXE/DAT did not disappear: $binary"
+        }
+        Start-Sleep -Milliseconds 50
+    }
+}
+function Invoke-InstallerCase([scriptblock]$test, [scriptblock]$cleanup) {
+    $testFailure = $null
+    $cleanupFailure = $null
+    try { . $test } catch { $testFailure = $_ } finally {
+        try { . $cleanup } catch { $cleanupFailure = $_ }
+    }
+    if ($null -ne $testFailure -and $null -ne $cleanupFailure) {
+        throw [System.AggregateException]::new(
+            ('Installer case failed: ' + $testFailure.Exception.Message + '; cleanup also failed: ' + $cleanupFailure.Exception.Message),
+            [System.Exception[]]@($testFailure.Exception, $cleanupFailure.Exception))
+    }
+    if ($null -ne $cleanupFailure) { throw $cleanupFailure }
+    if ($null -ne $testFailure) { throw $testFailure }
 }
 $previous = $env:INKISM_TEST_BINARY
 $previousSuffix = $env:INKISM_TEST_SCREENSHOT_SUFFIX
@@ -77,7 +121,7 @@ if ($PreviousValidationSetup) {
     }
     $initialPayload = Join-Path (Split-Path $initialSetup -Parent) 'windows'
 }
-try {
+Invoke-InstallerCase {
     Run-Checked $initialSetup ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="notelinks" /DIR="' + $target + '" /LOG="' + $installLog + '"')
     foreach ($name in @('Inkism.exe', 'inkism-engine.exe', 'README.md', 'BUILD.txt', 'unins000.exe')) {
         if (-not (Test-Path (Join-Path $target $name))) { throw "Missing installed file: $name" }
@@ -98,12 +142,12 @@ try {
         node (Join-Path $root 'frontend/scripts/windows-ui-test.ts')
         if ($LASTEXITCODE) { throw 'Installed application UI test failed' }
     }
-} finally {
+} {
     $env:INKISM_TEST_BINARY = $previous
     $env:INKISM_TEST_SCREENSHOT_SUFFIX = $previousSuffix
     $env:INKISM_TEST_ENCRYPTED = $previousEncrypted
     if (Test-Path -LiteralPath $uninstaller) {
-        Run-Checked $uninstaller ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + $uninstallLog + '"')
+        Run-Uninstall $uninstaller $uninstallLog
         if (Test-Path -LiteralPath $testProtocolKey) { throw 'Uninstall left its owned URL protocol behind' }
         Assert-PersonalProtocolPreserved
         foreach ($name in $payloadNames) {
@@ -114,15 +158,15 @@ try {
 }
 # A handler selected after installation must survive Inkism's uninstall.
 $foreignProtocolCommand = '"C:\InkismValidationOtherHandler.exe" "%1"'
-try {
-    Run-Checked $setup ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="notelinks" /DIR="' + $target + '" /LOG="' + $installLog + '.protocol"')
+Invoke-InstallerCase {
+    Run-Checked $setup ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="notelinks" /DIR="' + $target + '" /LOG="' + (Join-Path $root 'dist/installer-protocol-install.log') + '"')
     Assert-InstalledProtocol
     $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($testProtocol + '\shell\open\command', $true)
     try { $key.SetValue('', $foreignProtocolCommand) } finally { $key.Dispose() }
-    Run-Checked $uninstaller ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + $uninstallLog + '.protocol"')
+    Run-Uninstall $uninstaller (Join-Path $root 'dist/installer-protocol-uninstall.log')
     if ((Read-ProtocolCommand 'inkism-validation-note') -cne $foreignProtocolCommand) { throw 'Uninstall removed a later URL protocol handler' }
     Assert-PersonalProtocolPreserved
-} finally {
+} {
     # This scheme did not exist before this test. Remove only our sentinel handler.
     if ((Read-ProtocolCommand 'inkism-validation-note') -ceq $foreignProtocolCommand) {
         [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($testProtocol, $false)
@@ -173,7 +217,8 @@ foreach ($withForeign in @($false, $true)) {
     $optOutUninstaller = Join-Path $optOutTarget 'unins000.exe'
     $optOutSentinel = Join-Path $optOutTarget 'preserve-optout-user-data.txt'
     $optOutLogs = Join-Path $root ('dist/installer-optout-' + $caseName)
-    try {
+    $optOutUninstallAttempted = $false
+    Invoke-InstallerCase {
         if ($withForeign) { Set-OptOutForeignProtocol }
         Assert-OptOutProtocol $withForeign
         Run-Checked $setup ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="" /DIR="' + $optOutTarget + '" /LOG="' + $optOutLogs + '-install.log"')
@@ -184,16 +229,18 @@ foreach ($withForeign in @($false, $true)) {
         Assert-InstalledPayload (Join-Path $root 'dist/windows') $optOutTarget
         Assert-OptOutProtocol $withForeign
         if ((Get-Content -LiteralPath $optOutSentinel) -cne 'preserve-optout') { throw 'Opt-out reinstall changed unowned user data' }
-        Run-Checked $optOutUninstaller ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + $optOutLogs + '-uninstall.log"')
+        $optOutUninstallAttempted = $true
+        Run-Uninstall $optOutUninstaller ($optOutLogs + '-uninstall.log')
         Assert-OptOutProtocol $withForeign
         foreach ($name in $payloadNames) {
             if (Test-Path -LiteralPath (Join-Path $optOutTarget $name)) { throw "Opt-out uninstall left an owned payload file behind: $name" }
         }
         if (-not (Test-Path -LiteralPath $optOutSentinel) -or (Get-Content -LiteralPath $optOutSentinel) -cne 'preserve-optout') { throw 'Opt-out uninstall changed unowned user data' }
         Write-Output ("PASS: unchecked note-link task with $caseName handler; fresh install/reinstall/uninstall preserves protocol state, exact payload hashes and unowned data")
-    } finally {
-        if (Test-Path -LiteralPath $optOutUninstaller) {
-            Run-Checked $optOutUninstaller ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + $optOutLogs + '-cleanup.log"')
+    } {
+        if (-not $optOutUninstallAttempted -and (Test-Path -LiteralPath $optOutUninstaller)) {
+            $optOutUninstallAttempted = $true
+            Run-Uninstall $optOutUninstaller ($optOutLogs + '-cleanup.log')
         }
         # Remove only the foreign registry fixture created by this case.
         if ($withForeign -and (Read-ProtocolCommand 'inkism-validation-note') -ceq $optOutForeignCommand) {
@@ -216,7 +263,8 @@ foreach ($withForeign in @($false, $true)) {
     $upgradeUninstaller = Join-Path $upgradeTarget 'unins000.exe'
     $upgradeSentinel = Join-Path $upgradeTarget 'preserve-upgrade-user-data.txt'
     $upgradeLogs = Join-Path $root ('dist/installer-upgrade-optout-' + $caseName)
-    try {
+    $upgradeUninstallAttempted = $false
+    Invoke-InstallerCase {
         Run-Checked $setup ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="notelinks" /DIR="' + $upgradeTarget + '" /LOG="' + $upgradeLogs + '-install.log"')
         Assert-InstalledPayload (Join-Path $root 'dist/windows') $upgradeTarget
         Assert-InstalledProtocol $upgradeTarget
@@ -226,7 +274,8 @@ foreach ($withForeign in @($false, $true)) {
         Assert-InstalledPayload (Join-Path $root 'dist/windows') $upgradeTarget
         Assert-OptOutProtocol $withForeign
         if ((Get-Content -LiteralPath $upgradeSentinel) -cne 'preserve-upgrade') { throw 'Task deselection upgrade changed unowned user data' }
-        Run-Checked $upgradeUninstaller ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + $upgradeLogs + '-uninstall.log"')
+        $upgradeUninstallAttempted = $true
+        Run-Uninstall $upgradeUninstaller ($upgradeLogs + '-uninstall.log')
         Assert-OptOutProtocol $withForeign
         foreach ($name in $payloadNames) {
             if (Test-Path -LiteralPath (Join-Path $upgradeTarget $name)) { throw "Task deselection uninstall left an owned payload file behind: $name" }
@@ -234,9 +283,10 @@ foreach ($withForeign in @($false, $true)) {
         if (-not (Test-Path -LiteralPath $upgradeSentinel) -or (Get-Content -LiteralPath $upgradeSentinel) -cne 'preserve-upgrade') { throw 'Task deselection uninstall changed unowned user data' }
         $protocolResult = if ($withForeign) { 'later foreign handler and metadata preserved' } else { 'owned registration removed' }
         Write-Output ("PASS: opt-in to opt-out upgrade; $protocolResult; exact payload hashes, personal protocol and unowned data preserved")
-    } finally {
-        if (Test-Path -LiteralPath $upgradeUninstaller) {
-            Run-Checked $upgradeUninstaller ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + $upgradeLogs + '-cleanup.log"')
+    } {
+        if (-not $upgradeUninstallAttempted -and (Test-Path -LiteralPath $upgradeUninstaller)) {
+            $upgradeUninstallAttempted = $true
+            Run-Uninstall $upgradeUninstaller ($upgradeLogs + '-cleanup.log')
         }
         if ($withForeign -and (Read-ProtocolCommand 'inkism-validation-note') -ceq $optOutForeignCommand) {
             $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($testProtocol)
