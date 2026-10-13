@@ -38,17 +38,19 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
       RUSTFLAGS: '-C target-feature=+crt-static'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         id: rust
+        with:
+          toolchain: stable
       - name: Restore Windows Rust build cache
         id: rust-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         continue-on-error: true
         with:
           path: |
@@ -76,7 +78,7 @@ jobs:
           }
       - name: Build real frontend
         run: |
-          npm --prefix frontend ci --no-audit --no-fund
+          npm --prefix frontend ci --ignore-scripts --no-audit --no-fund
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           npm --prefix frontend run build
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -126,7 +128,7 @@ jobs:
       # Cache hits never skip any build command or test.
       - name: Save completed Windows Rust build cache
         if: steps.rust-cache.outputs.cache-hit != 'true' && steps.rust-cache.outputs.cache-primary-key != ''
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         continue-on-error: true
         with:
           path: |
@@ -208,7 +210,7 @@ jobs:
         run: |
           Compress-Archive -Path dist/windows -DestinationPath dist/Inkism-windows-x64.zip
           (Get-FileHash dist/Inkism-windows-x64.zip -Algorithm SHA256).Hash | Set-Content dist/Inkism-windows-x64.zip.sha256
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: windows-validation
@@ -232,15 +234,17 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
       RUSTFLAGS: '-C target-feature=+crt-static'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         id: rust
-      - uses: actions/cache/restore@v4
+        with:
+          toolchain: stable
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         continue-on-error: true
         with:
           path: |
@@ -265,7 +269,7 @@ jobs:
           New-Item -ItemType Directory -Force segment-validation | Out-Null
           cargo test --locked --manifest-path core/local-api/Cargo.toml --lib 2>&1 | Tee-Object segment-validation/http.txt
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          npm --prefix frontend ci --no-audit --no-fund
+          npm --prefix frontend ci --ignore-scripts --no-audit --no-fund
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           npm --prefix frontend run build
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -382,7 +386,7 @@ jobs:
           (Get-FileHash dist/Inkism-setup.exe -Algorithm SHA256).Hash | Set-Content dist/Inkism-setup.exe.sha256
           (Get-FileHash dist/Inkism-windows-x64.zip -Algorithm SHA256).Hash | Set-Content dist/Inkism-windows-x64.zip.sha256
           'UNVALIDATED: targeted Windows browser/Rust checks only; this candidate has not repeated native WebView2, installer or personal-PC acceptance.' | Set-Content dist/VALIDATION.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: ${{ success() && inputs.block_format_only }}
         with:
           name: windows-block-format-candidate
@@ -391,7 +395,7 @@ jobs:
             dist/Inkism-windows-x64.zip*
             dist/VALIDATION.txt
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: windows-internal-segments
