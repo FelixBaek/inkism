@@ -1,5 +1,5 @@
 import { t } from "./i18n";
-import { backendErrorCode, localizeBackendError } from "./lib/error-messages";
+import { backendErrorCode, backendErrorDetail, localizeBackendError } from "./lib/error-messages";
 /** 데스크톱 브리지: POST /api/rpc ({op,...args}) → {ok:true,data}|{ok:false,error} */
 import type {
   AppInfo,
@@ -26,6 +26,7 @@ export class RpcError extends Error {
   constructor(
     public op: string,
     message: string,
+    public readonly status?: number,
   ) {
     super(localizeBackendError(message));
     this.rawMessage = message;
@@ -36,6 +37,15 @@ export class RpcError extends Error {
   get isConflict(): boolean {
     return this.code === "conflict" || /revision|conflict/i.test(this.rawMessage);
   }
+}
+
+export type RpcDiagnostic = "body_read_budget" | "duplicate_block_id";
+/** Decisions use the raw protocol diagnostic, never translated display text. */
+export function hasRpcDiagnostic(error: unknown, diagnostic: RpcDiagnostic): error is RpcError {
+  if (!(error instanceof RpcError) || error.code !== "invalid" || (error.status !== undefined && error.status !== 400)) return false;
+  const detail = backendErrorDetail(error.rawMessage);
+  return diagnostic === "body_read_budget" ? detail === "note body exceeds read budget" :
+    /^duplicate block ID .+: rename the duplicate block ID before merging$/.test(detail);
 }
 
 interface RpcEnvelope<T> {
@@ -65,10 +75,10 @@ export async function rpc<T>(
   try {
     body = (await res.json()) as RpcEnvelope<T>;
   } catch {
-    throw new RpcError(op, t("응답을 해석할 수 없습니다 (HTTP {status})", { status: res.status }));
+    throw new RpcError(op, t("응답을 해석할 수 없습니다 (HTTP {status})", { status: res.status }), res.status);
   }
   if (!res.ok || body?.ok !== true) {
-    throw new RpcError(op, body?.error || t("RPC 실패 (HTTP {status})", { status: res.status }));
+    throw new RpcError(op, body?.error || t("RPC 실패 (HTTP {status})", { status: res.status }), res.status);
   }
   return body.data as T;
 }

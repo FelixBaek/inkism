@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Files, List, Search, X } from "../icons";
 import { CalendarBlankIcon as CalendarDays } from "@phosphor-icons/react";
-import { api, rpc } from "../api";
+import { api, rpc, hasRpcDiagnostic } from "../api";
 import { useStore } from "../store";
 import type { Note, Summary } from "../types";
 import { t } from "../i18n";
@@ -64,7 +64,7 @@ export function WritingTools() {
   },[panel]);
   const run=async(work:()=>Promise<void>)=>{
     if(running.current)return;running.current=true;setBusy(true);setError("");
-    try{await work();}catch(e){const message=e instanceof Error?e.message:String(e);setError(message.includes("duplicate block ID")?t("같은 문단 ID가 있어 병합하지 않았습니다. HTML id 또는 Markdown ^ID의 중복을 수정한 뒤 다시 시도해 주세요."):message);}finally{running.current=false;setBusy(false);}
+    try{await work();}catch(e){const message=e instanceof Error?e.message:String(e);setError(hasRpcDiagnostic(e,"duplicate_block_id")?t("같은 문단 ID가 있어 병합하지 않았습니다. HTML id 또는 Markdown ^ID의 중복을 수정한 뒤 다시 시도해 주세요."):message);}finally{running.current=false;setBusy(false);}
   };
   const openNote=async(id:string)=>{await latest.current.selectNote(id);if(latest.current.readDraft()?.id===id)close();else throw new Error(t("저장을 완료한 뒤 다시 시도해 주세요."));};
   const daily=()=>void run(async()=>{

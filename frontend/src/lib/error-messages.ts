@@ -31,6 +31,16 @@ export function backendErrorCode(message: string): string | undefined {
   return code;
 }
 
+export function backendErrorDetail(message: string): string {
+  for (let depth = 0; depth < 8; depth++) {
+    const part = splitPrefix(message);
+    if (!part) break;
+    message = part[1];
+    if (["conflict", "invalid", "not_found", "internal"].includes(part[0])) break;
+  }
+  return message;
+}
+
 function localizeDetail(message: string): string {
   switch (message) {
     case "document revision changed":
@@ -49,6 +59,8 @@ function localizeDetail(message: string): string {
     case "sync is in progress; retry after it finishes": return t("동기화가 진행 중입니다. 완료한 뒤 다시 시도해 주세요.");
     case "sync is not configured": return t("동기화를 먼저 설정해 주세요.");
     case "authentication failed": return t("인증에 실패했습니다. 다시 로그인해 주세요.");
+    case "note body exceeds read budget": return t("노트 본문이 조회 용량 제한을 초과했습니다. 구간별로 불러옵니다.");
+    case "편집 기준 버전이 이력에 없습니다. 현재 편집을 유지했습니다.": return t("편집 기준 버전이 이력에 없습니다. 현재 편집을 유지했습니다.");
     case "읽기 전용 노트입니다. 읽기 전용을 해제한 뒤 편집하세요": return t("읽기 전용 노트입니다. 읽기 전용을 해제한 뒤 편집하세요");
     case "잠긴 노트입니다. 잠금을 연 편집기에서 저장하세요": return t("잠긴 노트입니다. 잠금을 연 편집기에서 저장하세요");
     case "금고 비밀번호가 맞지 않습니다": return t("금고 비밀번호가 맞지 않습니다");
@@ -69,6 +81,8 @@ function localizeDetail(message: string): string {
   if (revision) return t("노트 {id}의 버전이 바뀌었습니다 (요청 {expected}, 현재 {current}). 다시 불러와 주세요.", {id: revision[1], expected: revision[2], current: revision[3]});
   const note = /^note ([\w-]+)$/.exec(message);
   if (note) return t("노트를 찾을 수 없습니다: {id}", {id: note[1]});
+  const duplicate = /^duplicate block ID (.+): rename the duplicate block ID before merging$/.exec(message);
+  if (duplicate) return t("중복 문단 ID {id}: 병합 전에 ID를 바꿔 주세요.", {id: duplicate[1]});
   // Exact keys already in the app's dictionaries can come from the backend
   // too. Unknown diagnostics, identifiers and paths remain intact.
   return t(message);

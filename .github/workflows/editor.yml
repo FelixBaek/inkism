@@ -62,6 +62,7 @@ jobs:
           INKISM_TEST_PREVIEW="$PWD/core/local-api/target/debug/inkism-local-api" INKISM_TEST_ENGINE="$PWD/core/runtime-core/target/debug/inkism-engine" npm --prefix frontend run test:browser 2>&1 | tee .test-data/editor-ci/source-browser.log
           INKISM_LAZY=1 node frontend/scripts/e2e-reminder-actions.ts 2>&1 | tee .test-data/editor-ci/lazy-reminder.log
           node frontend/scripts/e2e-recovery-import.ts 2>&1 | tee .test-data/editor-ci/draft-recovery.log
+          node frontend/scripts/e2e-recovery-errors.ts 2>&1 | tee .test-data/editor-ci/recovery-errors.log
           INKISM_TEST_ENGINE="$PWD/core/runtime-core/target/debug/inkism-engine" cargo test --locked --manifest-path core/local-api/Cargo.toml --bin inkism-local-api tests::crash_draft_application -- --exact --nocapture 2>&1 | tee .test-data/editor-ci/crash-journal.log
           npm --prefix frontend run dev -- --host 127.0.0.1 > .test-data/editor-ci/vite.log 2>&1 &
           vite_pid=$!
