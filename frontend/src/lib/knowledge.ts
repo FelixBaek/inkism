@@ -16,7 +16,7 @@ export type SavedView = {
   filter: { property: string; operator: 'contains' | 'equals' | 'gt' | 'lt' | 'exists'; value: string };
   sort: { property: string; direction: 'asc' | 'desc' };
 };
-export type KnowledgeSettings = { style_presets?:StylePreset[]; property_definitions?:PropertyDefinition[]; block_styles?:BlockStyle[]; version: number; template_ids: string[]; daily_template_id: string | null; views: SavedView[] };
+export type KnowledgeSettings = { glossary?:import("./term-glossary").TermGlossaryEntry[]; style_presets?:StylePreset[]; property_definitions?:PropertyDefinition[]; block_styles?:BlockStyle[]; version: number; template_ids: string[]; daily_template_id: string | null; views: SavedView[] };
 export type GraphNode = { id: string; title: string; tags: string[]; aliases: string[] };
 export type GraphEdge = { source: string; target: string };
 export type GraphData = { nodes: GraphNode[]; edges: GraphEdge[]; truncated: boolean };

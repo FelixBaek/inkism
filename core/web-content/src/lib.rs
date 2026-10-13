@@ -182,7 +182,7 @@ impl Sanitizer {
             return;
         }
         let mut tag = "";
-        if let Some(el) = element.filter(|el| ALLOWED_TAGS.contains(&&*el.name.local)) {
+        if let Some(el) = element.filter(|el| ALLOWED_TAGS.contains(&&*el.name.local) || (self.export && &*el.name.local == "span" && valid_term(el))) {
             tag = &el.name.local;
             if !self.open_tag(el) {
                 return;
@@ -332,10 +332,28 @@ fn hidden_style() -> &'static Regex {
     })
 }
 
+// Only the annotation span is admitted; arbitrary HTML attributes remain stripped.
+fn valid_term(el: &Element) -> bool {
+    let uuid = |s: &str| s.len() == 36 && s.bytes().enumerate().all(|(i, b)|
+        if [8,13,18,23].contains(&i) { b == b'-' } else { b.is_ascii_hexdigit() });
+    attribute(el, "data-term-id").is_some_and(|s| uuid(&s)) &&
+    attribute(el, "data-term-definition").is_some_and(|s| !s.trim().is_empty() && s.chars().count() <= 2000 &&
+        !s.chars().any(|c| c.is_ascii_control() && !matches!(c, '\t'|'\n'|'\r'))) &&
+    ["data-term-glossary-id", "data-term-note-id"].iter().all(|key| attribute(el, key).is_none_or(|s| uuid(&s)))
+}
+
 /// Export accepts exact formatting values, never URLs, arbitrary CSS, or
 /// event handlers.
 fn export_attributes(out: &mut String, el: &Element) {
     let tag: &str = &el.name.local;
+    if tag == "span" && valid_term(el) {
+        for key in ["data-term-id", "data-term-definition", "data-term-glossary-id", "data-term-note-id"] {
+            if let Some(value) = attribute(el, key) {
+                out.push(' '); out.push_str(key); out.push_str("=\"");
+                escape_into(out, &value); out.push('"');
+            }
+        }
+    }
     for (key, raw) in el.attrs() {
         let value = go_lower(raw.trim());
         let v = value.as_str();
@@ -447,6 +465,17 @@ fn atoi(s: &str) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn term_export_preserves_escaped_metadata_only() {
+        let html = r#"<p><span data-term-id="11111111-1111-4111-8111-111111111111" data-term-definition="한글 &quot;Def&quot; &lt;script&gt;literal&lt;/script&gt;" onclick="evil()">용어</span></p>"#;
+        let clean = clean_export(html, MAX_BYTES).unwrap();
+        assert!(clean.html.contains("data-term-definition="));
+        assert!(clean.html.contains("한글 &#34;Def&#34; &lt;script&gt;literal&lt;/script&gt;"));
+        assert!(!clean.html.contains("onclick"));
+        let invalid = html.replace("11111111-1111-4111-8111-111111111111", "invalid");
+        assert_eq!(clean_export(&invalid, MAX_BYTES).unwrap().html, "<p>용어</p>");
+    }
 
     #[test]
     fn go_string_helpers() {

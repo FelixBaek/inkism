@@ -214,6 +214,35 @@ fn validate_filter(filter: &Value) -> Result<()> {
     }
     Ok(())
 }
+/// Small reusable definitions; inline annotations remain self-contained in note bodies.
+fn validate_glossary(v: &Value) -> Result<()> {
+    let Some(raw) = v.get("glossary") else { return Ok(()); };
+    let entries = raw.as_array().ok_or_else(|| invalid("glossary must be an array"))?;
+    if entries.len() > 1000 { return Err(invalid("too many glossary entries")); }
+    let mut seen = HashSet::new();
+    for entry in entries {
+        let object = entry.as_object().ok_or_else(|| invalid("invalid glossary entry"))?;
+        if object.keys().any(|key| !["id", "term", "definition", "noteId", "type", "lang"].contains(&key.as_str())) {
+            return Err(invalid("unknown glossary field"));
+        }
+        let id = string(entry, "id")?;
+        let definition = string(entry, "definition")?;
+        if !ids::valid_id(id) || !seen.insert(id) || !bounded(string(entry, "term")?, 256)
+            || definition.trim().is_empty() || definition.chars().count() > 4096
+            || definition.chars().any(|c| c.is_control() && c != '\n' && c != '\t') {
+            return Err(invalid("invalid glossary id, term or definition"));
+        }
+        if entry.get("noteId").is_some_and(|value| !value.as_str().is_some_and(ids::valid_id)) {
+            return Err(invalid("invalid glossary note id"));
+        }
+        for (key, max) in [("type", 80), ("lang", 35)] {
+            if entry.get(key).is_some_and(|value| !value.as_str().is_some_and(|s| bounded(s, max))) {
+                return Err(invalid("invalid glossary metadata"));
+            }
+        }
+    }
+    Ok(())
+}
 pub fn validate_config(v: &Value) -> Result<()> {
     if v.to_string().len() > 256 * 1024 {
         return Err(invalid("knowledge settings too large"));
@@ -222,11 +251,12 @@ pub fn validate_config(v: &Value) -> Result<()> {
         .as_object()
         .ok_or_else(|| invalid("invalid knowledge settings"))?;
     if o.keys()
-        .any(|k| !["template_ids", "daily_template_id", "views", "style_presets", "property_definitions", "block_styles"].contains(&k.as_str()))
+        .any(|k| !["template_ids", "daily_template_id", "views", "style_presets", "property_definitions", "block_styles", "glossary"].contains(&k.as_str()))
     {
         return Err(invalid("unknown knowledge setting"));
     }
     validate_extensions(v)?;
+    validate_glossary(v)?;
     let ids = v["template_ids"]
         .as_array()
         .ok_or_else(|| invalid("invalid template_ids"))?;
@@ -435,7 +465,7 @@ pub fn config_set(conn: &Connection, args: &Value) -> Result<Value> {
         compare_version(conn, CONFIG_KEY, args)?;
         let mut data = config_get(conn)?;
         data.as_object_mut().unwrap().remove("version");
-        for key in ["template_ids", "daily_template_id", "views", "style_presets", "property_definitions", "block_styles"] {
+        for key in ["template_ids", "daily_template_id", "views", "style_presets", "property_definitions", "block_styles", "glossary"] {
             if let Some(v) = args.get(key) {
                 data[key] = v.clone();
             }
@@ -889,6 +919,21 @@ pub fn import_config(
         imported_view_ids.insert(string(&view,"id")?.to_owned());
         views.push(view);
     }
+    let mut glossary = current["glossary"].as_array().cloned().unwrap_or_default();
+    for entry in incoming["glossary"].as_array().into_iter().flatten() {
+        let mut imported = entry.clone();
+        if let Some(old) = entry["noteId"].as_str() {
+            if let Some(new) = ids.get(old) { imported["noteId"] = json!(new); }
+            else { imported.as_object_mut().unwrap().remove("noteId"); }
+        }
+        if let Some(existing) = glossary.iter().find(|item| item["id"] == imported["id"]) {
+            // Never silently repoint imported inline annotations to a different definition.
+            if existing != &imported { return Err(invalid("glossary id conflict in backup")); }
+        } else { glossary.push(imported); }
+    }
+    if current.get("glossary").is_some() || incoming.get("glossary").is_some() {
+        current["glossary"] = json!(glossary);
+    }
     let mut definition_map = HashMap::new();
     for key in ["style_presets", "property_definitions", "block_styles"] {
         let mut merged = current[key].as_array().cloned().unwrap_or_default();
@@ -951,6 +996,9 @@ pub fn delete_local(conn: &Connection, id: &str) -> Result<()> {
         .retain(|value| value.as_str() != Some(id));
     if config["daily_template_id"].as_str() == Some(id) {
         config["daily_template_id"] = Value::Null;
+    }
+    for entry in config["glossary"].as_array_mut().into_iter().flatten() {
+        if entry["noteId"].as_str() == Some(id) { entry.as_object_mut().unwrap().remove("noteId"); }
     }
     if config != original {
         settings::write_local(conn, CONFIG_KEY, Some(&config.to_string()))?;

@@ -500,3 +500,81 @@ fn collection_card_settings_survive_database_restart() {
     config["op"]=json!("knowledge_settings_set");config["views"]=json!([{"id":"cover-view","name":"Covers","layout":"cards","filter":{"property":"","operator":"contains","value":""},"sort":{"property":"$title","direction":"asc"},"card":{"cover_property":"Image","visible_properties":["Score"]}}]);
     let saved=ok(e.execute(config));drop(e);let reopened=db.open();let loaded=ok(reopened.execute(json!({"op":"knowledge_settings_get"})));assert_eq!(loaded["views"],saved["views"]);
 }
+
+#[test]
+fn glossary_is_validated_versioned_and_preserved_for_older_clients() {
+    let db = Db::new(); let e = db.open();
+    let glossary = json!([{"id":"term-rag","term":"RAG","definition":"검색 증강 생성\n근거를 찾아 답변한다.","type":"concept","lang":"ko"}]);
+    let saved = ok(e.execute(json!({"op":"knowledge_settings_set","version":0,"glossary":glossary})));
+    assert_eq!(saved["glossary"], glossary);
+    assert_eq!(ok(e.execute(json!({"op":"knowledge_list"})))["items"], json!([]), "definitions must not create notes");
+    assert_eq!(e.execute(json!({"op":"knowledge_settings_set","version":0,"glossary":[]}))["ok"], false);
+    let preserved = ok(e.execute(json!({"op":"knowledge_settings_set","version":saved["version"],"views":[]})));
+    assert_eq!(preserved["glossary"], glossary);
+    for invalid in [json!(null), json!([glossary[0],glossary[0]]), json!([{"id":"bad/id","term":"T","definition":"D"}]), json!([{"id":"t","term":" ","definition":"D"}]), json!([{"id":"t","term":"T","definition":"D","noteId":"bad/id"}]), json!([{"id":"t","term":"T","definition":"D","extra":true}]), json!([{"id":"t","term":"T","definition":"x".repeat(4097)}])] {
+        assert_eq!(e.execute(json!({"op":"knowledge_settings_set","version":preserved["version"],"glossary":invalid}))["ok"], false);
+        assert_eq!(ok(e.execute(json!({"op":"knowledge_settings_get"}))), preserved);
+    }
+    drop(e);
+    assert_eq!(ok(db.open().execute(json!({"op":"knowledge_settings_get"})))["glossary"], glossary);
+}
+
+#[test]
+fn glossary_backup_remaps_notes_and_delete_keeps_definition() {
+    let db=Db::new(); let e=db.open(); let n=note(&e,"RAG","expanded explanation");
+    let glossary=json!([{"id":"term-rag","term":"RAG","definition":"검색 증강 생성","noteId":n["id"]}]);
+    ok(e.execute(json!({"op":"knowledge_settings_set","version":0,"glossary":glossary})));
+    let path=format!("{}.backup",db.0.display()); ok(e.execute(json!({"op":"export","path":path})));
+    let target=Db::new(); let dest=target.open(); ok(dest.execute(json!({"op":"import","path":path})));
+    let imported=ok(dest.execute(json!({"op":"knowledge_list"})))["items"][0].clone();
+    let config=ok(dest.execute(json!({"op":"knowledge_settings_get"})));
+    assert_eq!(config["glossary"][0]["id"],"term-rag");
+    assert_eq!(config["glossary"][0]["noteId"],imported["id"]);
+    assert_ne!(imported["id"],n["id"]);
+    ok(dest.execute(json!({"op":"patch","id":imported["id"],"revision":imported["revision"],"changes":{"trashed":true}})));
+    ok(dest.execute(json!({"op":"delete","id":imported["id"]})));
+    let after=ok(dest.execute(json!({"op":"knowledge_settings_get"})));
+    assert_eq!(after["glossary"][0]["definition"],"검색 증강 생성");
+    assert!(after["glossary"][0].get("noteId").is_none());
+}
+
+#[test]
+fn glossary_backup_conflict_rolls_back_entire_import() {
+    let db=Db::new();let e=db.open();note(&e,"source","body");
+    ok(e.execute(json!({"op":"knowledge_settings_set","version":0,"glossary":[{"id":"term-1","term":"T","definition":"source meaning"}]})));
+    let path=format!("{}.backup",db.0.display());ok(e.execute(json!({"op":"export","path":path})));
+    let target=Db::new();let dest=target.open();
+    let config=ok(dest.execute(json!({"op":"knowledge_settings_set","version":0,"glossary":[{"id":"term-1","term":"T","definition":"other meaning"}]})));
+    assert_eq!(dest.execute(json!({"op":"import","path":path}))["ok"],false);
+    assert_eq!(ok(dest.execute(json!({"op":"knowledge_settings_get"}))),config);
+    assert_eq!(ok(dest.execute(json!({"op":"knowledge_list"})))["items"],json!([]));
+}
+
+#[test]
+fn glossary_sync_uses_existing_settings_validation_and_versions() {
+    let db=Db::new();let e=db.open();
+    let value=json!({"template_ids":[],"daily_template_id":null,"views":[],"glossary":[{"id":"term-1","term":"T","definition":"remote"}]}).to_string();
+    assert!(inkism_engine::settings::merge(e.connection(),inkism_engine::knowledge::CONFIG_KEY,Some(&value),100).unwrap());
+    let loaded=ok(e.execute(json!({"op":"knowledge_settings_get"})));
+    assert_eq!(loaded["glossary"][0]["definition"],"remote");assert_eq!(loaded["version"],100);
+    let bad=value.replace("\"id\":\"term-1\"","\"id\":\"bad/id\"");
+    assert!(inkism_engine::settings::merge(e.connection(),inkism_engine::knowledge::CONFIG_KEY,Some(&bad),101).is_err());
+    assert_eq!(ok(e.execute(json!({"op":"knowledge_settings_get"}))),loaded);
+}
+
+#[test]
+fn glossary_backup_keeps_annotation_and_expanded_note_connected() {
+    let db=Db::new();let e=db.open();let expanded=note(&e,"Expanded meaning","Explanation");
+    let body=format!("<p><span data-term-id=\"occurrence-1\" data-term-glossary-id=\"term-1\" data-term-note-id=\"{}\" data-term-definition=\"Short meaning\">Term</span></p>",expanded["id"].as_str().unwrap());
+    ok(e.execute(json!({"op":"save","note":{"title":"Annotated","content_format":"html","content":body}})));
+    ok(e.execute(json!({"op":"knowledge_settings_set","version":0,"glossary":[{"id":"term-1","term":"Term","definition":"Short meaning","noteId":expanded["id"]}]})));
+    let path=format!("{}.backup",db.0.display());ok(e.execute(json!({"op":"export","path":path})));
+    let target=Db::new();let dest=target.open();ok(dest.execute(json!({"op":"import","path":path})));
+    let items=ok(dest.execute(json!({"op":"knowledge_list"})))["items"].as_array().unwrap().clone();
+    let expanded=items.iter().find(|item|item["title"]=="Expanded meaning").unwrap();
+    let annotated=items.iter().find(|item|item["title"]=="Annotated").unwrap();
+    let imported=ok(dest.execute(json!({"op":"get","id":annotated["id"]})));
+    assert!(imported["content"].as_str().unwrap().contains(&format!("data-term-note-id=\"{}\"",expanded["id"].as_str().unwrap())));
+    assert!(imported["content"].as_str().unwrap().contains("data-term-glossary-id=\"term-1\""));
+    assert_eq!(ok(dest.execute(json!({"op":"knowledge_settings_get"})))["glossary"][0]["noteId"],expanded["id"]);
+}

@@ -1,4 +1,5 @@
 import React from "react";
+import { openTermDefinition, canDefineTerm } from "./TermDefinitionPopover";
 import type { Editor } from "@tiptap/core";
 import { useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
@@ -117,6 +118,7 @@ export function SelectionToolbar({ editor }: Readonly<{ editor: Editor }>) {
             <Icon size={16} aria-hidden />
           </IconButton>
         ))}
+        <button type="button" disabled={!canDefineTerm(editor)} onMouseDown={event => event.preventDefault()} onClick={() => openTermDefinition(editor)} title={t("용어 설명 (Ctrl/⌘+G)")}>{t("용어 설명")}</button>
         <button
           type="button"
           className="selection-extract-btn"

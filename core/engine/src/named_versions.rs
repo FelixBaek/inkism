@@ -139,12 +139,13 @@ pub fn import_with_ids(conn:&Connection,note:&str,data:&Value,mapping:&std::coll
             return Err(EngineError::invalid("named versions too large"));
         }
         let format = crate::source_format::from_value(row.get("content_format"))?;
+        let content = crate::links::remap_term_references(&content, format, mapping);
         let at = crate::model::opt_timestamp(row, "created_at")?
             .ok_or_else(|| EngineError::invalid("missing version timestamp"))?;
         conn.execute("INSERT INTO history_seq DEFAULT VALUES", [])?;
         let seq = conn.last_insert_rowid();
         // Imported note revision starts at 1; never reuse the old revision number.
-        conn.execute("INSERT INTO history(id,note_id,label,title,content,text,content_format,created_at,row_seq,note_revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,NULL)",params![if preserve_ids {row["id"].as_str().filter(|id|ids::valid_id(id)).ok_or_else(||EngineError::invalid("invalid version id"))?.to_string()}else{ids::new_id()},note,name,title,content.as_ref(),text.as_ref(),format,at,seq])?;
+        conn.execute("INSERT INTO history(id,note_id,label,title,content,text,content_format,created_at,row_seq,note_revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,NULL)",params![if preserve_ids {row["id"].as_str().filter(|id|ids::valid_id(id)).ok_or_else(||EngineError::invalid("invalid version id"))?.to_string()}else{ids::new_id()},note,name,title,content.as_str(),text.as_ref(),format,at,seq])?;
     }
     Ok(())
 }

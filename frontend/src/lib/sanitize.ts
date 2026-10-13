@@ -1,5 +1,22 @@
 import DOMPurify from "dompurify";
 
+// This inert metadata is plain text. DOMPurify otherwise removes literal HTML
+// examples inside attribute values; it is never inserted as innerHTML.
+const termText = new WeakMap<Node, string>();
+DOMPurify.addHook('beforeSanitizeAttributes', node => {
+  if (!(node instanceof Element) || node.tagName !== 'SPAN') return;
+  const value = node.getAttribute('data-term-definition');
+  if (value?.trim() && Array.from(value).length <= 2000 &&
+      !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) termText.set(node, value);
+});
+DOMPurify.addHook('afterSanitizeAttributes', node => {
+  const value = termText.get(node);
+  if (value !== undefined && node instanceof Element) {
+    node.setAttribute('data-term-definition', value);
+    termText.delete(node);
+  }
+});
+
 /**
  * 리치 텍스트 모드에서 Tiptap에 넣기 전에 가져온/저장된 HTML을 정화한다.
  * 대용량 문서(원문 모드)는 이 경로를 지나지 않는다 — 메인 스레드 DOM 파싱을
