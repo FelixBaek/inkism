@@ -16,7 +16,7 @@
     "test:unit": "node scripts/run-unit-tests.ts",
     "test:i18n": "node scripts/check-i18n.ts",
     "test:components": "node scripts/e2e-system-reminder-settings.ts",
-    "test:unit:coverage:core": "node --test --experimental-test-coverage --test-coverage-include=src/lib/csv.ts --test-coverage-include=src/lib/body-splice.ts --test-coverage-include=src/lib/window-history.ts --test-coverage-include=src/lib/edit-work.ts --test-coverage-lines=90 --test-coverage-branches=90 --test-coverage-functions=90 scripts/test-csv.ts scripts/test-body-splice.ts scripts/test-window-history.ts scripts/test-edit-work.ts scripts/test-core-boundaries.ts",
+    "test:unit:coverage:core": "node --test --experimental-test-coverage --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=lcov.info --test-coverage-include=src/lib/csv.ts --test-coverage-include=src/lib/body-splice.ts --test-coverage-include=src/lib/window-history.ts --test-coverage-include=src/lib/edit-work.ts --test-coverage-lines=90 --test-coverage-branches=90 --test-coverage-functions=90 scripts/test-csv.ts scripts/test-body-splice.ts scripts/test-window-history.ts scripts/test-edit-work.ts scripts/test-core-boundaries.ts",
     "bench:input": "node scripts/run-input-benchmark.ts"
   },
   "dependencies": {
