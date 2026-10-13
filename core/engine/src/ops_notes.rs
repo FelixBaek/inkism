@@ -113,21 +113,58 @@ pub fn list(conn: &Connection, args: &Value) -> Result<Value> {
         item.notebook_ids = memberships.remove(&item.id).unwrap_or_default();
     }
     tx.commit()?;
-    let items: Vec<Value> = items
-        .iter()
-        .map(|r| {
-            let tags: Vec<String> = serde_json::from_str(&r.tags_json).unwrap_or_default();
-            json!({
-                "id": r.id, "title": r.title, "preview": r.preview,
-                "notebook_id": r.notebook_id, "notebook_ids":r.notebook_ids, "tags": tags, "favorite": r.favorite,
-                "pinned": r.pinned, "readonly": r.readonly, "locked": r.locked, "archived": r.archived, "trashed": r.trashed,
-                "color": r.color, "reminder_at": r.reminder_at, "reminder_repeat_hours":r.reminder_repeat_hours,
-                "created_at": r.created_at, "updated_at": r.updated_at, "edited_at": r.edited_at,
-                "revision": r.revision, "content_format":r.content_format,
-            })
-        })
-        .collect();
+    let items: Vec<Value> = items.iter().map(summary_json).collect();
     Ok(json!({ "items": items, "next_cursor": next_cursor }))
+}
+
+fn summary_json(r: &SummaryRow) -> Value {
+    let tags: Vec<String> = serde_json::from_str(&r.tags_json).unwrap_or_default();
+    json!({
+        "id": r.id, "title": r.title, "preview": r.preview,
+        "notebook_id": r.notebook_id, "notebook_ids":r.notebook_ids, "tags": tags, "favorite": r.favorite,
+        "pinned": r.pinned, "readonly": r.readonly, "locked": r.locked, "archived": r.archived, "trashed": r.trashed,
+        "color": r.color, "reminder_at": r.reminder_at, "reminder_repeat_hours":r.reminder_repeat_hours,
+        "created_at": r.created_at, "updated_at": r.updated_at, "edited_at": r.edited_at,
+        "revision": r.revision, "content_format":r.content_format,
+    })
+}
+
+/// Read-only change feed for the agent API: every row, hidden ones included so
+/// callers can drop them, in `(updated_at,id)` order. Cursor is `updated_at:id`.
+// shortcut: no hard-delete tombstones and synced rows keep their remote
+// updated_at, so feeds can miss those; clients resync from `list` periodically.
+// Full scan + sort per page; add an (updated_at,id) index if libraries outgrow it.
+pub fn changes(conn: &Connection, args: &Value) -> Result<Value> {
+    let limit = args.get("limit").and_then(Value::as_u64).unwrap_or(limits::DEFAULT_LIST_LIMIT as u64).clamp(1, limits::MAX_LIST_LIMIT as u64) as usize;
+    let (since, after) = match args.get("cursor").and_then(Value::as_str).filter(|c| !c.is_empty()) {
+        None => (i64::MIN, String::new()),
+        Some(c) => c
+            .split_once(':')
+            .and_then(|(t, id)| Some((t.parse::<i64>().ok()?, id.to_string())))
+            .filter(|(_, id)| ids::valid_id(id))
+            .ok_or_else(|| EngineError::invalid("bad cursor"))?,
+    };
+    let tx = conn.unchecked_transaction()?;
+    let mut stmt = tx.prepare(&format!(
+        "SELECT {SUMMARY_COLUMNS} FROM notes_meta m WHERE (m.updated_at,m.id) > (?1,?2) ORDER BY m.updated_at, m.id LIMIT ?3"
+    ))?;
+    let mut items = stmt
+        .query_map(params![since, after, limit as i64 + 1], summary_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    drop(stmt);
+    let more = items.len() > limit;
+    items.truncate(limit);
+    let ids: Vec<&str> = items.iter().map(|r| r.id.as_str()).collect();
+    let mut memberships = crate::notebook_membership::load_many(&tx, &ids)?;
+    for item in &mut items {
+        item.notebook_ids = memberships.remove(&item.id).unwrap_or_default();
+    }
+    tx.commit()?;
+    let next_cursor = items.last().map_or_else(
+        || args.get("cursor").and_then(Value::as_str).unwrap_or("").to_string(),
+        |r| format!("{}:{}", r.updated_at, r.id),
+    );
+    Ok(json!({ "items": items.iter().map(summary_json).collect::<Vec<_>>(), "next_cursor": next_cursor, "has_more": more }))
 }
 
 /// Notebook, tag and search-query filters of a list request.
@@ -242,12 +279,7 @@ fn read_summary_page(
     let mut items: Vec<SummaryRow> = Vec::with_capacity(limit as usize);
     for (clause, order, parameters) in queries {
         let remaining = limit as usize + 1 - items.len();
-        let sql = format!(
-            "SELECT m.id, m.title, m.preview, m.notebook_id, m.tags, m.favorite, m.pinned, \
-                    m.archived, m.trashed, m.color, m.reminder_at, m.created_at, m.updated_at, \
-                    m.revision, m.content_format, m.reminder_repeat_hours, m.readonly, m.edited_at, m.locked \
-             FROM notes_meta m WHERE {clause}{order} LIMIT {remaining}"
-        );
+        let sql = format!("SELECT {SUMMARY_COLUMNS} FROM notes_meta m WHERE {clause}{order} LIMIT {remaining}");
         let mut stmt = tx.prepare(&sql)?;
         let mut rows = stmt.query(rusqlite::params_from_iter(binds[..parameters].iter()))?;
         while let Some(row) = rows.next()? {
@@ -283,6 +315,11 @@ fn list_cursor(last: &SummaryRow, sort: &ListSort) -> String {
     };
     c.encode()
 }
+
+/// Column order read by `summary_row`.
+const SUMMARY_COLUMNS: &str = "m.id, m.title, m.preview, m.notebook_id, m.tags, m.favorite, m.pinned, \
+    m.archived, m.trashed, m.color, m.reminder_at, m.created_at, m.updated_at, \
+    m.revision, m.content_format, m.reminder_repeat_hours, m.readonly, m.edited_at, m.locked";
 
 fn summary_row(row: &rusqlite::Row) -> rusqlite::Result<SummaryRow> {
     Ok(SummaryRow {

@@ -1,6 +1,7 @@
 import {useDialogVisibility} from '../lib/dialog-visibility';
 import { createPortal } from "react-dom";
 import {AiSettings} from "./AiSettings";
+import {AgentApiSettings} from "./AgentApiSettings";
 import {VaultSettings} from "./VaultSettings";
 import {CommandSettings} from "./CommandSettings";
 import React, { useEffect, useRef, useState } from "react";
@@ -31,7 +32,7 @@ import { PluginSettings } from "./PluginSettings";
 import { parseWrap } from "./EditorPane";
 import "./SettingsDialog.css";
 
-type Section = "ai" | "general" | "editor" | "plugins" | "sync" | "backup" | "import" | "look" | "photo" | "lock" | "about";
+type Section = "ai" | "agent" | "general" | "editor" | "plugins" | "sync" | "backup" | "import" | "look" | "photo" | "lock" | "about";
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "general", label: t("일반") },
   { id: "editor", label: t("편집기") },
@@ -42,6 +43,7 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: "look", label: t("모양") },
   { id: "photo", label: t("사진 검색") },
   { id: "ai", label: t("AI 연결") },
+  { id: "agent", label: t("외부 AI 연결") },
   { id: "lock", label: t("앱 잠금") },
   { id: "about", label: t("정보") },
 ];
@@ -262,6 +264,7 @@ export function SettingsDialog() {
             {/* 닫으면 내용을 내린다: 동기화 상태 확인 같은 주기 작업이 화면 밖에서 돌지 않게 */}
             {open && <div className="settings-content">
             {section === "ai" && <AiSettings />}
+            {section === "agent" && <AgentApiSettings />}
             {section === "general" && <><GeneralSettings /><DefaultSettings /><CommandSettings /></>}
             {section === "editor" && <EditorSettings />}
             {section === "plugins" && <PluginSettings />}
