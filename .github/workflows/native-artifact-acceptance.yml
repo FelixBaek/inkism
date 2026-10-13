@@ -1,0 +1,91 @@
+name: Existing native artifact acceptance
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/native-artifact-acceptance.yml'
+      - 'tools/scripts/native-artifact-*'
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Run historical test artifacts; no new app build or release'
+        type: choice
+        options: [all, macos, ios, android]
+        default: all
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: native-artifact-acceptance-${{ github.ref }}-${{ inputs.platform }}
+  cancel-in-progress: false
+jobs:
+  apple:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'macos' || inputs.platform == 'ios'
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos, ios]
+    # Both existing artifacts contain arm64 code. The label is pinned rather than -latest.
+    runs-on: macos-26
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == matrix.platform
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == matrix.platform
+        with:
+          node-version: '22'
+      - name: Install and run exact historical native artifact
+        if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == matrix.platform
+        shell: bash
+        run: node tools/scripts/native-artifact-acceptance.mjs --platform '${{ matrix.platform }}' --output "$RUNNER_TEMP/native-acceptance/${{ matrix.platform }}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == matrix.platform)
+        with:
+          name: native-acceptance-${{ matrix.platform }}-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/native-acceptance/${{ matrix.platform }}/evidence.json
+            ${{ runner.temp }}/native-acceptance/${{ matrix.platform }}/*.png
+            ${{ runner.temp }}/native-acceptance/${{ matrix.platform }}/*.log
+  android:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'android'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          packages: platform-tools
+      - name: Prepare supported emulator and disposable KVM access
+        shell: bash
+        run: |
+          sdkmanager 'emulator' 'system-images;android-30;google_apis;x86_64'
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+      - name: Verify exact historical APK
+        shell: bash
+        run: node tools/scripts/native-artifact-acceptance.mjs --platform android --prepare-only --output "$RUNNER_TEMP/native-acceptance/android"
+      - name: Install and restart the actual Android app
+        shell: bash
+        run: |
+          apk=$(cat "$RUNNER_TEMP/native-acceptance/android/artifact-path.txt")
+          python3 tools/scripts/native-artifact-android.py --sdk "$ANDROID_HOME" --apk "$apk" --output "$RUNNER_TEMP/native-acceptance/android"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: native-acceptance-android-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/native-acceptance/android/*.json
+            ${{ runner.temp }}/native-acceptance/android/*.png
+            ${{ runner.temp }}/native-acceptance/android/*.xml
+            ${{ runner.temp }}/native-acceptance/android/*.log
