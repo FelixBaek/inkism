@@ -38,15 +38,22 @@ pub use windows::{forward, Server};
 
 #[cfg(windows)]
 mod windows {
-    use super::*;
-    use std::{io, ptr, sync::mpsc, thread};
+    use super::{endpoint_name, valid_link, MAX_LINK_BYTES};
+    use std::{io, path::Path, ptr, sync::mpsc, thread};
     use windows_sys::Win32::{
         Foundation::{GetLastError, ERROR_CLASS_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WPARAM},
         System::{
             DataExchange::COPYDATASTRUCT, LibraryLoader::GetModuleHandleW,
             Threading::GetCurrentThreadId,
         },
-        UI::WindowsAndMessaging::*,
+        UI::WindowsAndMessaging::{
+            AllowSetForegroundWindow, CreateWindowExW, DefWindowProcW, DestroyWindow,
+            DispatchMessageW, FindWindowExW, GetMessageW, GetWindowLongPtrW,
+            GetWindowThreadProcessId, PostQuitMessage, PostThreadMessageW, RegisterClassW,
+            SendMessageTimeoutW, SetWindowLongPtrW, TranslateMessage, UnregisterClassW,
+            CREATESTRUCTW, GWLP_USERDATA, HWND_MESSAGE, MSG, SMTO_ABORTIFHUNG, SMTO_BLOCK,
+            WM_CLOSE, WM_COPYDATA, WM_DESTROY, WM_NCCREATE, WM_NCDESTROY, WM_QUIT, WNDCLASSW,
+        },
     };
 
     const CLASS: &str = "InkismNoteLinkEndpointV1";
