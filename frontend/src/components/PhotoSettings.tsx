@@ -30,7 +30,10 @@ export function PhotoSettings() {
     setBusy(true);
     setMessage("");
     try {
-      setMeta(await knowledge.set({ ...meta, document: { ...meta.document, cover } }, note.revision));
+      if (!(await s.flushNow())) throw new Error(t("먼저 노트를 저장해 주세요."));
+      const draft = s.readDraft();
+      if (draft?.id !== note.id) throw new Error(t("선택한 노트가 바뀌었습니다."));
+      setMeta(await knowledge.set({ ...meta, document: { ...meta.document, cover } }, draft.revision));
       window.dispatchEvent(new Event("inkism-knowledge-changed")); // 편집기 위 표지를 바로 바꾼다
       setMessage(cover ? t("표지 사진을 넣었어요.") : t("표지 사진을 뺐어요."));
     } catch (e) {

@@ -150,7 +150,7 @@ export function PortableLibrarySettings({
     delete: t("지운 노트로 이동"),
   };
   const conflicts = Array.from(new Set(plan?.conflicts ?? []));
-  const connectedLabel = watch || autoWrite || autoImport ? t("자동 감지 켜기") : t("연결됨");
+  const connectedLabel = watch || autoWrite || autoImport ? t("자동 감지 중") : t("연결됨");
   return (
     <div className="portable-library-settings">
       <section className="portable-column" aria-labelledby="portable-folder-title">

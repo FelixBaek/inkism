@@ -45,6 +45,7 @@ export function BlockInsertPanel({ editor, onClose }: Readonly<{ editor: Editor;
     return { key: group.key, label: group.label, entries: entries.filter((entry) => !matches || matches.has(entry.item.id)) };
   }).filter((group) => group.entries.length);
   const ai = byId("aiBlock");
+  const showAi = !!ai && (!matches || matches.has(ai.id));
   const run = (entry: Entry) => {
     if (!editor.isEditable || !entry.item.available(editor)) return;
     onClose();
@@ -98,8 +99,8 @@ export function BlockInsertPanel({ editor, onClose }: Readonly<{ editor: Editor;
           </div>
         </section>
       ))}
-      {!groups.length && <p className="tb-empty">{t("검색 결과가 없습니다")}</p>}
-      {ai && !matches && (
+      {!groups.length && !showAi && <p className="tb-empty">{t("검색 결과가 없습니다")}</p>}
+      {showAi && (
         <button
           type="button"
           className="tb-insert-ai"
