@@ -859,7 +859,6 @@ textarea {
 .editor-toolbar {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 4px;
   min-height: 40px;
   padding: 4px;

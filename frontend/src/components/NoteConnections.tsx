@@ -6,7 +6,7 @@ import { api, rpc } from "../api";
 import { useStore } from "../store";
 import { t } from "../i18n";
 import { knowledge, parseReference, wikiReferences, type NoteReference } from "../lib/knowledge";
-import { navigateNoteAnchor, noteAnchors, requestResolvedAnchorRepair } from "../lib/note-anchor";
+import { waitForAnchorEditor, navigateNoteAnchor, noteAnchors, requestResolvedAnchorRepair } from "../lib/note-anchor";
 import { markdownToHTML } from "../lib/markdown";
 import { sanitizeRichHtml } from "../lib/sanitize";
 import type { Note } from "../types";
@@ -303,10 +303,11 @@ export function NoteConnections({ onClose, compact = false }: { onClose: () => v
         throw new Error(t("연결 삽입은 8MB 이하 문서에서 사용할 수 있습니다."));
       const fragment = anchor ? `#${encodeURIComponent(anchor)}` : "",
         caption = label || destination.title || target;
+      const embeddedTarget = `note://${target}${fragment}|${caption.replace(/[\]\n|]/g, "")}`;
       let addition: string;
       if ((note.content_format ?? "html") === "html")
         addition = embed
-          ? `<p>![[${escape(`note://${target}${fragment}|${caption.replace(/[\]\n|]/g, "")}`)}]]</p>`
+          ? `<p>![[${escape(embeddedTarget)}]]</p>`
           : `<p><a href="note://${target}${fragment}">${escape(caption)}</a></p>`;
       else
         addition = `\n\n${embed ? "!" : ""}[[note://${target}${fragment}${"|" + caption.replace(/[\]\n|]/g, "")}]]\n`;
@@ -557,13 +558,7 @@ function ResolvedReference({
       onClose();
       await s.selectNote(id);
       if (preview) {
-        await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-        const deadline = Date.now() + 10000;
-        while (document.querySelector(".windowed-editor") && !document.querySelector(".windowed-editor .ProseMirror")) {
-          if (Date.now() > deadline) throw new Error(t("문서를 준비 중입니다. 잠시 후 다시 열어 주세요."));
-          await new Promise((r) => setTimeout(r, 25));
-        }
-        await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+        await waitForAnchorEditor();
         const draft = s.readDraft();
         const note =
           preview.note.content_format === "markdown" && draft?.id === id
@@ -575,6 +570,27 @@ function ResolvedReference({
       void s.showError(t("노트 연결"), errorText(e));
     }
   };
+  const embedView = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = embedView.current;
+    if (!element) return;
+    const followLink = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)) return;
+      const link = event.target.closest("a");
+      const href = link?.getAttribute("href");
+      if (!href?.startsWith("note://")) return;
+      event.preventDefault();
+      const ref = parseReference(href);
+      void knowledge
+        .resolve(ref.target)
+        .then((result) => {
+          if (result.items.length === 1) void open(result.items[0].id, ref.anchor, result.redirect_sources ?? []);
+        })
+        .catch((error) => setError(errorText(error)));
+    };
+    element.addEventListener("click", followLink);
+    return () => element.removeEventListener("click", followLink);
+  }, [html, open]);
   return (
     <div className="knowledge-reference">
       <strong>{reference.label}</strong>
@@ -606,19 +622,7 @@ function ResolvedReference({
           className="knowledge-embed"
           aria-label={t("참조한 노트 내용")}
           dangerouslySetInnerHTML={{ __html: html }}
-          onClick={(e) => {
-            const a = (e.target as Element).closest("a");
-            if (a?.getAttribute("href")?.startsWith("note://")) {
-              e.preventDefault();
-              const ref = parseReference(a.getAttribute("href")!);
-              void knowledge
-                .resolve(ref.target)
-                .then((r) => {
-                  if (r.items.length === 1) void open(r.items[0].id, ref.anchor, r.redirect_sources ?? []);
-                })
-                .catch((e) => setError(errorText(e)));
-            }
-          }}
+          ref={embedView}
         />
       )}
     </div>
