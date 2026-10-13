@@ -545,7 +545,8 @@ function Wait-TestDownload([string]$title,[string]$extension,[DateTime]$since,[s
         }catch{}}
         Start-Sleep -Milliseconds 100
     }while([DateTime]::UtcNow -lt $deadline)
-    throw "Native download absent: $title.$extension"
+    $seen=(Get-ChildItem -LiteralPath ([InkismInput]::Downloads()) -ErrorAction SilentlyContinue | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 8 | ForEach-Object { "$($_.Name) $($_.Length)B $($_.LastWriteTimeUtc.ToString('o'))" }) -join '; '
+    throw "Native download absent: $title.$extension (since $($since.ToString('o')); downloads: $seen)"
 }
 $cases = New-Object System.Collections.Generic.List[object]
 $expectedPath=Join-Path $scratch 'expected-source.json'
