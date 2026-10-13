@@ -12,6 +12,6 @@
 .global-search-results mark { color: var(--accent-text); background: transparent; font-weight: 500; }
 .note-answer{display:grid;gap:8px;margin-top:12px}
 .note-answer-actions{display:flex;gap:8px}
-.note-answer-text{white-space:pre-wrap;font-size:var(--fs-caption);line-height:1.6;color:var(--text)}
+.note-answer-text{display:block;white-space:pre-wrap;font-size:var(--fs-caption);line-height:1.6;color:var(--text)}
 .note-answer-cite{padding:0 2px;border:0;background:none;color:var(--accent-text);font:inherit;font-size:var(--fs-small);vertical-align:super;cursor:pointer}
 .note-answer-sources summary{font-size:var(--fs-small);color:var(--muted);cursor:pointer}
