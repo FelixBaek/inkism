@@ -1,6 +1,7 @@
 name: Existing native artifact acceptance
 on:
-  pull_request:
+  push:
+    branches: [main, 'codex/**']
     paths:
       - '.github/workflows/native-artifact-acceptance.yml'
       - 'tools/scripts/native-artifact-*'
@@ -93,3 +94,4 @@ jobs:
             ${{ runner.temp }}/native-acceptance/android/*.png
             ${{ runner.temp }}/native-acceptance/android/*.xml
             ${{ runner.temp }}/native-acceptance/android/*.log
+            ${{ runner.temp }}/native-acceptance/android/*.txt

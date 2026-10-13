@@ -25,9 +25,17 @@ const hash = value => createHash('sha256').update(value).digest('hex');
 const save = () => fs.writeFileSync(path.join(output, 'evidence.json'), JSON.stringify(evidence, null, 2));
 const check = (name, details = {}) => {evidence.checks.push({name, ...details}); save(); console.log(`PASS ${platform}: ${name}`);};
 function run(command, argv, options = {}) {
+  const started = Date.now(), diagnostic = {command, arguments: argv, startedAt: new Date(started).toISOString(), timeoutMs: options.timeout ?? 60_000};
+  const log = path.join(output, 'commands.log');
+  fs.appendFileSync(log, JSON.stringify({event: 'start', ...diagnostic}) + '\n');
   const result = spawnSync(command, argv, {encoding: 'utf8', timeout: 60_000, maxBuffer: 16 * 1024 * 1024, ...options});
-  if (result.error) throw result.error;
-  assert.equal(result.status, 0, `${command} failed (${result.status}): ${String(result.stderr).slice(-3000)}`);
+  const completed = {...diagnostic, elapsedMs: Date.now() - started, status: result.status, signal: result.signal};
+  fs.appendFileSync(log, JSON.stringify({event: 'complete', ...completed, error: result.error?.message, stderr: result.status === 0 ? undefined : String(result.stderr ?? '').slice(-3000)}) + '\n');
+  if (result.error || result.status !== 0) {
+    const error = new Error(`${command} ${argv.slice(0, 3).join(' ')} failed: ${result.error?.message ?? `exit ${result.status}: ${String(result.stderr).slice(-3000)}`}`);
+    error.nativeCommand = completed;
+    throw error;
+  }
   return result.stdout;
 }
 async function until(predicate, message, timeout = 30_000) {
@@ -124,7 +132,7 @@ function encryptedLibrary(container) {
   assert.ok(bytes.length >= 4096 && !bytes.subarray(0, 16).equals(Buffer.from('SQLite format 3\0')), 'Mobile library is missing or plaintext');
   assert.ok(/^INKISM-MOBILE-KEY-1\n[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(identity.toString()), 'Invalid mobile key identity marker');
   assert.equal(fs.statSync(marker).mode & 0o077, 0, 'Key identity marker is not private');
-  return {relativePath: path.relative(root, db), bytes: bytes.length, identityHash: hash(identity)};
+  return {relativePath: path.relative(root, db), bytes: bytes.length, encryptedHeaderHash: hash(bytes.subarray(0, 16)), identityHash: hash(identity)};
 }
 async function ios(input) {
   assert.equal(process.platform, 'darwin'); assert.equal(process.arch, 'arm64', 'Artifact is arm64 simulator code');
@@ -156,18 +164,33 @@ async function ios(input) {
   assert.ok(path.isAbsolute(container));
   let previous;
   for (const stage of ['first', 'restart']) {
+    check('request installed simulator app launch', {stage});
     const launch = run('xcrun', ['simctl', 'launch', device, bundleId, '-AppleLanguages', '(en)', '-AppleLocale', 'en_US']);
     const pid = Number(launch.match(/:\s*(\d+)\s*$/)?.[1]);
     assert.ok(pid > 0, 'Simulator did not report the launched app process');
+    check('installed simulator app process launched', {stage, pid});
     await until(() => {assert.ok(alive(pid), 'Simulator app exited during startup'); try {encryptedLibrary(container); return true;} catch {return false;}}, 'Encrypted private library was not initialized');
     const image = path.join(output, `ios-${stage}.png`);
     await until(() => {assert.ok(alive(pid), 'Simulator app exited before rendering'); run('xcrun', ['simctl', 'io', device, 'screenshot', image]); try {appScreen(image, ['new note', 'no notes yet', 'select a note', 'all notes', '새 노트', '아직 노트가 없습니다']); return true;} catch {return false;}}, 'Installed iOS frontend did not render its note UI', 60_000);
     const storage = encryptedLibrary(container);
-    if (previous) assert.equal(storage.identityHash, previous.identityHash, 'Key identity changed on process restart');
+    if (previous) {
+      assert.equal(storage.identityHash, previous.identityHash, 'Key identity changed on process restart');
+      assert.equal(storage.relativePath, previous.relativePath, 'Library path changed on process restart');
+      assert.equal(storage.encryptedHeaderHash, previous.encryptedHeaderHash, 'Encrypted library was recreated on process restart');
+    }
     previous = storage;
     check('encrypted app-container library opened', {stage, ...storage, osKeyValuesLogged: false});
-    run('xcrun', ['simctl', 'terminate', device, bundleId]);
+    const termination = {stage, pid, requestedAt: new Date().toISOString(), aliveBefore: alive(pid), commandReturned: false};
+    evidence.simulatorTerminations ??= [];
+    evidence.simulatorTerminations.push(termination); save();
+    try {
+      run('xcrun', ['simctl', 'terminate', device, bundleId]);
+      termination.commandReturned = true;
+    } finally {
+      termination.aliveAfterCommand = alive(pid); termination.observedAt = new Date().toISOString(); save();
+    }
     await until(() => !alive(pid), 'Simulator app did not terminate');
+    check('installed simulator app process terminated', {stage, pid});
   }
   evidence.limitations = ['Historical artifact, not current harness HEAD', 'Simulator Keychain APIs and process restart; no physical Secure Enclave, lock-state, installation signing, IME or migration claim', 'No mobile note-edit, touch or separate external WebViewer acceptance'];
 }
@@ -245,7 +268,9 @@ try {
   if (!prepareOnly) {assert.notEqual(platform, 'android', 'Android runtime acceptance is owned by native-artifact-android.py'); compileHelper(); await (platform === 'ios' ? ios(input) : macos(input));}
   evidence.result = prepareOnly ? 'prepared' : 'success';
 } catch (error) {
-  evidence.result = 'failure'; evidence.error = error.message; process.exitCode = 1; console.error(error.message);
+  evidence.result = 'failure'; evidence.error = error.message;
+  if (error.nativeCommand) evidence.failedCommand = error.nativeCommand;
+  process.exitCode = 1; console.error(error.message);
 } finally {
   try {await cleanup();} catch (error) {evidence.result = 'failure'; process.exitCode = 1; console.error(error.message);}
   evidence.finishedAt = new Date().toISOString(); save();
