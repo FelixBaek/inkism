@@ -151,22 +151,30 @@ fn higher_payload_versions_cannot_overwrite_or_delete_notes_and_survive_restart(
     writer.stage_local(note(&protected_id, json!("삭제하면 안 되는 노트")), 2).unwrap();
     writer.push().unwrap();
 
-    // Authenticated records use an existing kind and valid v1-shaped fields.
-    // Only the schema version says this client must not interpret them.
+    // Newer records can retain v1 fields or change the schema entirely.
+    // Both must remain unsupported without interpreting or acknowledging them.
     let relay_client = sync_core::RelayClient::new(&relay.url, TOKEN).unwrap();
     let mut future_records = Vec::new();
-    for (version, id, deleted) in [
-        (sync_core::PAYLOAD_VERSION + 1, &original_id, false),
-        (u32::MAX, &protected_id, true),
+    for (version, id, deleted, changed_schema) in [
+        (sync_core::PAYLOAD_VERSION + 1, &original_id, false, false),
+        (u32::MAX, &protected_id, true, false),
+        (sync_core::PAYLOAD_VERSION + 1, &original_id, false, true),
+        (u32::MAX, &protected_id, true, true),
     ] {
         let event = uuid::Uuid::new_v4().to_string();
         let mut future = note(id, json!("미래 형식으로 덮어쓴 본문"));
         future.deleted = deleted;
-        let payload = json!({
+        let mut value = json!({
             "version":version,"entity":future,"device_id":"future-device",
             "counter":1,"ts":u64::MAX / 2,
             "vclock":{writer.device_id():1,"future-device":1},
-        }).to_string().into_bytes();
+        });
+        if changed_schema {
+            value.as_object_mut().unwrap().remove("vclock");
+            value["entity"]["kind"] = json!("futurekind");
+            value["clock"] = json!(["new schema"]);
+        }
+        let payload = value.to_string().into_bytes();
         let blob = sync_core::encode_blob(&sync_core::seal_record(&key, &event, &payload).unwrap());
         relay_client.post_change(&event, &blob).unwrap();
         future_records.push((event, payload));
@@ -187,7 +195,7 @@ fn higher_payload_versions_cannot_overwrite_or_delete_notes_and_survive_restart(
         assert_eq!(get(app, &protected_id)["title"], "삭제하면 안 되는 노트", "future tombstone deleted a supported note");
         assert_eq!(get(app, &good)["title"], "미래 기록 뒤의 정상 노트");
         assert!(status["error"].is_null(), "unsupported records must not become a blocking error: {status}");
-        assert_eq!(status["unsupported_records"], 2, "{status}");
+        assert_eq!(status["unsupported_records"], 4, "{status}");
         let state = Connection::open(state_path(&path)).unwrap();
         let host = Connection::open(&path).unwrap();
         for (event, payload) in &future_records {
