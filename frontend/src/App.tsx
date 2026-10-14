@@ -34,6 +34,7 @@ import { installPluginFontStyles, subscribePlugins } from "./lib/plugins";
 import { NoteLinkNavigation } from "./components/NoteLinkNavigation";
 import { KnowledgeTools } from "./components/KnowledgeTools";
 import { WritingTools } from "./components/WritingTools";
+import { WikiUpdate } from "./components/WikiUpdate";
 import "./mobile.css";
 
 type ShellStore = ReturnType<typeof useStore>;
@@ -239,6 +240,7 @@ function Shell() {
           {/* 라이브러리 도구는 늘 붙어 있어야 단축키와 대화상자가 동작한다. 닫혀 있을 때는 보이지만 않게 둔다. */}
           <div ref={tools} className={"library-tools" + (toolsOpen ? " is-open" : "")} aria-label={t("라이브러리 도구")}>
             <WritingTools />
+            <WikiUpdate />
             <KnowledgeTools />
             <LibraryMoreTools />
             <Whiteboard />
