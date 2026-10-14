@@ -14,7 +14,7 @@ const md=await rpc("save",{note:{title:"Portable source",content:source,content_
 const response=await fetch(base+"/api/portable/export",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});assert.equal(response.status,200,await (response.ok ? Promise.resolve("") : response.text()));const entries=readZipEntries(Buffer.from(await response.arrayBuffer()));const manifest=JSON.parse(entries.get(".inkism-portable.json")!.toString("utf8"));
 assert.ok(entries.has(`notes/${daily.id}.md`),"daily ID is portable");
 assert.equal(entries.get(`notes/${html.id}.html`)!.toString(),html.content);
-const portable=entries.get(`notes/${md.id}.md`)!.toString();assert.ok(portable.startsWith("\ufeff# Markdown\r\n"));assert.ok(portable.includes(`${html.id}.html`));assert.ok(portable.includes(`../attachments/${attachment.id}.bin`));assert.deepEqual(entries.get(`attachments/${attachment.id}.bin`),bytes);
+const portable=entries.get(`notes/${md.id}.md`)!.toString();assert.ok(portable.startsWith(`---\nid: "${md.id}"\n`));assert.ok(portable.includes("---\n\ufeff# Markdown\r\n"),"body after front matter is byte-exact");assert.ok(portable.includes(`${html.id}.html`));assert.ok(portable.includes(`../attachments/${attachment.id}.bin`));assert.deepEqual(entries.get(`attachments/${attachment.id}.bin`),bytes);
 assert.equal(manifest.notes.find((n:any)=>n.id===md.id).revision,md.revision);
 const files=()=>[...entries].map(([path,bytes])=>{const file=new File([bytes],path.split("/").pop()!);Object.defineProperty(file,"webkitRelativePath",{value:`folder/${path}`});return file;});
 const get=(id:string)=>rpc("get",{id});

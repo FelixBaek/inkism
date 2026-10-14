@@ -33,7 +33,7 @@ const RENDERER_OPS: &[&str] = &[
     "restore_notebook",
     "trashed_notebooks",
     "knowledge_get", "knowledge_set", "knowledge_list", "knowledge_settings_get", "knowledge_settings_set", "merge_notes", "merge_preview", "merge_apply", "merge_undo", "merge_changes",
-    "link_resolve", "graph_get", "daily_note", "template_create", "page_create",
+    "link_resolve", "graph_get", "daily_note", "template_create", "type_preset_apply", "page_create",
     "defaults_get",
     "defaults_set",
     "vault_status",

@@ -5,6 +5,7 @@ import {
   applyFolderChanges,
   readFolderHandle,
   writeDatabaseSnapshot,
+  fetchPortableZip,
   type FolderPlan,
   type WritableFolderHandle,
 } from "../lib/portable-sync";
@@ -86,22 +87,17 @@ export function PortableLibrarySettings({
   }
   async function exportFolder() {
     await run(async () => {
-      const response = await fetch("/api/portable/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || t("내보내지 못했습니다."));
-      }
+      const { response, locked } = await fetchPortableZip();
       const url = URL.createObjectURL(await response.blob()),
         a = document.createElement("a");
       a.href = url;
       a.download = "inkism-folder.zip";
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
-      setMessage(t("외부 편집 폴더 ZIP을 내보냈습니다. 압축을 풀고 notes 폴더에서 편집하세요."));
+      setMessage(
+        t("외부 편집 폴더 ZIP을 내보냈습니다. 압축을 풀고 notes 폴더에서 편집하세요.") +
+          (locked ? " " + t("잠긴 노트 {count}개는 내용 없이 목록 파일에만 표시했습니다.", { count: locked }) : ""),
+      );
     });
   }
   async function connect() {
@@ -161,7 +157,7 @@ export function PortableLibrarySettings({
           </button>
         </div>
         <p className="portable-note">
-          {t("노트를 Markdown·HTML·텍스트 파일과 첨부파일로 내보냅니다. 잠긴 노트와 지운 노트는 제외됩니다.")}
+          {t("노트를 Markdown 파일(머리말에 제목·태그·속성 포함)과 첨부파일로 내보냅니다. Markdown으로 보존할 수 없는 노트는 HTML·텍스트 원본으로 내보냅니다. 잠긴 노트와 지운 노트는 제외됩니다.")}
         </p>
         <div className="portable-actions">
           <button className="btn" disabled={busy} onClick={() => void connect()}>

@@ -119,6 +119,7 @@ impl Engine {
         let conn = self.connection();
         let reply = match op {
             "list" => ops_notes::list(&self.query_conn, &req)?,
+            "changes" => ops_notes::changes(&self.query_conn, &req)?,
             "due_reminders" => ops_notes::due_reminders(&self.query_conn, &req)?,
             "get" => ops_notes::get(conn, &req)?,
             "note_preview" => ops_notes::preview(conn, &req)?,
@@ -198,6 +199,7 @@ impl Engine {
             "page_create" => { let v=crate::knowledge::page_create(conn,&req)?; self.wakeup.notify(); v },
             "daily_note" => { let v=crate::knowledge::daily(conn,&req)?; self.wakeup.notify(); v },
             "template_create" => { let v=crate::knowledge::template_create(conn,&req)?; self.wakeup.notify(); v },
+            "type_preset_apply" => { let v=crate::knowledge::type_preset_apply(conn,&req)?; self.wakeup.notify(); v },
             "defaults_get" => crate::settings::get(conn)?,
             "defaults_set" => crate::settings::set(conn, &req)?,
             "tags" => ops_meta::tags(conn)?,

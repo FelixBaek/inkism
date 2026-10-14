@@ -222,9 +222,23 @@ impl Drop for Clipper {
     }
 }
 
+/// A loopback listener's request handler (the clipper, the agent API).
+pub(crate) trait Receiver: Send + Sync + 'static {
+    /// Body bytes read before the handler rejects the request.
+    const LIMIT: usize;
+    fn respond(&self, r: &Request) -> Response;
+}
+
+impl Receiver for Clipper {
+    const LIMIT: usize = CAPTURE_LIMIT;
+    fn respond(&self, r: &Request) -> Response {
+        self.receive(r)
+    }
+}
+
 // ponytail: receive runs inline on the one worker; a slow sanitize delays the
 // next capture, which is fine for one paired extension.
-async fn accept(listener: tokio::net::TcpListener, clipper: std::sync::Weak<Clipper>) {
+pub(crate) async fn accept<T: Receiver>(listener: tokio::net::TcpListener, clipper: std::sync::Weak<T>) {
     loop {
         let stream = match listener.accept().await {
             Ok((stream, _)) => stream,
@@ -246,8 +260,8 @@ async fn accept(listener: tokio::net::TcpListener, clipper: std::sync::Weak<Clip
     }
 }
 
-/// Converts hyper's request to `Request`, runs `receive`, converts back.
-async fn http(clipper: std::sync::Weak<Clipper>, req: hyper::Request<Incoming>) -> hyper::Response<Full<Bytes>> {
+/// Converts hyper's request to `Request`, runs `respond`, converts back.
+async fn http<T: Receiver>(clipper: std::sync::Weak<T>, req: hyper::Request<Incoming>) -> hyper::Response<Full<Bytes>> {
     let (parts, mut body) = req.into_parts();
     let mut data = Vec::new();
     // Read at most one byte past the limit; `receive` rejects anything longer.
@@ -255,7 +269,7 @@ async fn http(clipper: std::sync::Weak<Clipper>, req: hyper::Request<Incoming>) 
         while let Some(Ok(frame)) = body.frame().await {
             if let Ok(chunk) = frame.into_data() {
                 data.extend_from_slice(&chunk);
-                if data.len() > CAPTURE_LIMIT {
+                if data.len() > T::LIMIT {
                     break;
                 }
             }
@@ -272,8 +286,8 @@ async fn http(clipper: std::sync::Weak<Clipper>, req: hyper::Request<Incoming>) 
         body: data,
     };
     let response = match clipper.upgrade() {
-        Some(c) => c.receive(&request),
-        None => Response::fail(503, "clipper unavailable"),
+        Some(c) => c.respond(&request),
+        None => Response::fail(503, "listener unavailable"),
     };
     let mut out = hyper::Response::new(Full::new(Bytes::from(response.body)));
     *out.status_mut() = hyper::StatusCode::from_u16(response.status).unwrap_or(hyper::StatusCode::INTERNAL_SERVER_ERROR);
