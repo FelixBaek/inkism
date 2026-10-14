@@ -21,7 +21,7 @@ export type GraphNode = { id: string; title: string; tags: string[]; aliases: st
 export type GraphEdge = { source: string; target: string };
 export type RelationKind = 'link' | 'title_link' | 'relation' | 'parent';
 /** One typed edge from the engine `relations` op; `direction` is relative to `from`. */
-export type RelationEdge = { source: string; target: string; source_title: string; target_title: string; kind: RelationKind; property: string | null; direction: 'out' | 'in'; from: string; hop: 1 | 2; evidence: { label?: string; byte_offset?: number; byte_end?: number; property?: string } | null };
+export type RelationEdge = { source: string; target: string; source_title: string; target_title: string; kind: RelationKind; property: string | null; direction: 'out' | 'in'; from: string; hop: number; evidence: { label?: string; byte_offset?: number; byte_end?: number; property?: string } | null };
 export type RelationQuery = { id: string; depth?: 1 | 2; kinds?: ('link' | 'relation' | 'parent')[]; property?: string; direction?: 'out' | 'in' | 'both'; limit?: number };
 export type GraphData = { nodes: GraphNode[]; edges: GraphEdge[]; truncated: boolean };
 export const knowledge = {
