@@ -1,5 +1,14 @@
 # Atelier Felix - inkism
 
+[![CodeQL](https://github.com/FelixBaek/inkism/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/FelixBaek/inkism/security/code-scanning)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=FelixBaek_inkism&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=FelixBaek_inkism)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=FelixBaek_inkism&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=FelixBaek_inkism)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=FelixBaek_inkism&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=FelixBaek_inkism)
+[![Coverage](https://codecov.io/gh/FelixBaek/inkism/graph/badge.svg)](https://app.codecov.io/gh/FelixBaek/inkism)
+[![AI Code Assurance](https://sonarcloud.io/api/project_badges/ai_code_assurance?project=FelixBaek_inkism)](https://sonarcloud.io/summary/new_code?id=FelixBaek_inkism)
+[![Dependabot](https://img.shields.io/badge/dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/FelixBaek/inkism/security/dependabot)
+[![Secret scanning](https://img.shields.io/badge/secret%20scanning-push%20protection-brightgreen?logo=github)](https://github.com/FelixBaek/inkism/security)
+
 [한국어](README.ko.md)
 
 An encrypted, local-first note app for Windows.
