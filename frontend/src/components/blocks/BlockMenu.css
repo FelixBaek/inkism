@@ -496,7 +496,7 @@
   color: var(--muted);
 }
 
-/* "/" 메뉴 (Figma Editor popover/Slash menu): 우클릭 메뉴와 같은 둥근 판(10)·항목(6),
+/* "/" 메뉴 (Figma Editor popover/Slash menu 195:29962): 우클릭 메뉴와 같은 둥근 판(10)·항목(6),
  * 이름 아래 짧은 설명, 고른 줄은 배경만 바뀐다(강조색 글자 없음). */
 .slash-menu-root .block-menu {
   border-radius: 10px;

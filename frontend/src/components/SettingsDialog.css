@@ -658,7 +658,7 @@
 .settings-content .btn.btn-ghost:not(:disabled, .settings-content dialog *):hover {
   background: var(--hover);
 }
-/* 결과 알림: 성공은 확인 아이콘 + 초록, 주의는 경고 아이콘 + 갈색, 실패는 빨강 */
+/* 결과 알림 (Figma Settings message 198:29114): 성공은 확인 아이콘 + 초록, 주의는 경고 아이콘 + 갈색, 실패는 빨강 */
 .settings-content p.settings-msg {
   display: flex;
   align-items: center;
