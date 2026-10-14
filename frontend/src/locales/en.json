@@ -2324,5 +2324,12 @@
   "편집 구간 {n}": "Edited section {n}",
   "이 구간을 삭제했습니다.": "This section was deleted.",
   " (편집 구간 복구)": " (Recovered edit sections)",
-  " (편집 복구)": " (Recovered edit)"
+  " (편집 복구)": " (Recovered edit)",
+  "내 노트에 묻기": "Ask my notes",
+  "근거 찾는 중…": "Finding sources…",
+  "질문에서 찾을 낱말을 고르지 못했습니다. 핵심 낱말을 넣어 주세요.": "No search words found in the question. Include a key word.",
+  "근거가 될 노트를 찾지 못해 AI에 보내지 않았습니다.": "No matching notes were found, so nothing was sent to the AI.",
+  "근거 {n}: {title} 열기": "Open source {n}: {title}",
+  "답변: {question}": "Answer: {question}",
+  "AI에 보낸 근거 {count}개": "{count} sources sent to the AI"
 }
