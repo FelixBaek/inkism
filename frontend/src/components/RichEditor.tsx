@@ -1,4 +1,5 @@
 import { ANCHOR_EVENT, textOccurrence, type AnchorRequest } from "../lib/note-anchor";
+import { takeVoiceMemo } from "../lib/voice-memo";
 import { markdownToHTML } from "../lib/markdown";
 import {
   acquireRichHistory,
@@ -462,6 +463,10 @@ export function RichEditor({
   useLayoutEffect(() => {
     onEditor?.(editor);
     return () => onEditor?.(null);
+  }, [editor]);
+  useEffect(() => {
+    if (editor && !editor.isDestroyed && editor.isEditable && editor.can().insertAudio?.() && takeVoiceMemo())
+      editor.chain().focus().insertAudio({ kind: "record" }).run();
   }, [editor]);
   useLayoutEffect(() => {
     if (!editor || editor.isDestroyed || !documentSelection) return;

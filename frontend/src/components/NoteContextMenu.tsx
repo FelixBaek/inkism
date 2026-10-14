@@ -29,6 +29,7 @@ import {
   Trash2,
   RotateCcw,
   Circle,
+  Pencil,
 } from "../icons";
 
 /** 노트 색(엔진은 임의 문자열을 저장한다). 목록 행에 점으로 표시한다. */
@@ -54,6 +55,20 @@ function download(blob: Blob, name: string) {
 }
 
 export type NoteMenuTarget = { item: Summary; x: number; y: number };
+
+type Store = ReturnType<typeof useStore>;
+/** 이름 바꾸기(F2): 목록 메뉴·앱 상단 메뉴·단축키가 같은 창을 쓴다. */
+export async function renameNoteDialog(s: Store, id: string, title: string, revision?: number) {
+  const result = await s.prompt({
+    title: t("이름 바꾸기"),
+    message: "",
+    label: t("제목"),
+    initial: title,
+    confirmLabel: t("바꾸기"),
+  });
+  const next = result?.value.trim();
+  if (next && next !== title) await s.renameNote(id, next, revision);
+}
 
 /** 노트 메뉴. 이 앱에 실제 기능이 있는 항목만 둔다(잠금 없음). */
 export function useNoteCommands(item: Summary, onReminder: () => void, onPublish: () => void): MenuItemSpec[] {
@@ -140,15 +155,42 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
       await s.refreshMeta();
     });
 
+  const notebooksMenu: MenuItemSpec = {
+    commandId: "context.note.notebooks", label: t("폴더에 넣기"),
+    separatorBefore: true,
+    icon: icon(<Folder />),
+    items: [
+      ...(s.notebooks.length
+        ? s.notebooks.map((nb) => ({
+            commandId: "context.note.notebook:"+nb.id, label: nb.name,
+            icon: <NotebookGlyph nb={nb} size={15} />,
+            checked: notebookIds.includes(nb.id),
+            onSelect: () =>
+              patch({
+                notebook_ids: notebookIds.includes(nb.id)
+                  ? notebookIds.filter((id) => id !== nb.id)
+                  : [...notebookIds, nb.id],
+              }),
+          }))
+        : [{ label: t("폴더가 없습니다"), disabled: true }]),
+      {
+        commandId: "context.note.notebook-remove", label: t("폴더에서 빼기"),
+        separatorBefore: true,
+        disabled: notebookIds.length === 0,
+        onSelect: () => patch({ notebook_ids: [] }),
+      },
+    ],
+  };
+  // Figma 10 "정리 · 컨텍스트 메뉴" 순서: 열기·상태 / 정리 / 내보내기·복사 / 지우기
   const items: MenuItemSpec[] = [
     { commandId: "context.note.open-tab", label: t("새 탭에서 열기"), icon: icon(<ExternalLink />), onSelect: () => void openInNewTab(s, item.id) },
-    { commandId: "context.note.pin", separatorBefore: true, label: t("고정"), icon: icon(<Pin />), checked: item.pinned, onSelect: () => patch({ pinned: !item.pinned }) },
     {
-      commandId: "context.note.favorite", label: t("즐겨찾기"),
-      icon: icon(<Star />),
-      checked: item.favorite,
-      onSelect: () => patch({ favorite: !item.favorite }),
+      commandId: "context.note.rename", label: t("이름 바꾸기"),
+      shortcut: "F2",
+      icon: icon(<Pencil />),
+      onSelect: () => void renameNoteDialog(s, item.id, item.title, item.revision),
     },
+    { commandId: "context.note.pin", label: t("고정"), icon: icon(<Pin />), checked: item.pinned, onSelect: () => patch({ pinned: !item.pinned }) },
     {
       commandId: "context.note.readonly", label: t("읽기 전용"),
       icon: icon(<PencilOff />),
@@ -156,29 +198,30 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
       onSelect: () => patch({ readonly: !item.readonly }),
     },
     {
-      commandId: "context.note.notebooks", label: t("폴더에 넣기"),
-      separatorBefore: true,
-      icon: icon(<Folder />),
+      commandId: "context.note.favorite", label: t("즐겨찾기"),
+      icon: icon(<Star />),
+      checked: item.favorite,
+      onSelect: () => patch({ favorite: !item.favorite }),
+    },
+    { commandId: "context.note.reminder", label: t("알림 설정"), icon: icon(<Bell />), onSelect: onReminder },
+    {
+      commandId: "context.note.archive", label: t("보관"),
+      icon: icon(<Archive />),
+      checked: item.archived,
+      onSelect: () => patch({ archived: !item.archived }),
+    },
+    notebooksMenu,
+    {
+      commandId: "context.note.color", label: t("색 지정"),
+      icon: icon(<Palette />),
       items: [
-        ...(s.notebooks.length
-          ? s.notebooks.map((nb) => ({
-              commandId: "context.note.notebook:"+nb.id, label: nb.name,
-              icon: <NotebookGlyph nb={nb} size={15} />,
-              checked: notebookIds.includes(nb.id),
-              onSelect: () =>
-                patch({
-                  notebook_ids: notebookIds.includes(nb.id)
-                    ? notebookIds.filter((id) => id !== nb.id)
-                    : [...notebookIds, nb.id],
-                }),
-            }))
-          : [{ label: t("폴더가 없습니다"), disabled: true }]),
-        {
-          commandId: "context.note.notebook-remove", label: t("폴더에서 빼기"),
-          separatorBefore: true,
-          disabled: notebookIds.length === 0,
-          onSelect: () => patch({ notebook_ids: [] }),
-        },
+        ...NOTE_COLORS.map((c) => ({
+          commandId: "context.note.color:"+c.value, label: c.label,
+          icon: <Circle size={14} weight="fill" color={c.value} aria-hidden />,
+          checked: item.color === c.value,
+          onSelect: () => patch({ color: item.color === c.value ? null : c.value }),
+        })),
+        { commandId: "context.note.color-clear", label: t("색 지우기"), separatorBefore: true, disabled: !item.color, onSelect: () => patch({ color: null }) },
       ],
     },
     {
@@ -196,37 +239,9 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
           }))
         : [{ label: t("태그가 없습니다"), disabled: true }],
     },
-    {
-      commandId: "context.note.color", label: t("색 지정"),
-      icon: icon(<Palette />),
-      items: [
-        ...NOTE_COLORS.map((c) => ({
-          commandId: "context.note.color:"+c.value, label: c.label,
-          icon: <Circle size={14} weight="fill" color={c.value} aria-hidden />,
-          checked: item.color === c.value,
-          onSelect: () => patch({ color: item.color === c.value ? null : c.value }),
-        })),
-        { commandId: "context.note.color-clear", label: t("색 지우기"), separatorBefore: true, disabled: !item.color, onSelect: () => patch({ color: null }) },
-      ],
-    },
-    {
-      commandId: "context.note.copy-link", label: t("링크 복사"),
-      separatorBefore: true,
-      icon: icon(<Link2 />),
-      onSelect: () => run(t("복사 실패"), () => navigator.clipboard.writeText("note://" + item.id)),
-    },
-    { commandId: "context.note.duplicate", label: t("복제"), icon: icon(<CopyNote />), onSelect: duplicate },
-    {
-      commandId: "context.note.archive", label: t("보관"),
-      icon: icon(<Archive />),
-      checked: item.archived,
-      onSelect: () => patch({ archived: !item.archived }),
-    },
-    { commandId: "context.note.reminder", separatorBefore: true, label: t("알림 설정"), icon: icon(<Bell />), onSelect: onReminder },
-    { commandId: "context.note.publish", label: t("게시"), icon: icon(<CloudUpload />), onSelect: onPublish },
+    { commandId: "context.note.publish", separatorBefore: true, label: t("게시"), icon: icon(<CloudUpload />), onSelect: onPublish },
     {
       commandId: "context.note.export", label: t("내보내기"),
-      separatorBefore: true,
       icon: icon(<ShareExport />),
       // 열린 노트는 형식을 고르는 내보내기 창으로, 목록의 다른 노트는 바로 형식을 고른다.
       ...(s.draft?.id === item.id ? { onSelect: () => window.dispatchEvent(new Event(PREVIEW_EVENT)) } : {}),
@@ -255,12 +270,18 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
         }),
     },
     {
-      commandId: "context.note.trash", label: t("삭제"),
+      commandId: "context.note.copy-link", label: t("링크 복사"),
+      icon: icon(<Link2 />),
+      onSelect: () => run(t("복사 실패"), () => navigator.clipboard.writeText("note://" + item.id)),
+    },
+    { commandId: "context.note.duplicate", label: t("복제"), icon: icon(<CopyNote />), onSelect: duplicate },
+    {
+      commandId: "context.note.trash", label: t("지우기"),
       separatorBefore: true,
       shortcut: "Del",
       icon: icon(<Trash2 />),
       danger: true,
-      onSelect: () => patch({ trashed: true }),
+      onSelect: () => void s.trashNote(item.id, item.title, item.revision),
     },
   ];
   return items;

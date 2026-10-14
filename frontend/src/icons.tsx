@@ -164,6 +164,8 @@ export {
   ArrowsOutSimpleIcon as Longer,
   TranslateIcon as Translate,
   ListDashesIcon as ListDashes,
+  ColumnsIcon as Columns,
+  CalendarBlankIcon as CalendarBlank,
   ClockIcon as Clock,
   CheckIcon as Check,
   ListChecksIcon as TaskList,
