@@ -2,6 +2,7 @@
 //! flags, library choice, the library lock, the engine and the window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod ai_key;
 mod integrate;
 mod launch;
 #[cfg(any(windows, test))]

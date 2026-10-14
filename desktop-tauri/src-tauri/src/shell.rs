@@ -111,7 +111,8 @@ pub fn run(session: Session) -> local_api::Result<Option<PathBuf>> {
     let note_link_server = Arc::new(Mutex::new(None));
     let result = (|| {
         let app = tauri::Builder::default()
-            .invoke_handler(tauri::generate_handler![crate::web_viewer::web_viewer])
+            .manage(crate::ai_key::KeyStore::new(session.config_root.join("Inkism").join("ai-key.dpapi")))
+            .invoke_handler(tauri::generate_handler![crate::web_viewer::web_viewer, crate::ai_key::ai_key])
             .register_asynchronous_uri_scheme_protocol(SCHEME, {
                 let handler = handler.clone();
                 move |ctx, request, responder| {

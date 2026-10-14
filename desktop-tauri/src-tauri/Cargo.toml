@@ -35,6 +35,7 @@ inkism-reminders = { path = "../../core/reminders" }
 inkism-google-auth = { path = "../../core/google-auth" }
 inkism-app-update = { path = "../../core/app-update" }
 inkism-pdf-export = { path = "../../core/pdf-export" }
+zeroize = "1"
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 inkism-native-host = { path = "../../core/native-host", features = ["encrypted-storage"] }
@@ -42,6 +43,7 @@ tauri-plugin-deep-link = "2"
 serde = { version = "1", features = ["derive"] }
 
 [target.'cfg(windows)'.dependencies]
+inkism-windows-secrets = { path = "../../core/runtime-core/windows-secrets" }
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_DataExchange", "Win32_System_LibraryLoader", "Win32_System_Threading"] }
 
 

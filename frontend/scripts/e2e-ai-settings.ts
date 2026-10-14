@@ -12,6 +12,7 @@ try{
  const endpoint=p.getByLabel('AI 요청 주소',{exact:true}),model=p.getByLabel('AI 모델',{exact:true}),status=p.getByRole('status');
  const disclosure=p.getByLabel('AI로 보내는 내용',{exact:true});
  assert.match(await disclosure.textContent()??'',/등록한 서버로.*고른 글.*용어 풀이.*내 노트에 묻기: 질문과 검색으로 찾은 노트 구절/s);
+ await p.getByText('이 환경에서는 API 키를 저장하지 않습니다. 키는 메모리에만 두며 앱을 닫으면 지워집니다.',{exact:true}).waitFor(); // no desktop key store here
  // Preset fills the endpoint; the models list comes from the derived /v1/models.
  await p.getByLabel('서비스 예시',{exact:true}).selectOption({label:'Ollama'});
  assert.equal(await endpoint.inputValue(),'http://localhost:11434/v1/chat/completions');
@@ -41,5 +42,5 @@ try{
  assert.ok(stored.includes('manual-model')&&!stored.includes('sk-test-secret'),'config saved, key never stored');
  assert.ok(!logs.some(l=>l.includes('sk-test-secret')),'key never logged');
  assert.deepEqual(errors,[]);
- console.log('PASS ai settings: preset endpoint, /models list + manual model, classified 401/network/429/404/shape failures with status, per-feature send disclosure, key not stored or logged');
+ console.log('PASS ai settings: preset endpoint, /models list + manual model, classified 401/network/429/404/shape failures with status, per-feature send disclosure, memory-only key (no desktop store) not stored or logged');
 }finally{await browser.close();}
