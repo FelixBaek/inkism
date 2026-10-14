@@ -2474,5 +2474,8 @@
   "잘라내기": "Cut",
   "붙여넣기": "Paste",
   "서식 없이 붙여넣기": "Paste without formatting",
-  "편집기 메뉴": "Editor menu"
+  "편집기 메뉴": "Editor menu",
+  "CLI 기본 모델": "Default CLI model",
+  "{cli}에 로그인된 계정으로 실행합니다. 주소와 API 키는 필요 없습니다.": "Runs with the account signed in to {cli}. No address or API key is needed.",
+  "이 컴퓨터의 CLI": "CLIs on this computer"
 }

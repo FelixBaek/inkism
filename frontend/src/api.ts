@@ -84,7 +84,7 @@ export async function rpc<T>(
 }
 
 /** 셸 전용 JSON 경로(/api/...): {ok,data}|{ok:false,error}. */
-async function shellJSON<T>(path: string, body?: unknown): Promise<T> {
+export async function shellJSON<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(
     path,
     body === undefined

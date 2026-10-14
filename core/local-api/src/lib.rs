@@ -14,6 +14,7 @@ pub mod agent;
 pub mod engine;
 pub mod gate;
 
+mod ai_cli;
 mod attachments;
 mod backup;
 mod clipper;
@@ -207,6 +208,7 @@ impl Handler {
             (_, "/api/publications") => publications::serve(self, r),
             ("GET" | "HEAD", p) if p.starts_with(attachments::PATH_PREFIX) => attachments::download(self, r),
             (_, p) if p.starts_with("/api/update/") => update::serve(self, r),
+            (_, "/api/ai/cli") => ai_cli::serve(self, r, deadline),
             ("GET", "/api/upload-access") => attachments::upload_access(self),
             ("GET", "/api/backup") => backup::export_bundle(self, r),
             ("POST", "/api/restore") => backup::restore_bundle(self, r),
