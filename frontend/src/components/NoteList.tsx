@@ -11,13 +11,15 @@ import {
   StickyNote,
   PencilOff,
   Archive,
+  Microphone,
 } from "../icons";
-import { useStore, viewTitle, PAGE_SIZE } from "../store";
+import { requestVoiceMemo } from "../lib/voice-memo";
+import { useStore, viewTitle } from "../store";
 import { formatRelative } from "../lib/date";
 import type { TrashDays } from "../api";
 import type { Notebook, Summary, View } from "../types";
 import { IconButton } from "./IconButton";
-import { NoteContextMenu, type NoteMenuTarget } from "./NoteContextMenu";
+import { NoteContextMenu, renameNoteDialog, type NoteMenuTarget } from "./NoteContextMenu";
 import { ReminderEditor } from "./Reminders";
 import { NoteShareDialog } from "./NoteShareDialog";
 import { CoverBanner } from "./NotebookCover";
@@ -40,16 +42,13 @@ function trashRowLabel(at: number | undefined, archived: boolean, retention: Tra
   return trashLabel(at, archived ? null : retention);
 }
 
-function pageCount(total: number | undefined, hasNext: boolean, page: number) {
-  if (total !== undefined) return Math.max(1, Math.ceil(total / PAGE_SIZE));
-  return hasNext ? null : page;
+function countLabel(count: number) {
+  return count < 0 ? t("{count}개 이상", { count: -count }) : t("{count}개", { count });
 }
-function listInfo(search: string, hasNext: boolean, page: number, length: number, order: string, count: number | null) {
-  if (search)
-    return t(hasNext ? "{count}개 이상 검색 결과" : "{count}개 검색 결과", { count: (page - 1) * PAGE_SIZE + length });
+function listInfo(search: string, hasNext: boolean, length: number, order: string, count: number | null) {
+  if (search) return t(hasNext ? "{count}개 이상 검색 결과" : "{count}개 검색 결과", { count: length });
   if (count === null) return order;
-  const amount = count < 0 ? t("{count}개 이상", { count: -count }) : t("{count}개", { count });
-  return order + " · " + amount;
+  return order + " · " + countLabel(count);
 }
 function ListStatus({
   error,
@@ -113,8 +112,19 @@ export function NoteList() {
   };
   // 전체 노트는 총 개수를 알고, 다른 보기는 마지막 쪽에 닿아야 정확한 수를 안다(음수 = "이상").
   const total = s.view.type === "all" && !s.search ? s.stats?.notes : undefined;
-  const count = !s.pageData ? null : (total ?? knownNoteCount(s.pageData.nextCursor, s.page, items.length));
-  const pages = pageCount(total, hasNext, s.page);
+  const count = !s.pageData ? null : (total ?? (hasNext ? -items.length : items.length));
+  // 목록 끝이 보이면 다음 쪽을 읽는다.
+  const sentinel = React.useRef<HTMLDivElement>(null);
+  const loadMore = s.loadMore;
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || !hasNext) return;
+    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && loadMore(), {
+      rootMargin: "200px",
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasNext, loadMore]);
   const trash = s.view.type === "trash";
   const shelf = trash || s.view.type === "archive";
   useTrashPurge();
@@ -185,7 +195,7 @@ export function NoteList() {
         </div>
       )}
       <p className="list-info">
-        {listInfo(s.search, hasNext, s.page, items.length, order, count)}
+        {listInfo(s.search, hasNext, items.length, order, count)}
         {trash && picked.size > 0 && (
           <>
             {" · "}
@@ -224,32 +234,33 @@ export function NoteList() {
               ))}
             </React.Fragment>
           ))}
+        {hasNext && <div ref={sentinel} className="list-sentinel" aria-hidden />}
       </div>
 
-      {(s.page > 1 || hasNext) && (
-        <nav className="list-pager" aria-label={t("노트 목록")}>
+      {items.length > 0 && count !== null && (
+        <p className="list-more" aria-live="polite">
+          {hasNext ? t("{count} · 스크롤해서 더 보기", { count: countLabel(count) }) : countLabel(count)}
+        </p>
+      )}
+      {/* 좁은 화면(Figma 65:8875): 오른쪽 아래 새 노트와 그 위 음성 메모. 넓은 화면에서는 CSS로 숨긴다. */}
+      {!shelf && (
+        <div className="list-fab">
           <button
             type="button"
-            className="pager-btn"
-            aria-label={t("이전 페이지")}
-            disabled={s.page <= 1 || s.listLoading}
-            onClick={() => s.goToPage(s.page - 1)}
+            className="list-fab-voice"
+            aria-label={t("음성 메모")}
+            title={t("음성 메모")}
+            onClick={() => {
+              requestVoiceMemo();
+              void s.newNote();
+            }}
           >
-            {t("이전")}
+            <Microphone size={18} aria-hidden />
           </button>
-          <span className="pager-info" aria-live="polite">
-            {s.page} / {pages ?? "…"}
-          </span>
-          <button
-            type="button"
-            className="pager-btn"
-            aria-label={t("다음 페이지")}
-            disabled={!hasNext || s.listLoading}
-            onClick={() => s.goToPage(s.page + 1)}
-          >
-            {t("다음")}
+          <button type="button" className="list-fab-new" aria-label={t("새 노트 만들기")} onClick={() => void s.newNote()}>
+            <Plus size={24} aria-hidden />
           </button>
-        </nav>
+        </div>
       )}
       {cleanup && (
         <TrashSelectionDialog
@@ -289,11 +300,6 @@ export function NoteList() {
       {action?.kind === "publish" && <NoteShareDialog noteID={action.item.id} onClose={() => setAction(null)} />}
     </section>
   );
-}
-
-/** 마지막 쪽이면 정확한 노트 수, 아니면 "이상"을 뜻하는 음수. */
-function knownNoteCount(nextCursor: unknown, page: number, shown: number): number {
-  return nextCursor === null ? (page - 1) * PAGE_SIZE + shown : -page * PAGE_SIZE;
 }
 
 /** 폴더 머리말: 표지, 상위 폴더 경로, 설명. 이름·개수·버튼은 목록 머리에 있다. */
@@ -427,7 +433,12 @@ function NoteRow({
           if (e.key === "Delete" && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
             e.preventDefault();
             if (item.trashed) void s.quickDelete(item.id);
-            else void s.patchNoteById(item.id, { trashed: true }, item.revision);
+            else void s.trashNote(item.id, item.title, item.revision);
+            return;
+          }
+          if (e.key === "F2" && !item.trashed && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+            e.preventDefault();
+            void renameNoteDialog(s, item.id, item.title, item.revision);
             return;
           }
           if (e.key !== "ContextMenu" && !(e.shiftKey && e.key === "F10")) return;

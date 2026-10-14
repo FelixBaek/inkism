@@ -125,7 +125,7 @@ export interface StoreValue {
   pageData: PageData | null;
   listLoading: boolean;
   listError: string | null;
-  goToPage: (n: number) => void;
+  loadMore: () => void;
   refreshList: () => void;
   selectedId: string | null;
   selectNote: (id: string | null) => Promise<void>;
@@ -175,6 +175,13 @@ export interface StoreValue {
   ensurePersisted: () => Promise<boolean>;
   openHistory: (historyId?: string) => void;
   trashSelected: () => Promise<void>;
+  /** 노트를 지운 노트로 옮기고, 아래쪽에 되돌리기 알림을 띄운다. */
+  trashNote: (id: string, title: string, revision?: number) => Promise<void>;
+  /** 방금 지운 노트(되돌리기 알림). */
+  deletedNote: { id: string; title: string } | null;
+  undoTrash: () => Promise<void>;
+  dismissDeleted: () => void;
+  renameNote: (id: string, title: string, revision?: number) => Promise<void>;
   restoreSelected: () => Promise<void>;
   deleteSelectedForever: () => Promise<void>;
   quickRestore: (id: string) => Promise<void>;
@@ -453,7 +460,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
   const [tags, setTags] = useState<TagCount[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
 
-  const pageCache = useRef(new Map<number, PageData>());
+  const loadedRef = useRef(0); // pageData에 들어 있는 쪽 수
   const cursorsRef = useRef<(string | undefined)[]>([undefined]); // cursorsRef[n] = 페이지 n+1 커서
   const listSeq = useRef(0);
   const [listVersion, setListVersion] = useState(0); // refreshList 트리거
@@ -625,45 +632,48 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
 
   // 검색어/뷰 변경 → 1페이지로
   useEffect(() => {
-    pageCache.current.clear();
+    loadedRef.current = 0;
     cursorsRef.current = [undefined];
     listSeq.current++;
     setPage(1);
   }, [view, search]);
 
-  // ---------- 목록 로드 (키셋 페이지네이션 + 순서 방어) ----------
+  // ---------- 목록 로드 (무한 스크롤: page = 불러온 쪽 수, 순서 방어) ----------
   const loadPage = useCallback(
     async (n: number) => {
       const seq = ++listSeq.current;
-      const cached = pageCache.current.get(n);
       const sort = readSort(view);
       const params: ListParams = {
         ...viewToParams(view, search),
         sort_by: sort.sortBy,
         sort_direction: sort.sortDirection,
       };
-      if (cached) {
-        setPageData(cached);
-        setListError(null);
-        setListLoading(false);
-        return;
-      }
+      // 바로 앞 쪽까지 들고 있으면 한 쪽만 덧붙이고, 아니면(목록 무효화) 처음부터 n쪽을 다시 읽는다.
+      const append = loadedRef.current === n - 1 && n > 1 && cursorsRef.current[n - 1] !== undefined;
+      const from = append ? n : 1;
       setListLoading(true);
       try {
-        const cursor = cursorsRef.current[n - 1];
-        const res = await api.list({ ...params, cursor, limit: PAGE_SIZE });
-        if (seq !== listSeq.current) return; // 오래된 응답 폐기
-        const data: PageData = { items: res.items, nextCursor: res.next_cursor };
-        pageCache.current.set(n, data);
-        for (const key of pageCache.current.keys()) if (Math.abs(key - n) > 1) pageCache.current.delete(key);
-        cursorsRef.current[n] = res.next_cursor ?? undefined;
-        cursorsRef.current.length = n + 1;
-        setPageData(data);
+        let items: Summary[] = [];
+        let nextCursor: string | null = null;
+        for (let k = from; k <= n; k++) {
+          const res = await api.list({ ...params, cursor: cursorsRef.current[k - 1], limit: PAGE_SIZE });
+          if (seq !== listSeq.current) return; // 오래된 응답 폐기
+          items = items.concat(res.items);
+          nextCursor = res.next_cursor;
+          cursorsRef.current[k] = res.next_cursor ?? undefined;
+          cursorsRef.current.length = k + 1;
+          if (!nextCursor) break;
+        }
+        setPageData((prev) => {
+          if (!append || !prev) return { items, nextCursor };
+          const seen = new Set(prev.items.map((i) => i.id));
+          return { items: [...prev.items, ...items.filter((i) => !seen.has(i.id))], nextCursor };
+        });
+        loadedRef.current = n;
         setListError(null);
       } catch (e) {
         if (seq !== listSeq.current) return;
         setListError(e instanceof Error ? e.message : t("목록을 불러올 수 없습니다"));
-        setPageData((prev) => prev);
       } finally {
         if (seq === listSeq.current) setListLoading(false);
       }
@@ -676,7 +686,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
   }, [loadPage, page, listVersion]);
 
   const invalidateList = useCallback(() => {
-    pageCache.current.clear();
+    loadedRef.current = 0;
     cursorsRef.current = [undefined];
     setListVersion((v) => v + 1);
   }, []);
@@ -760,16 +770,14 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     };
   }, []);
 
-  // 현재 페이지 데이터만 다시 읽기 (정렬은 유지될 수 없으므로 안전하게 1페이지로)
-  const bumpList = useCallback(() => {
-    invalidateList();
-    setPage(1);
-  }, [invalidateList]);
+  // 불러온 쪽 수는 그대로 두고 처음부터 다시 읽는다(스크롤 위치 유지).
+  const bumpList = invalidateList;
 
-  const goToPage = useCallback((n: number) => {
-    if (n < 1) return;
-    setPage(n);
-  }, []);
+  // 무한 스크롤: 다음 쪽이 있고 읽는 중이 아니면 한 쪽 더.
+  const loadMore = useCallback(() => {
+    if (listLoading || !pageData?.nextCursor || loadedRef.current !== page) return;
+    setPage(page + 1);
+  }, [listLoading, pageData, page]);
 
   const retryConnection = useCallback(() => {
     void loadInfo();
@@ -1736,12 +1744,33 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     if (id) setDialog({ kind: "history", noteId: id, historyId });
   }, []);
 
+  const [deletedNote, setDeletedNote] = useState<{ id: string; title: string } | null>(null);
+  const trashNote = useCallback(
+    async (id: string, title: string, revision?: number) => {
+      if (await patchNoteById(id, { trashed: true }, revision)) setDeletedNote({ id, title });
+    },
+    [patchNoteById],
+  );
+  const undoTrash = useCallback(async () => {
+    if (!deletedNote) return;
+    setDeletedNote(null);
+    await patchNoteById(deletedNote.id, { trashed: false });
+  }, [deletedNote, patchNoteById]);
+
   const trashSelected = useCallback(async () => {
     const id = selectedIdRef.current;
     if (!id) return;
-    if (!(await flushNow())) return;
-    await patchSelected({ trashed: true });
-  }, [flushNow, patchSelected]);
+    await trashNote(id, draftRef.current?.id === id ? draftRef.current.title : (note?.title ?? ""));
+  }, [trashNote, note]);
+
+  // 열린 노트는 초안 제목을 바꿔 다음 저장에 싣는다(패치하면 저장이 옛 제목으로 되돌린다).
+  const renameNote = useCallback(
+    async (id: string, title: string, revision?: number) => {
+      if (draftRef.current?.id === id) updateDraft({ title });
+      else await patchNoteById(id, { title }, revision);
+    },
+    [patchNoteById, updateDraft],
+  );
 
   const restoreSelected = useCallback(async () => {
     await patchSelected({ trashed: false, archived: false });
@@ -1948,6 +1977,23 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     setSaveError(null);
     void doSave();
   }, [doSave]);
+
+  // 저장이 실패하면 엔진 연결부터 확인한다(끊겼으면 connError로 알린다).
+  useEffect(() => {
+    if (saveState === "error") void loadInfo();
+  }, [saveState, loadInfo]);
+  // 엔진 연결이 돌아오면 저장하지 못한 변경을 다시 저장한다.
+  const wasDisconnected = useRef(false);
+  useEffect(() => {
+    if (connError) {
+      wasDisconnected.current = true;
+      const timer = window.setInterval(() => void loadInfo(), 5000);
+      return () => window.clearInterval(timer);
+    }
+    if (!wasDisconnected.current) return;
+    wasDisconnected.current = false;
+    if (dirtyRef.current) retrySave();
+  }, [connError, retrySave, loadInfo]);
 
   /** Save state after a metadata operation that held the save lock. */
   const settledSaveState = (): SaveState => {
@@ -2311,7 +2357,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     pageData,
     listLoading,
     listError,
-    goToPage,
+    loadMore,
     refreshList,
     selectedId,
     selectNote,
@@ -2352,6 +2398,11 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     ensurePersisted,
     openHistory,
     trashSelected,
+    trashNote,
+    deletedNote,
+    undoTrash,
+    dismissDeleted: () => setDeletedNote(null),
+    renameNote,
     restoreSelected,
     deleteSelectedForever,
     quickRestore,

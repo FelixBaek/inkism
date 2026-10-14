@@ -4,7 +4,7 @@ import { SyncIndicator } from "./SyncSettings";
 import { EditorZoom } from "./EditorZoom";
 import React, { useState, useMemo, useRef, lazy, Suspense } from "react";
 import { editorLocation, rememberLocation } from "../lib/editor-location";
-import { Type, FileCode2, X, Loader2, CheckCircle2, AlertTriangle, CloudUpload, RefreshCw, List, Settings, PanelRight, Eye, ChevronDown } from "../icons";
+import { Type, FileCode2, X, Loader2, CheckCircle2, AlertTriangle, Prohibit, CloudUpload, RefreshCw, List, Settings, PanelRight, Eye, ChevronDown } from "../icons";
 import { PREVIEW_EVENT } from "./PreviewExport";
 import { IconButton } from "./IconButton";
 import { CoverBanner } from "./NotebookCover";
@@ -373,6 +373,15 @@ export function StatusBar() {
     default:
       status = <>{idleStatus(d)}</>;
       statusClass = "muted";
+  }
+  // 엔진 연결이 끊기면 "저장된 상태"를 띄우지 않는다. 다시 연결되면 store가 남은 변경을 저장한다.
+  if (s.connError && d && s.saveState !== "conflict") {
+    status = (
+      <>
+        {t("저장 안 됨 · 연결되면 다시 저장")} <Prohibit size={13} aria-hidden />
+      </>
+    );
+    statusClass = "bad";
   }
 
   return (
