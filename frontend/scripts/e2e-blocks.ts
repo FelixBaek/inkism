@@ -50,7 +50,7 @@ try{
  const from=await handle.boundingBox(),to=await root.locator(':scope > p').last().boundingBox();assert.ok(from&&to);await page.mouse.move(from.x+from.width/2,from.y+from.height/2);await page.mouse.down();await page.mouse.move(from.x+from.width/2+10,from.y+from.height/2+10,{steps:5});await page.mouse.move(to.x+40,to.y+to.height-1,{steps:25});await page.mouse.up();await frame();assert.notEqual((await texts())[0],'첫 문단');assert.equal(await root.locator('strong').count(),1);await undo();assert.equal((await texts())[0],'첫 문단');await historyKey(page,'redo');await frame();assert.notEqual((await texts())[0],'첫 문단');await saved();
  const stored=await rpc('get',{id:note.id});assert.ok(stored.content.includes('<strong>첫 문단</strong>'));assert.ok(stored.content.includes('한글 셀'));assert.ok(stored.content.includes('접기 안쪽 본문'));
  // Multi-block selections must not silently act on only their first block.
- await root.click();await page.keyboard.press('Control+a');const whole=await texts();
+ await root.focus();await page.keyboard.press('Control+a');const whole=await texts();
  for(const key of ['Alt+Shift+ArrowUp','Alt+Shift+ArrowDown','Control+d']){await page.keyboard.press(key);await frame();assert.deepEqual(await texts(),whole,key);}
  // Deleting the only paragraph keeps a valid, editable document, and undo recovers its marks.
  const onlyTitle='하나뿐인 블록 '+Date.now();await rpc('save',{note:{title:onlyTitle,content:'<p><strong>보존할 한글</strong></p>',text:'보존할 한글',tags:[]}});
