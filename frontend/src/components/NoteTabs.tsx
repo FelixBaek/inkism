@@ -156,6 +156,30 @@ export function NoteTabs() {
   useEffect(() => {
     if (active) buttons.current.get(active)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [active, tabs.length]);
+  const latestTabs = useRef(tabs);
+  latestTabs.current = tabs;
+  useEffect(() => {
+    // Ctrl+Tab·Ctrl+PageDown 다음 탭, Shift/PageUp 이전 탭, Ctrl+1..8 해당 탭, Ctrl+9 마지막 탭.
+    const onKey = (event: KeyboardEvent) => {
+      const list = latestTabs.current;
+      if (event.defaultPrevented || event.isComposing || event.altKey || !list.length) return;
+      if (document.querySelector("dialog[open]")) return;
+      const index = list.findIndex((tab) => tab.id === store.current.selectedId);
+      let next: number;
+      if (event.ctrlKey && (event.key === "Tab" || event.key === "PageDown" || event.key === "PageUp")) {
+        const back = event.key === "PageUp" || (event.key === "Tab" && event.shiftKey);
+        if (event.key !== "Tab" && event.shiftKey) return;
+        next = ((index < 0 && back ? 0 : index) + (back ? list.length - 1 : 1)) % list.length;
+      } else if ((event.ctrlKey || event.metaKey) && !event.shiftKey && /^[1-9]$/.test(event.key)) {
+        next = event.key === "9" ? list.length - 1 : Number(event.key) - 1;
+        if (next >= list.length) return;
+      } else return;
+      event.preventDefault();
+      if (list[next].id !== store.current.selectedId) void store.current.selectNote(list[next].id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const close = async (id: string) => {
     if (closingRef.current) return;
     if (active !== id) {
@@ -212,6 +236,15 @@ export function NoteTabs() {
           className={`note-tab${tab.id === active ? " is-selected" : ""}${tab.preview ? " is-preview" : ""}`}
           key={tab.id}
           role="presentation"
+          // 가운데 버튼 클릭으로 탭을 닫는다(자동 스크롤은 막는다).
+          onMouseDown={(event) => {
+            if (event.button === 1) event.preventDefault();
+          }}
+          onAuxClick={(event) => {
+            if (event.button !== 1 || closing) return;
+            event.preventDefault();
+            void close(tab.id);
+          }}
         >
           <button
             type="button"
