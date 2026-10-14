@@ -546,6 +546,8 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             key={pop.name}
             {...common}
             keepOpen={palettePinned}
+            // 서식 메뉴의 색 버튼에서 열면 메뉴 옆에 둔다(메뉴·고른 글을 가리지 않게).
+            side={level === 0}
             label={pop.name === "highlight" ? t("배경색") : t("글자색")}
             className="tb-pop-panel"
           >
