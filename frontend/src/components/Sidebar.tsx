@@ -15,7 +15,6 @@ import {
   RefreshCw,
   Files,
   Bell,
-  List,
   Link2,
   Hash,
   Search,
@@ -117,7 +116,7 @@ export function Sidebar({
       live = false;
     };
   }, [tab, s.stats, s.notebooks]);
-  const openKnowledge = (panel: "graph" | "views") =>
+  const openKnowledge = (panel: "graph") =>
     window.dispatchEvent(new CustomEvent(KNOWLEDGE_EVENT, { detail: panel }));
 
   return (
@@ -171,7 +170,6 @@ export function Sidebar({
             {toolItem(t("템플릿"), <Files size={16} />, () =>
               window.dispatchEvent(new CustomEvent(WRITING_TOOL_EVENT, { detail: "templates" })),
             )}
-            {toolItem(t("노트 모아보기"), <List size={16} />, () => openKnowledge("views"))}
             {toolItem(t("관계 그래프"), <Link2 size={16} />, () => openKnowledge("graph"))}
           </div>
         )}

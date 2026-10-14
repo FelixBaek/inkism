@@ -24,17 +24,12 @@
 .document-children {display:flex;gap:8px;overflow:auto;padding:8px 0}
 .document-children button {flex:0 0 180px;min-height:64px;padding:12px;text-align:left;color:var(--text);background:var(--raised);border:1px solid var(--border);overflow-wrap:anywhere}
 .document-children [data-size=small] {flex-basis:140px;min-height:44px}.document-children [data-size=large] {flex-basis:240px;min-height:96px}
-.document-children [data-shadow],.knowledge-card[data-shadow] {box-shadow:0 4px 12px #0002}
-.document-children [data-tone=paper],.knowledge-card[data-tone=paper],.editor-pane[data-document-tone=paper] .editor-scroll {background:var(--canvas)}
-.document-children [data-tone=soft],.knowledge-card[data-tone=soft],.editor-pane[data-document-tone=soft] .editor-scroll {background:var(--raised)}
+.document-children [data-shadow]{box-shadow:0 4px 12px #0002}
+.document-children [data-tone=paper],.editor-pane[data-document-tone=paper] .editor-scroll {background:var(--canvas)}
+.document-children [data-tone=soft],.editor-pane[data-document-tone=soft] .editor-scroll {background:var(--raised)}
 .editor-pane[data-document-width=wide] .rich-editor {max-width:1240px!important}
 .editor-pane[data-document-width=full] .rich-editor {max-width:none!important}
 .editor-pane[data-document-spacing=compact] .tiptap-prose p {margin-block:.25em}
 .editor-pane[data-document-spacing=relaxed] .tiptap-prose p {margin-block:1.25em}
-.knowledge-board {display:flex;gap:16px;overflow:auto;padding:8px 0}.knowledge-body .knowledge-board>.knowledge-group {flex:0 0 260px;margin:0;border:0;padding:0}
-.knowledge-card {border:1px solid var(--border);background:var(--raised);padding:12px;min-width:0}
-.knowledge-card-open {display:flex;flex-direction:column;gap:8px;border:0;background:none;color:var(--text);text-align:left;width:100%;overflow-wrap:anywhere;cursor:pointer}
-.knowledge-card[data-size=small] {padding:8px}.knowledge-card[data-size=large] {padding:24px}
-.knowledge-card label {margin-top:12px}.knowledge-card select {width:100%}
 .property-choice {min-width:0;display:grid;gap:6px}.property-choice select {width:100%}.property-choice a {display:inline-block;margin:4px}
 @media(max-width:600px){.document-tools {padding:0 10px}.document-controls input:not([type=checkbox]),.document-controls select {font-size:16px;max-width:100%;min-height:44px}.document-tools button {min-height:44px}.document-controls label {width:100%;justify-content:space-between}.property-choice {grid-column:1/3;grid-row:2}}
