@@ -37,13 +37,13 @@ try{
  await page.getByRole('menuitemcheckbox',{name:'색 없음',exact:true}).waitFor();
  if(shots)await page.screenshot({path:shots+'/tag-color-menu.png'});
  await page.getByRole('menuitemcheckbox',{name:'분홍',exact:true}).click();
- const pink='rgb(233, 30, 99)';
+ const pink='rgb(224, 82, 151)';
  const sideIcon=page.locator('.side-row',{has:page.getByRole('button',{name:'태그 '+old+' 옵션',exact:true})}).locator('.side-icon');
  await page.waitForFunction(([name,color])=>[...document.querySelectorAll('.side-row')].some(r=>r.textContent?.includes(name)&&getComputedStyle(r.querySelector('.side-icon')!).color===color),[old,pink]);
  assert.equal(await sideIcon.evaluate(el=>getComputedStyle(el).color),pink);
  const chip=page.locator('.tag-editor .tag-chip',{hasText:old}).first();
  assert.equal(await chip.evaluate(el=>getComputedStyle(el,'::before').backgroundColor),pink);
- assert.equal((await rpc('tags')).find(x=>x.name===old).color,'#e91e63');
+ assert.equal((await rpc('tags')).find(x=>x.name===old).color,'#e05297');
  if(shots)await page.screenshot({path:shots+'/tag-color-sidebar-editor.png'});
  await page.getByRole('button',{name:'태그 '+old+' 옵션',exact:true}).click();
  await page.getByRole('menuitem',{name:'이름 변경',exact:true}).click();
@@ -66,7 +66,7 @@ try{
  assert.equal(saved.content,'동시입력 '+html,'all source bytes survive the metadata revision rebase');assert.ok(bodySaves>0);
  assert.deepEqual(saved.tags,[target]);assert.ok(saved.content.includes('동시입력'));
  assert.deepEqual((await rpc('get',{id:b.id})).tags,[target]);
- assert.equal((await rpc('tags')).find(x=>x.name===target).color,'#e91e63','merge into an uncolored tag carries the color');
+ assert.equal((await rpc('tags')).find(x=>x.name===target).color,'#e05297','merge into an uncolored tag carries the color');
  await page.getByRole('button',{name:'태그 '+target+' 옵션',exact:true}).click();
  await page.getByRole('menuitem',{name:'태그 제거',exact:true}).click();
  await dialog.getByRole('button',{name:'확인한 태그 변경 적용',exact:true}).click();

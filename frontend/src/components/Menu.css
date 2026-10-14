@@ -45,3 +45,30 @@
   border-radius: 50%;
   vertical-align: middle;
 }
+/* 색·아이콘 고르기: 글자 없이 8칸 격자. 고른 칸은 테두리로 표시한다. */
+.menu-popup.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 32px);
+  gap: 2px;
+  min-width: 0;
+  max-width: none;
+  max-height: min(360px, 80vh);
+  padding: 6px;
+}
+.menu-grid > .menu-item {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+}
+.menu-grid > .menu-item .menu-item-icon {
+  margin: 0;
+}
+.menu-grid > .menu-item[aria-checked="true"] {
+  outline: 1.5px solid var(--text);
+  outline-offset: -2px;
+}
+.menu-grid .menu-swatch {
+  width: 18px;
+  height: 18px;
+}
