@@ -123,6 +123,15 @@ export function KnowledgeTools() {
   // 사이드바에서 다른 보기로 가면 모아보기 화면을 닫는다.
   const viewKey = JSON.stringify(s.view);
   useEffect(() => setPanel((p) => (p === "views" ? null : p)), [viewKey]);
+  // 이미 보고 있는 목록(같은 보기)을 다시 눌러도 닫힌다. 모아보기·그래프 단추는 클릭 뒤 다시 연다.
+  useEffect(() => {
+    const leave = (e: MouseEvent) => {
+      if (e.target instanceof Element && e.target.closest(".sidebar .side-item"))
+        setPanel((p) => (p === "views" || p === "graph" ? null : p));
+    };
+    document.addEventListener("click", leave, true);
+    return () => document.removeEventListener("click", leave, true);
+  }, []);
   const host = panel === "views" ? document.querySelector(".app-content") : null;
   const close = () => setPanel(null);
   useEffect(() => {
