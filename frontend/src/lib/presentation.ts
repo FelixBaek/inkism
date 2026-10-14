@@ -3,7 +3,7 @@ import {markdownToHTML} from './markdown';
 import type {Note} from '../types';
 import {t} from '../i18n';
 export type PresentationSlide={title:string;html:string};
-const escape=(text:string)=>text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const escape=(text:string)=>text.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 /** A derived, inert view. Never send this representation back to storage. */
 export function presentationSlides(note:Pick<Note,'title'|'content'|'content_format'>):PresentationSlide[]{
  if(new TextEncoder().encode(note.content).length>8*1024*1024)throw new Error(t('발표 모드는 8 MiB 이하 문서에서 사용할 수 있습니다.'));
@@ -14,7 +14,7 @@ export function presentationSlides(note:Pick<Note,'title'|'content'|'content_for
  const safe=DOMPurify.sanitize(html,{USE_PROFILES:{html:true},FORBID_TAGS:['style','link','iframe','object','embed','form','input','button','textarea','select','video','audio','source','base','meta'],FORBID_ATTR:['srcset','autofocus','contenteditable','name','id','background','poster','target','download']});
  const root=document.createElement('template');root.innerHTML=safe;
  for(const element of root.content.querySelectorAll<HTMLElement>('*')){
-  const link=element.getAttribute('href');if(link&&/^\/api\/attachments\//.test(link))element.dataset.presentationOmitted=element.textContent?.trim()||link.split('/').at(-1)||t('첨부 누락');
+  const link=element.getAttribute('href');if(link?.startsWith('/api/attachments/'))element.dataset.presentationOmitted=element.textContent?.trim()||link.split('/').at(-1)||t('첨부 누락');
   element.removeAttribute('href'); // Presentation links cannot navigate or launch other applications.
   const style=element.style;const retained:Record<string,string>={};
   for(const key of ['color','background-color','font-size','font-weight','font-style','text-align','text-decoration','vertical-align']){const value=style.getPropertyValue(key);if(value&&!/url\s*\(|expression\s*\(|var\s*\(/i.test(value))retained[key]=value;}

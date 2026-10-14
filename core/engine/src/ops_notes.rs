@@ -1460,7 +1460,7 @@ pub(crate) fn apply_patch(
         sets.join(", "),
         vals.len()
     );
-    let params_ref: Vec<&dyn rusqlite::ToSql> = vals.iter().map(|b| b.as_ref()).collect();
+    let params_ref: Vec<&dyn rusqlite::ToSql> = vals.iter().map(Box::as_ref).collect();
     conn.execute(&sql, params_ref.as_slice())?;
     indexer::enqueue(conn, id, new_rev)?;
     if summary_only {

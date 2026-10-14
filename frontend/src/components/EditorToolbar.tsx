@@ -124,8 +124,8 @@ function fontNameOf(fontFamily: string) {
 export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
   const s = useStore();
   const [registeredFonts] = usePref(FONTS_KEY, parseEditorFonts);
-  const [, refreshPlugins] = useState(0);
-  useEffect(() => subscribePlugins(() => refreshPlugins((x) => x + 1)), []);
+  const [, refreshPlugins] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => subscribePlugins(() => refreshPlugins()), []);
   const pluginFonts = activePluginFonts();
   const fonts: [string, string | null][] = [...new Map([...FONTS, ...pluginFonts.map(f => [f.label, f.family] as [string, string]), ...registeredFonts.map(f => [f.label, f.family] as [string, string])].map(([label, family]) => [family?.toLowerCase() ?? "default", [label, family] as [string, string | null]])).values()];
   // AI 블록처럼 툴바 밖에서 부르는 AI 요청도 같은 앱 안내창을 쓴다.

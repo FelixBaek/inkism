@@ -602,7 +602,7 @@ export function WindowedRichEditor({
       join?: Join,
       target?: WindowTarget,
     ) => Promise<boolean | undefined>
-  >(async () => undefined);
+  >(() => Promise.resolve(undefined));
   const callbacks = useRef({ readDraft, flush, change, changeRange, readOnly });
   callbacks.current = { readDraft, flush, change, changeRange, readOnly };
   const isReadOnly = () => callbacks.current.readOnly || Boolean(callbacks.current.readDraft()?.readonly);

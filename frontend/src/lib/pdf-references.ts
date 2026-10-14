@@ -1,9 +1,9 @@
 import { t } from "../i18n";
 export type PdfPageLink={label:string;page:number;url:string};
 export type Footnote={id:string;marker:string;text:string;line:number;from?:number;to?:number};
-const escape=(s:string)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const escape=(s:string)=>s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 export function pageUrl(url:string,page:number){const u=new URL(url,location.href);if(!['https:','http:'].includes(u.protocol)&&!(u.protocol==='tauri:'&&u.protocol===location.protocol&&u.host===location.host))throw new Error(t("안전한 웹 주소나 앱 첨부파일을 입력해 주세요."));if(u.username||u.password||!Number.isSafeInteger(page)||page<1||page>1000000)throw new Error(t("PDF 주소와 페이지 번호를 확인해 주세요."));u.hash=`page=${page}`;return u.toString();}
-export function extractPdfPageLinks(source:string):PdfPageLink[]{const out:PdfPageLink[]=[];for(const m of source.matchAll(/\[([^\]]+)\]\(([^)\s]+#page=(\d+)[^)]*)\)/gi)){try{out.push({label:m[1],page:Number(m[3]),url:pageUrl(m[2],Number(m[3]))});}catch{}}for(const m of source.matchAll(/<a\b[^>]*href=["']([^"']+#page=(\d+)[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi)){try{out.push({label:m[3].replace(/<[^>]+>/g,''),page:Number(m[2]),url:pageUrl(m[1].replace(/&amp;/g,'&'),Number(m[2]))});}catch{}}return out;}
+export function extractPdfPageLinks(source:string):PdfPageLink[]{const out:PdfPageLink[]=[];for(const m of source.matchAll(/\[([^\]]+)\]\(([^)\s]+#page=(\d+)[^)]*)\)/gi)){try{out.push({label:m[1],page:Number(m[3]),url:pageUrl(m[2],Number(m[3]))});}catch{}}for(const m of source.matchAll(/<a\b[^>]*href=["']([^"']+#page=(\d+)[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi)){try{out.push({label:m[3].replace(/<[^>]+>/g,''),page:Number(m[2]),url:pageUrl(m[1].replaceAll('&amp;','&'),Number(m[2]))});}catch{}}return out;}
 /** Exact closing token, including nested same-tag elements. Quoted attributes,
  * comments and raw text cannot supply a closing tag for the definition. */
 const TAG_PART=/"[^"]*"|'[^']*'|[^'">]/.source;
@@ -82,10 +82,11 @@ export function extractFootnotes(source:string,format='markdown'):Footnote[]{
  const prose=markdownProse(source);
  const lines=source.split(/(?<=\n)/),offsets:number[]=[];let offset=0,fence='';
  for(const line of lines){offsets.push(offset);offset+=line.length;}
- for(let i=0;i<lines.length;i++){
+ for(let i=0,consumed=-1;i<lines.length;i++){
+  if(i<=consumed)continue;
   const trimmed=lines[i].replace(/[\r\n]+$/,'');
   const boundary=/^ {0,3}(`{3,}|~{3,})(.*)$/.exec(trimmed);
-  if(boundary){if(!fence)fence=boundary[1];else if(boundary[1][0]===fence[0]&&boundary[1].length>=fence.length&&!boundary[2].trim())fence='';continue;}
+  if(boundary){if(!fence)fence=boundary[1];else if(boundary[1].startsWith(fence[0])&&boundary[1].length>=fence.length&&!boundary[2].trim())fence='';continue;}
   if(fence)continue;
   const match=/^ {0,3}\[\^([\w-]+)\]:[ \t]*(.*)$/.exec(trimmed);if(!match||!prose.slice(offsets[i],offsets[i]+trimmed.length).includes('[^'+match[1]+']:'))continue;
   const first=i,body=[match[2]];let last=i;
@@ -97,7 +98,7 @@ export function extractFootnotes(source:string,format='markdown'):Footnote[]{
    body.push(...blanks,continuation[1]);last=next;
   }
   result.push({id:match[1],marker:`[^${match[1]}]`,text:body.join('\n'),line:first+1,from:offsets[first],to:offsets[last]+lines[last].replace(/[\r\n]+$/,'').length});
-  i=last;
+  consumed=last;
  }
  return result;
 }
@@ -190,7 +191,7 @@ function markdownProse(source:string):string {
  let fence='',masked='',raw='';
  for(const line of source.split(/(?<=\n)/)) {
   const boundary=/^ {0,3}(`{3,}|~{3,})(.*)/.exec(line);
-  if(boundary){if(!fence)fence=boundary[1];else if(boundary[1][0]===fence[0]&&boundary[1].length>=fence.length&&!boundary[2].trim())fence='';masked+=' '.repeat(line.length);continue;}
+  if(boundary){if(!fence)fence=boundary[1];else if(boundary[1].startsWith(fence[0])&&boundary[1].length>=fence.length&&!boundary[2].trim())fence='';masked+=' '.repeat(line.length);continue;}
   if(fence||/^(?: {4}|\t)/.test(line)){masked+=' '.repeat(line.length);continue;}
   masked+=line;
  }
@@ -231,7 +232,8 @@ export function renumberFootnotes(source:string):string {
  for(const definition of definitions){const from=definition.from!+source.slice(definition.from).indexOf('[^');edits.push({from,to:from+definition.id.length+3,text:`[^${numbers.get(definition.id)}]`});}
  // Undefined numeric references must not silently become linked to a renamed definition.
  for(const ref of refs)if(!ids.has(ref.id)&&[...numbers.values()].includes(ref.id))throw new Error(t('각주가 변경되었습니다. 다시 불러와 주세요.'));
- for(const edit of edits.sort((a,b)=>b.from-a.from))source=source.slice(0,edit.from)+edit.text+source.slice(edit.to);
+ edits.sort((a,b)=>b.from-a.from);
+ for(const edit of edits)source=source.slice(0,edit.from)+edit.text+source.slice(edit.to);
  return source;
 }
 
@@ -252,7 +254,7 @@ function htmlFootnotePlan(source:string){
  if(new Set(definitions.map(d=>d.id)).size!==definitions.length)fail();
  for(const d of definitions){
   const chunk=source.slice(d.from,d.to),tag=/^<(p|li)\b/i.exec(chunk)?.[1];
-  if(!tag||new RegExp(`<${tag}\\b`,'gi').exec(chunk.slice(1)))fail();
+  if(!tag||new RegExp(String.raw`<${tag}\b`,'gi').exec(chunk.slice(1)))fail();
  }
  const refs=footnoteReferences(source,'html').filter(r=>!definitions.some(d=>r.from>=d.from!&&r.from<d.to!));
  const byId=new Map(definitions.map(d=>[d.id,d]));
@@ -265,7 +267,8 @@ function applySourceEdits(source:string,edits:SourceEdit[]){
   const e=ordered[i];if(e.from<0||e.to<e.from||e.to>source.length||(i&&e.from<ordered[i-1].to))
    throw new Error(t('각주 구조가 모호하여 정리할 수 없습니다. 각주와 참조를 확인해 주세요.'));
  }
- for(const e of edits.sort((a,b)=>b.from-a.from))source=source.slice(0,e.from)+e.text+source.slice(e.to);
+ edits.sort((a,b)=>b.from-a.from);
+ for(const e of edits)source=source.slice(0,e.from)+e.text+source.slice(e.to);
  return source;
 }
 /** HTML keeps stable fragment IDs/backlinks; only displayed numbers change. */
@@ -301,7 +304,7 @@ export function reorderHtmlFootnotes(source:string):string {
  const {definitions,order,fail}=htmlFootnotePlan(source);if(definitions.length<2)return source;
  const tag=/^<(p|li)\b/i.exec(source.slice(definitions[0].from))![1].toLowerCase();
  for(let i=0;i<definitions.length;i++){
-  if(!new RegExp(`^<${tag}\\b`,'i').test(source.slice(definitions[i].from)))fail();
+  if(!new RegExp(String.raw`^<${tag}\b`,'i').test(source.slice(definitions[i].from)))fail();
   if(i&&source.slice(definitions[i-1].to,definitions[i].from).trim())fail();
  }
  const chunks=order.map(id=>{const d=definitions.find(d=>d.id===id)!;return source.slice(d.from,d.to);});

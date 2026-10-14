@@ -386,7 +386,7 @@ export function PropertyEditor() {
   );
 }
 
-function ListPropertyValue({ value, onChange }: { value: string[]; onChange: (value: string[]) => void }) {
+function ListPropertyValue({ value, onChange }: Readonly<{ value: string[]; onChange: (value: string[]) => void }>) {
   const [raw, setRaw] = useState(value.join(", "));
   useEffect(() => setRaw(value.join(", ")), [value]);
   return (
@@ -447,7 +447,7 @@ function GraphScreen({ onClose }: { onClose: () => void }) {
   return host ? createPortal(screen, host) : screen;
 }
 
-function NoteGraph({ onClose }: { onClose: () => void }) {
+function NoteGraph({ onClose }: Readonly<{ onClose: () => void }>) {
   const s = useStore(),
     [data, setData] = useState<GraphData | null>(null),
     [error, setError] = useState(""),
@@ -819,7 +819,7 @@ function CollectionCover({ value }: { value: unknown }) {
     <span className="knowledge-card-cover-empty">{t("표지 이미지 없음")}</span>
   );
 }
-function NoteViews({ onClose }: { onClose: () => void }) {
+function NoteViews({ onClose }: Readonly<{ onClose: () => void }>) {
   const s = useStore(),
     [items, setItems] = useState<KnowledgeItem[]>([]),
     [settings, setSettings] = useState<KnowledgeSettings | null>(null),
@@ -885,7 +885,7 @@ function NoteViews({ onClose }: { onClose: () => void }) {
     const result = calculate(expression, note, items);
     return result.error ? formulaError(result.error) : String(result.value);
   };
-  const labels = new Map(items.map((n) => [n.id, n.title || t("제목 없음")]));
+  const labels = new Map<string, string>(items.map((n) => [n.id, n.title || t("제목 없음")]));
   const display = (p: NoteProperty | undefined) =>
     p?.type === "relation"
       ? (p.value as string[]).map((id) => labels.get(id) ?? t("사용할 수 없는 노트")).join(", ")

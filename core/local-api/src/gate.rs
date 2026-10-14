@@ -8,7 +8,7 @@ use google_auth::{BoxError, Context};
 use serde::Serialize;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock, RwLockReadGuard};
+use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard};
 use std::time::Instant;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
@@ -83,7 +83,7 @@ impl SessionGate {
     /// Admits one request unless locked. The lock flag is read after taking
     /// the read side, so `lock` can never cross an admitted request.
     pub fn enter(&self) -> Option<Admission<'_>> {
-        let guard = self.mu.read().unwrap_or_else(|e| e.into_inner());
+        let guard = self.mu.read().unwrap_or_else(PoisonError::into_inner);
         if self.is_locked() {
             return None;
         }
@@ -93,7 +93,7 @@ impl SessionGate {
     /// Waits for accepted saves/transfers, then stops the runtime. A failed
     /// stop stays locked; no later request may expose private content.
     pub fn lock(&self) -> Result<()> {
-        let _write = self.mu.write().unwrap_or_else(|e| e.into_inner());
+        let _write = self.mu.write().unwrap_or_else(PoisonError::into_inner);
         if self.locked.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
@@ -119,7 +119,7 @@ impl SessionGate {
         authenticate: impl FnOnce(&Context) -> Result<()>,
         prepare: Option<SetupFn<'_>>,
     ) -> Result<()> {
-        let _write = self.mu.write().unwrap_or_else(|e| e.into_inner());
+        let _write = self.mu.write().unwrap_or_else(PoisonError::into_inner);
         if !self.is_locked() {
             return Ok(());
         }

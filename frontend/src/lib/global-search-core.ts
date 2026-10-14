@@ -2,7 +2,7 @@ import {sourcePosition,type SearchDocument} from './search-document-core';
 import type {Summary} from '../types';
 export type SearchHit={note:Summary;index:number;line:number;snippet:string;matchStart?:number;matchLength?:number;sourceOffset?:number;sourceEnd?:number;revision?:number;matchedText?:string;occurrence?:number};
 export type SearchOptions={regex?:boolean;caseSensitive?:boolean};
-export function escape(value:string){return value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+export function escape(value:string){return value.replace(/[.*+?^${}()|[\]\\]/g,String.raw`\$&`);}
 export function prepareSearch(query:string) {
  if(query.length>1000)throw new Error('검색어는 1,000자 이하로 입력해 주세요.');
  const filters:{name:string;value:string}[]=[];
@@ -24,7 +24,7 @@ export function searchText(notes:Summary[],textOf:(note:Summary)=>string|SearchD
    if(f.name==='line'){const range=/^(\d+)(?:-(\d+))?$/.exec(f.value);if(!range)throw new Error('line: 조건은 줄 번호 또는 시작-끝 번호로 입력해 주세요.');return line>=Number(range[1])&&line<=Number(range[2]??range[1]);}
    if(!doc)return false;
    const anchors=doc.anchors.filter(a=>a.sourceOffset<=offset);
-   if(f.name==='block'){const blocks=anchors.filter(a=>a.kind==='block');const block=blocks.find((a,index)=>(a.id?.toLowerCase()===f.value.replace(/^\^/,'')||String(index+1)===f.value)&&(a.sourceEnd===undefined||offset<a.sourceEnd));return !!block;}
+   if(f.name==='block'){const blocks=anchors.filter(a=>a.kind==='block');return blocks.some((a,index)=>(a.id?.toLowerCase()===f.value.replace(/^\^/,'')||String(index+1)===f.value)&&(a.sourceEnd===undefined||offset<a.sourceEnd));}
    // A heading's scope ends at the next same-or-higher-level heading.
    const stack:typeof doc.anchors=[];for(const a of anchors.filter(a=>a.kind==='heading')){while(stack.length&&stack.at(-1)!.level>=a.level)stack.pop();stack.push(a);}return stack.some(a=>a.text.toLocaleLowerCase().includes(f.value));
   });

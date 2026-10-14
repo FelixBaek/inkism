@@ -11,7 +11,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 const ENV: &str = "INKISM_UNSPLASH_ACCESS_KEY";
@@ -136,7 +136,7 @@ impl Unsplash {
             return env.trim().to_string();
         }
         let Some(path) = &self.key_path else { return String::new() };
-        let _guard = self.mu.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.mu.lock().unwrap_or_else(PoisonError::into_inner);
         match std::fs::read(path) {
             Ok(raw) if raw.len() <= 256 => String::from_utf8_lossy(&raw).trim().to_string(),
             _ => String::new(),
@@ -151,7 +151,7 @@ impl Unsplash {
     fn set_key(&self, key: &str) -> Result<(), Error> {
         let key = key.trim();
         let Some(path) = &self.key_path else { return Err(Error::Bad("키를 저장할 위치가 없습니다".into())) };
-        let _guard = self.mu.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.mu.lock().unwrap_or_else(PoisonError::into_inner);
         if key.is_empty() {
             return match std::fs::remove_file(path) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),

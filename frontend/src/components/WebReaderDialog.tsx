@@ -43,7 +43,7 @@ export function WebReaderDialog() {
       catch (error) {
         // Retrying a lost response must not create duplicates or overwrite edits.
         const existing = await api.get(noteId.current).catch(() => null);
-        if (!existing || existing.content !== content || existing.title !== page.title) throw error;
+        if (existing?.content !== content || existing.title !== page.title) throw error;
       }
       setSaved(true); store.refreshList(); await store.refreshMeta(); await store.selectNote(noteId.current);
     } catch (e) { setError(String(e)); }
@@ -55,7 +55,7 @@ export function WebReaderDialog() {
     {createPortal(<dialog ref={dialog} className="sharing-dialog web-reader-dialog" aria-label={t('웹 읽기')} onCancel={event => { event.preventDefault(); close(); }}>
       <h2>{t('웹 읽기')}</h2><p>{t('주소를 입력하고 읽기를 누르면 로그인 없이 공개 본문을 가져옵니다.')}</p>
       <form onSubmit={event => { event.preventDefault(); void read(); }}><label>{t('웹페이지 주소')}<input type="url" required value={url} disabled={saving} onChange={event => setUrl(event.target.value)} placeholder="https://"/></label><button className="btn" type="submit" disabled={saving || busy}>{t('본문 읽기')}</button>{busy && <button className="btn" type="button" onClick={cancel}>{t('취소')}</button>}</form>
-      {busy && <p role="status">{t('불러오는 중…')}</p>}{error && <p role="alert">{error}</p>}
+      {busy && <p><output>{t('불러오는 중…')}</output></p>}{error && <p role="alert">{error}</p>}
       {!page && originalUrl && <p><a href={originalUrl} target="_blank" rel="noopener noreferrer">{t('원문 페이지 열기')}</a></p>}
       {page && <section><h3>{page.title}</h3><p className="sharing-source">{page.url}</p><div className="dialog-actions"><button className="btn" onClick={() => setPlain(!plain)} aria-pressed={plain}>{t('텍스트로 보기')}</button><a href={page.url} target="_blank" rel="noopener noreferrer">{t('원문 페이지 열기')}</a></div>
         <iframe title={t('읽기 본문')} sandbox="" referrerPolicy="no-referrer" srcDoc={`<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'"><style>body{font:16px/1.7 system-ui,sans-serif;padding:16px;overflow-wrap:anywhere}pre{white-space:pre-wrap}table{max-width:100%}</style>${view}`}/>

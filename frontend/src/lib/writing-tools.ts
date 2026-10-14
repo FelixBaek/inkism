@@ -52,7 +52,7 @@ export function reorderMarkdownHeading(content: string, headingIndex: number, di
   // A final section without a newline must not swallow the following heading.
   // Setext headings also require separation from an adjacent paragraph.
   const required=/^ {0,3}#{1,6}(?:\s|$)/.test(first)?1:2;
-  const trailing=(second.match(/(?:\r?\n)+$/)?.[0].match(/\n/g)??[]).length;
+  const trailing=(/(?:\r?\n)+$/.exec(second)?.[0].match(/\n/g)??[]).length;
   const separator=eol.repeat(Math.max(0,required-trailing));
   const next=source.slice(0,startOffset)+second+separator+first+source.slice(endOffset);
   const expected=[...anchors.slice(0,left),...anchors.slice(right,end),...anchors.slice(left,right),...anchors.slice(end)].map(a=>[a.text,a.level]);

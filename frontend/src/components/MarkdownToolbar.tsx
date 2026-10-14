@@ -1,6 +1,6 @@
 import { openTermDefinition, canDefineTerm } from "./TermDefinitionPopover";
 import {CsvTools} from "./CsvTools";
-import React, { useEffect, useReducer, useRef } from "react";
+import React, { useEffect, useReducer } from "react";
 import type { Editor } from "@tiptap/core";
 import { Bold, Italic, Strikethrough, InlineCode, List, ListOrdered, TaskList, Link2 } from "../icons";
 import { IconButton } from "./IconButton";

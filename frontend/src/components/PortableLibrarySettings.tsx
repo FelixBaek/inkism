@@ -22,12 +22,12 @@ import {
 export function PortableLibrarySettings({
   beforeAction,
   onApplied,
-}: {
+}: Readonly<{
   beforeAction: () => Promise<boolean>;
   onApplied?: () => Promise<void> | void;
-}) {
+}>) {
   const session = useSyncExternalStore(subscribePortableSession, getPortableSession);
-  const [localBusy, setBusy] = useState(false),
+  const [localBusy, setLocalBusy] = useState(false),
     [message, setMessage] = useState(() => sessionStorage.getItem("inkism.portable.result") || ""),
     [plan, setPlan] = useState<FolderPlan | null>(session.plan),
     [selected, setSelected] = useState<Set<string>>(new Set());
@@ -60,7 +60,7 @@ export function PortableLibrarySettings({
   async function run(action: () => Promise<void>) {
     if (running.current || getPortableSession().busy) return;
     running.current = true;
-    setBusy(true);
+    setLocalBusy(true);
     setMessage("");
     try {
       await runPortableSession(async () => {
@@ -71,7 +71,7 @@ export function PortableLibrarySettings({
       if (mounted.current) setMessage(e instanceof Error ? e.message : t("처리하지 못했습니다."));
     } finally {
       running.current = false;
-      if (mounted.current) setBusy(false);
+      if (mounted.current) setLocalBusy(false);
     }
   }
   async function inspect(files: File[]) {

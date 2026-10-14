@@ -1,11 +1,11 @@
 <!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Inkism 공유 문서</title>
-<style>body{max-width:860px;margin:32px auto;padding:20px;font:16px/1.7 system-ui;overflow-wrap:anywhere}nav{display:flex;gap:10px;flex-wrap:wrap}button,input{font:inherit;padding:8px}pre{white-space:pre-wrap}table{border-collapse:collapse}td,th{border:1px solid #aaa;padding:6px}[hidden]{display:none}#status{color:#a4261a}</style>
-<h1 id="title">공유 문서</h1><form id="unlock"><label>문서 비밀번호 <input id="password" type="password" maxlength="512" autocomplete="current-password"></label><button>열기</button></form><p id="status" role="status"></p><nav id="pages" aria-label="위키 페이지"></nav><main id="content"></main><button id="reload">새로고침</button>
+<style>body{max-width:860px;margin:32px auto;padding:20px;font:16px/1.7 system-ui;overflow-wrap:anywhere}nav{display:flex;gap:10px;flex-wrap:wrap}button,input{font:inherit;padding:8px}pre{white-space:pre-wrap}table{border-collapse:collapse}td,th{border:1px solid #aaa;padding:6px}[hidden]{display:none}#status{display:block;color:#a4261a}</style>
+<h1 id="title">공유 문서</h1><form id="unlock"><label>문서 비밀번호 <input id="password" type="password" maxlength="512" autocomplete="current-password"></label><button>열기</button></form><output id="status"></output><nav id="pages" aria-label="위키 페이지"></nav><main id="content"></main><button id="reload">새로고침</button>
 <script>
 (()=>{
 let data=null,password='',loading=null;
 const $=id=>document.getElementById(id),endpoint=location.pathname;
-const headers=()=>({'Accept':'application/json','x-share-password-b64':btoa(String.fromCharCode(...new TextEncoder().encode(password)))});
+const headers=()=>({'Accept':'application/json','x-share-password-b64':btoa(String.fromCodePoint(...new TextEncoder().encode(password)))});
 function allPages(){return data?[{id:'',title:data.title,html:data.html},...data.pages]:[];}
 function choosePage(){let id='';try{id=decodeURIComponent(location.hash.slice(1));}catch{}return allPages().find(p=>p.id===id)||allPages()[0];}
 function render(){if(!data){return;}const page=choosePage();$('title').textContent=page.title;$('content').innerHTML=page.html;for(const a of $('content').querySelectorAll('a[href^="#"]')){const target=allPages().find(p=>'#'+p.id===a.getAttribute('href'));if(target){a.textContent='↗ '+target.title;}}$('pages').replaceChildren();for(const p of allPages()){const a=document.createElement('a');a.href='#'+encodeURIComponent(p.id);a.textContent=p.title||'제목 없음';a.setAttribute('aria-current',String(p.id===page.id));$('pages').append(a);}}

@@ -265,7 +265,7 @@ fn write_private(path: &Path, data: &[u8]) -> io::Result<()> {
 fn remove_job(directory: &Path) -> io::Result<()> {
     let named = directory
         .file_name()
-        .and_then(|n| n.to_str())
+        .and_then(std::ffi::OsStr::to_str)
         .is_some_and(|n| n.starts_with(JOB_PREFIX));
     if !directory.is_absolute() || !named {
         return Err(io::Error::other("unsafe cleanup target"));

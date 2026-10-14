@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 /// The storage engine's JSON request/response channel.
@@ -70,7 +70,7 @@ struct PageResponse {
 const PAGE: usize = 100;
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(|p| p.into_inner())
+    m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl Service {
@@ -409,7 +409,7 @@ impl Service {
                     .wake
                     .1
                     .wait_timeout(woken, Duration::from_millis(100))
-                    .unwrap_or_else(|p| p.into_inner())
+                    .unwrap_or_else(PoisonError::into_inner)
                     .0;
             }
         }

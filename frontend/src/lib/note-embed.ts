@@ -3,7 +3,7 @@ import {t} from "../i18n";
 import {noteAnchors,resolveNoteAnchor} from "./note-anchor";
 import {sanitizeRichHtml} from "./sanitize";
 import {markdownToHTML} from "./markdown";
-const escape=(s:string)=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const escape=(s:string)=>s.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
 export function referenceHTML(note:Note,anchor:string):string {
   let source=note.content;const format=note.content_format??'html';
   if(new TextEncoder().encode(source).length>2*1024*1024)throw new Error(t('참조 미리보기는 2MB 이하 노트에서 사용할 수 있습니다.'));

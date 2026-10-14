@@ -18,7 +18,7 @@ const indexedReference = (item: IndexedReference): NoteReference => ({
   label: item.label || item.reference,
 });
 const escape = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 
 function exceedsReadBudget(error: unknown) {
   return hasRpcDiagnostic(error, "body_read_budget");
@@ -62,7 +62,7 @@ function connectionText(note: Note) {
 }
 
 /** compact: the note-info panel form only; it skips the reference and mention scans that the full view runs on every save. */
-export function NoteConnections({ onClose, compact = false }: { onClose: () => void; compact?: boolean }) {
+export function NoteConnections({ onClose, compact = false }: Readonly<{ onClose: () => void; compact?: boolean }>) {
   const s = useStore(),
     id = s.note!.id,
     latest = useRef(s);
@@ -270,7 +270,7 @@ export function NoteConnections({ onClose, compact = false }: { onClose: () => v
     try {
       if (!(await s.flushNow())) throw new Error(t("먼저 노트를 저장해 주세요."));
       const snapshot = s.readDraft();
-      if (!snapshot || snapshot.id !== id || snapshot.readonly) throw new Error(t("현재 노트를 편집할 수 없습니다."));
+      if (snapshot?.id !== id || snapshot.readonly) throw new Error(t("현재 노트를 편집할 수 없습니다."));
       const note = await api.get(id);
       if (note.revision !== snapshot.revision || s.readDraft() !== snapshot)
         throw new Error(t("문서가 변경되었습니다. 다시 시도해 주세요."));
@@ -296,7 +296,7 @@ export function NoteConnections({ onClose, compact = false }: { onClose: () => v
     try {
       if (!(await s.flushNow())) throw new Error(t("먼저 노트를 저장해 주세요."));
       const snapshot = s.readDraft();
-      if (!snapshot || snapshot.id !== id || snapshot.readonly) throw new Error(t("현재 노트를 편집할 수 없습니다."));
+      if (snapshot?.id !== id || snapshot.readonly) throw new Error(t("현재 노트를 편집할 수 없습니다."));
       const [note, destination] = await Promise.all([api.get(id), api.get(target)]);
       if (note.revision !== snapshot.revision || s.readDraft() !== snapshot)
         throw new Error(t("문서가 변경되었습니다. 다시 시도해 주세요."));
@@ -489,11 +489,11 @@ function ResolvedReference({
   reference,
   currentId,
   onClose,
-}: {
+}: Readonly<{
   reference: NoteReference;
   currentId: string;
   onClose: () => void;
-}) {
+}>) {
   const openRequest = useRef<AbortController | null>(null);
   useEffect(() => () => openRequest.current?.abort(), []);
   const [redirectSources, setRedirectSources] = useState<string[]>([]);

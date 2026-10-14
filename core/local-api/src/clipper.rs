@@ -16,7 +16,7 @@ use hyper_util::rt::{TokioIo, TokioTimer};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 /// Capture body limit (Go `webcontent.MaxBytes + 8192`).
@@ -96,7 +96,7 @@ impl Clipper {
         };
         // Weak: the accept loop must not keep the clipper alive.
         runtime.spawn(accept(listener, Arc::downgrade(&c)));
-        *c.runtime.lock().unwrap_or_else(|e| e.into_inner()) = Some(runtime);
+        *c.runtime.lock().unwrap_or_else(PoisonError::into_inner) = Some(runtime);
         Ok(c)
     }
 
@@ -107,13 +107,13 @@ impl Clipper {
             s.token.clear();
             s.pending = None;
         }
-        if let Some(runtime) = self.runtime.lock().unwrap_or_else(|e| e.into_inner()).take() {
+        if let Some(runtime) = self.runtime.lock().unwrap_or_else(PoisonError::into_inner).take() {
             runtime.shutdown_background();
         }
     }
 
     fn lock(&self) -> MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(|e| e.into_inner())
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     fn pair(&self, id: &str) -> Result<UploadAccess> {
@@ -216,7 +216,7 @@ fn parse_clip(body: &[u8]) -> std::result::Result<Clip, Response> {
 impl Drop for Clipper {
     fn drop(&mut self) {
         // Dropping a runtime inside async context panics; background shutdown never does.
-        if let Some(runtime) = self.runtime.get_mut().unwrap_or_else(|e| e.into_inner()).take() {
+        if let Some(runtime) = self.runtime.get_mut().unwrap_or_else(PoisonError::into_inner).take() {
             runtime.shutdown_background();
         }
     }

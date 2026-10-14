@@ -9,7 +9,7 @@ const hashText=(text:string)=>sha256(new TextEncoder().encode(text));
 const decode=async(file:File)=>new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(await file.arrayBuffer());
 const extension=(path:string):ContentFormat|undefined=>({md:'markdown',html:'html',txt:'text'} as const)[path.split('.').pop() as 'md'];
 const safePath=(path:string)=>!path.startsWith('/')&&!path.includes('\\')&&!path.split('/').some(x=>!x||x==='.'||x==='..')&&!/[\u0000-\u001f]/.test(path);
-const rx=(text:string)=>text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+const rx=(text:string)=>text.replace(/[.*+?^${}()|[\]\\]/g,String.raw`\$&`);
 export { stripFrontmatter };
 const fileFormat=(entry:PortableEntry)=>entry.file_format??entry.format;
 const fromMarkdown=async(markdown:string,format:ContentFormat)=>{
@@ -17,7 +17,7 @@ const fromMarkdown=async(markdown:string,format:ContentFormat)=>{
  const html=(await import('./markdown')).markdownToHTML(markdown);
  return format==='text'?html.text:html.content;
 };
-const refs=(source:string,path:string)=>new RegExp(`(^|[="'\\s(<])\\.\\./${rx(path)}(?=[?"'\\s<>\\)\\]#]|$)`,'gm');
+const refs=(source:string,path:string)=>new RegExp(String.raw`(^|[="'\s(<])\.\./${rx(path)}(?=[?"'\s<>\)\]#]|$)`,'gm');
 export async function collectFolderFiles(files:File[]):Promise<Map<string,File>> {
  if(files.length>4096||files.reduce((n,f)=>n+f.size,0)>LIMIT)throw new Error(t('외부 편집 폴더는 64 MiB 이하만 지원합니다.'));
  const result=new Map<string,File>();for(const f of files){const p=f.webkitRelativePath?f.webkitRelativePath.slice(f.webkitRelativePath.indexOf('/')+1):f.name;if(!safePath(p)||result.has(p))throw new Error(t('중복되거나 안전하지 않은 파일 경로입니다.'));result.set(p,f);}return result;
@@ -28,7 +28,7 @@ export async function planFolderChanges(files:File[],get:typeof api.get=api.get)
  const manifest=validatePortableManifest(JSON.parse(await descriptor.text()));
  const plan:FolderPlan={manifest,changes:[],conflicts:[],unchanged:0,ignored:0,assets:new Map(),files:byPath};
  const changedAssets=new Set<string>();
- for(const [path,file] of byPath)if(path.startsWith('attachments/')){if(path.split('/').length!==2)throw new Error(t('첨부파일은 attachments 폴더 바로 아래에 두세요.'));plan.assets.set(path,file);const base=manifest.attachments.find(a=>a.path===path);if(!base||file.size!==base.size||await sha256(new Uint8Array(await file.arrayBuffer()))!==base.sha256)changedAssets.add(path);}
+ for(const [path,file] of byPath)if(path.startsWith('attachments/')){if(path.split('/').length!==2)throw new Error(t('첨부파일은 attachments 폴더 바로 아래에 두세요.'));plan.assets.set(path,file);const base=manifest.attachments.find(a=>a.path===path);if(file.size!==base?.size||await sha256(new Uint8Array(await file.arrayBuffer()))!==base.sha256)changedAssets.add(path);}
  if(plan.assets.size>512)throw new Error(t('첨부파일은 512개까지 지원합니다.'));
  const candidates=new Map<string,{file:File;hash:string}>();
  for(const [path,file] of byPath)if(path.startsWith('notes/')&&path.split('/').length===2&&extension(path)&&!manifest.notes.some(e=>e.path===path))candidates.set(path,{file,hash:await sha256(new Uint8Array(await file.arrayBuffer()))});
@@ -54,7 +54,7 @@ export async function planFolderChanges(files:File[],get:typeof api.get=api.get)
    plan.changes.push({key:entry.id,kind,path,previousPath:kind==='rename'?entry.path:undefined,title:kind==='rename'?path.slice(6).replace(/\.[^.]+$/,''):keptTitle,tags:metadataChanged?metadata.tags:current.tags,notebook_id:metadataChanged?metadata.notebook_id:current.notebook_id,entry,current,content:path.endsWith('.md')?stripFrontmatter(portable):portable,assets,details});
   }catch(e){plan.conflicts.push(`${path}: ${e instanceof Error?e.message:'확인 실패'}`);}
  }
- for(const [path,{file}] of candidates){if(used.has(path))continue;try{const content=await decode(file);for(const match of content.matchAll(/\.\.\/attachments\/[^\s\"'<>\)\]?#]+/g)){if(!plan.assets.has(match[0].slice(3)))throw new Error(t('참조하는 첨부파일이 없습니다.'));}const assets=[...plan.assets.keys()].filter(p=>refs(content,p).test(content)&&changedAssets.has(p));plan.changes.push({key:'portable-'+(await hashText(JSON.stringify(manifest.notes.map(n=>[n.id,n.source_sha256]).sort((a,b)=>String(a)<String(b)?-1:String(a)>String(b)?1:0))+'\n'+path)).slice(0,48),kind:'create',path,title:path.slice(6).replace(/\.[^.]+$/,''),content,assets,details:[t('새 노트')]});}catch(e){plan.conflicts.push(`${path}: ${e instanceof Error?e.message:'확인 실패'}`);}}
+ for(const [path,{file}] of candidates){if(used.has(path))continue;try{const content=await decode(file);for(const match of content.matchAll(/\.\.\/attachments\/[^\s"'<>)\]?#]+/g)){if(!plan.assets.has(match[0].slice(3)))throw new Error(t('참조하는 첨부파일이 없습니다.'));}const assets=[...plan.assets.keys()].filter(p=>refs(content,p).test(content)&&changedAssets.has(p));plan.changes.push({key:'portable-'+(await hashText(JSON.stringify(manifest.notes.map(n=>[n.id,n.source_sha256]).sort((a,b)=>String(a)<String(b)?-1:String(a)>String(b)?1:0))+'\n'+path)).slice(0,48),kind:'create',path,title:path.slice(6).replace(/\.[^.]+$/,''),content,assets,details:[t('새 노트')]});}catch(e){plan.conflicts.push(`${path}: ${e instanceof Error?e.message:'확인 실패'}`);}}
  plan.ignored=[...changedAssets].filter(path=>!plan.changes.some(c=>c.assets.includes(path))).length+[...byPath.keys()].filter(p=>!['.inkism-portable.json','README.txt','INDEX.md'].includes(p)&&!p.startsWith('attachments/')&&!manifest.notes.some(e=>e.path===p)&&!candidates.has(p)).length;
  return plan;
 }
@@ -156,8 +156,8 @@ async function fileAt(root:WritableFolderHandle,path:string):Promise<File|null>{
 async function put(root:WritableFolderHandle,path:string,data:Blob|string){const parts=path.split('/');let dir=root;for(const name of parts.slice(0,-1))dir=await dir.getDirectoryHandle(name,{create:true});const stream=await(await dir.getFileHandle(parts.at(-1)!,{create:true})).createWritable();try{await stream.write(data);await stream.close();}catch(e){await stream.abort?.();throw e;}}
 async function remove(root:WritableFolderHandle,path:string){const parts=path.split('/');let dir=root;for(const name of parts.slice(0,-1))dir=await dir.getDirectoryHandle(name);await dir.removeEntry(parts.at(-1)!);}
 const digestFile=async(file:Blob|null)=>file?sha256(new Uint8Array(await file.arrayBuffer())):null;
-const encode=async(blob:Blob)=>{const bytes=new Uint8Array(await blob.arrayBuffer());let text='';for(let i=0;i<bytes.length;i+=8192)text+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(text);};
-const decodeBlob=(data:string)=>new Blob([Uint8Array.from(atob(data),c=>c.charCodeAt(0))]);
+const encode=async(blob:Blob)=>{const bytes=new Uint8Array(await blob.arrayBuffer());let text='';for(let i=0;i<bytes.length;i+=8192)text+=String.fromCodePoint(...bytes.subarray(i,i+8192));return btoa(text);};
+const decodeBlob=(data:string)=>new Blob([Uint8Array.from(atob(data),c=>c.codePointAt(0)!)]);
 async function resume(root:WritableFolderHandle,journal:WriteJournal){
  if(journal.version!==1||!Array.isArray(journal.records)||journal.records.length>4096)throw new Error(t('폴더 쓰기 복구 기록이 올바르지 않습니다.'));
  for(const row of journal.records){if(!safePath(row.path)||!(/^(notes|attachments)\/[^/]+$/.test(row.path)||['.inkism-portable.json','INDEX.md','README.txt'].includes(row.path))||row.path===JOURNAL||!(row.before===null||/^[a-f0-9]{64}$/.test(row.before))||!(row.after===null||/^[a-f0-9]{64}$/.test(row.after)))throw new Error(t('폴더 쓰기 복구 기록이 올바르지 않습니다.'));if(row.after!==await digestFile(row.data===null?null:decodeBlob(row.data)))throw new Error(t('폴더 쓰기 복구 기록이 손상되었습니다.'));}

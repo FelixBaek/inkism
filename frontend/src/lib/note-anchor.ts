@@ -18,7 +18,7 @@ export function noteAnchors(content:string, format:string="html"):NoteAnchor[] {
       const tag=match[2].toLowerCase(), node=document.createElement("template"); node.innerHTML=match[0];
       const el=node.content.firstElementChild;
       if (!el) continue;
-      const end=content.slice(tags.lastIndex).search(new RegExp(`</${tag}\\s*>`,"i"));
+      const end=content.slice(tags.lastIndex).search(new RegExp(String.raw`</${tag}\s*>`,"i"));
       const raw=end<0?"":content.slice(tags.lastIndex,tags.lastIndex+end);
       if (/^h[1-6]$/.test(tag)) result.push({kind:"heading",text:textOf(raw),level:Number(tag[1]),index:heading++,sourceOffset:match.index,id:el.id||undefined});
       if (el.id) result.push({kind:"block",text:textOf(raw).slice(0,160)||el.id,level:0,index:result.length,sourceOffset:match.index,id:el.id});
@@ -28,11 +28,11 @@ export function noteAnchors(content:string, format:string="html"):NoteAnchor[] {
     const lines=content.split(/(?<=\n)/);
     for(let n=0;n<lines.length;n++) {
       const line=lines[n].replace(/[\r\n]+$/, ""), candidate=line.replace(/^\uFEFF/, ""), f=/^ {0,3}(`{3,}|~{3,})/.exec(candidate);
-      if(f) {if(!fence){fence=f[1][0];fenceLength=f[1].length;}else if(f[1][0]===fence&&f[1].length>=fenceLength&&/^\s*$/.test(candidate.slice(f[0].length)))fence="";offset+=lines[n].length;continue;}
+      if(f) {if(!fence){fence=f[1][0];fenceLength=f[1].length;}else if(f[1].startsWith(fence)&&f[1].length>=fenceLength&&/^\s*$/.test(candidate.slice(f[0].length)))fence="";offset+=lines[n].length;continue;}
       if(!fence&&!/^(?: {4}|\t)/.test(candidate)) {
         const atx=/^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$/.exec(candidate);
         const setext=n+1<lines.length&&candidate.trim()&&/^ {0,3}(=+|-+)\s*$/.exec(lines[n+1].trimEnd());
-        if(atx||setext) result.push({kind:"heading",text:(atx?atx[2]:candidate.trim()).replace(/!?(?:\[([^\]]+)\])\([^)]*\)/g,"$1").replace(/[*_`]/g,""),level:atx?atx[1].length:(setext as RegExpExecArray)[1][0]==="="?1:2,index:index++,sourceOffset:offset});
+        if(atx||setext) result.push({kind:"heading",text:(atx?atx[2]:candidate.trim()).replace(/!?(?:\[([^\]]+)\])\([^)]*\)/g,"$1").replace(/[*_`]/g,""),level:atx?atx[1].length:(setext as RegExpExecArray)[1].startsWith("=")?1:2,index:index++,sourceOffset:offset});
         const block=/(?:^|\s)\^([\w-]+)\s*$/.exec(candidate);
         if(block)result.push({kind:"block",text:candidate.slice(0,block.index).trim(),level:0,index:result.length,sourceOffset:offset,id:block[1]});
       }
@@ -53,11 +53,11 @@ export async function resolveNoteAnchorTarget(note:Note,target:string,redirectSo
     const sourceFind=(value:string)=>sourceAnchors.find(a=>a.id===value.replace(/^\^/,''))??sourceAnchors.find(a=>a.kind==='heading'&&(a.text===value||a.text.toLowerCase().replace(/\s+/g,'-')===value.toLowerCase()));
     if(sourceFind(fragment))continue;
     const map=(await knowledge.get(sourceId)).anchor_redirects??{};const visited=new Set<string>();
-    for(let depth=0;depth<16;depth++){if(visited.has(fragment))break;visited.add(fragment);const next=Object.prototype.hasOwnProperty.call(map,fragment)?map[fragment]:undefined;if(typeof next!=='string'||!next)break;fragment=next;if(sourceFind(fragment))break;}
+    for(let depth=0;depth<16;depth++){if(visited.has(fragment))break;visited.add(fragment);const next=Object.hasOwn(map,fragment)?map[fragment]:undefined;if(typeof next!=='string'||!next)break;fragment=next;if(sourceFind(fragment))break;}
   }
   const afterMerge=find(fragment);if(afterMerge)return {anchor:afterMerge,fragment};
   const metadata=await knowledge.get(note.id),redirects=metadata.anchor_redirects??{};const seen=new Set<string>();
-  for(let depth=0;depth<16;depth++){if(seen.has(fragment))return {fragment};seen.add(fragment);const next=Object.prototype.hasOwnProperty.call(redirects,fragment)?redirects[fragment]:undefined;if(typeof next!=='string'||!next)return {fragment};fragment=next;const found=find(fragment);if(found)return {anchor:found,fragment};}
+  for(let depth=0;depth<16;depth++){if(seen.has(fragment))return {fragment};seen.add(fragment);const next=Object.hasOwn(redirects,fragment)?redirects[fragment]:undefined;if(typeof next!=='string'||!next)return {fragment};fragment=next;const found=find(fragment);if(found)return {anchor:found,fragment};}
   return {fragment};
 }
 export async function resolveNoteAnchor(note:Note,target:string,redirectSources:string[]=[]):Promise<NoteAnchor|undefined>{return (await resolveNoteAnchorTarget(note,target,redirectSources)).anchor;}

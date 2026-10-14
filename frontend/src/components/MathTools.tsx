@@ -334,7 +334,7 @@ export function MathTools({ editor }: Readonly<Props>) {
           maxLength={MAX_MATH_LENGTH}
           rows={4}
           spellCheck={false}
-          placeholder={t("예: \\frac{1}{2}, e^{i\\pi} = -1")}
+          placeholder={t(String.raw`예: \frac{1}{2}, e^{i\pi} = -1`)}
           aria-describedby="math-dialog-hint"
         />
         <p id="math-dialog-hint" className="math-hint">

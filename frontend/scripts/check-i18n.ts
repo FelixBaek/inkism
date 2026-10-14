@@ -7,6 +7,7 @@ const files=(d:string):string[]=>readdirSync(d).flatMap(f=>{const p=join(d,f);re
 const keys=new Set<string>();
 function translations(expression:ts.Expression):void {
   if(ts.isStringLiteral(expression)||ts.isNoSubstitutionTemplateLiteral(expression))keys.add(expression.text);
+  else if(ts.isTaggedTemplateExpression(expression)&&expression.tag.getText()==='String.raw'&&ts.isNoSubstitutionTemplateLiteral(expression.template))keys.add(expression.template.rawText??expression.template.text);
   else if(ts.isConditionalExpression(expression)){translations(expression.whenTrue);translations(expression.whenFalse);}
   else if(ts.isParenthesizedExpression(expression)||ts.isAsExpression(expression)||ts.isSatisfiesExpression(expression))translations(expression.expression);
   else if(ts.isElementAccessExpression(expression)&&ts.isArrayLiteralExpression(expression.expression)){

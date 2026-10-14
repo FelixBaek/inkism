@@ -4,7 +4,7 @@ import { useStore } from "../store";
 import { t } from "../i18n";
 
 type Version = { seq: number; record_id: string; title: string; created_at: number; device_id: string; content_format: string };
-export function RemoteHistoryPanel({ noteId }: { noteId: string }) {
+export function RemoteHistoryPanel({ noteId }: Readonly<{ noteId: string }>) {
   const store = useStore();
   const [items, setItems] = useState<Version[]>([]);
   const [cursor, setCursor] = useState(0);

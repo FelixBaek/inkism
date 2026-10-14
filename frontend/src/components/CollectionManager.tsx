@@ -3,7 +3,7 @@ import {t} from '../i18n';
 import {knowledge,initialPropertyValue,type KnowledgeItem,type KnowledgeSettings,type PropertyDefinition,type NoteProperty} from '../lib/knowledge';
 import {AttachmentPropertyEditor} from './AttachmentPropertyEditor';
 import {PropertyValueEditor} from './PropertyValueEditor';
-export function CollectionManager({settings,items,selected,onSaved,flush}:{settings:KnowledgeSettings;items:KnowledgeItem[];selected:Set<string>;onSaved:(settings:KnowledgeSettings)=>Promise<void>;flush:()=>Promise<boolean>}) {
+export function CollectionManager({settings,items,selected,onSaved,flush}:Readonly<{settings:KnowledgeSettings;items:KnowledgeItem[];selected:Set<string>;onSaved:(settings:KnowledgeSettings)=>Promise<void>;flush:()=>Promise<boolean>}>) {
  const empty=():PropertyDefinition=>({id:crypto.randomUUID(),name:'',type:'text'});
  const [definition,setDefinition]=useState<PropertyDefinition>(empty),[value,setValue]=useState<NoteProperty['value']>(''),[raw,setRaw]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const saved=(settings.property_definitions??[]).find(d=>d.id===definition.id);

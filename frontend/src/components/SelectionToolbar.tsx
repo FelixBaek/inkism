@@ -53,7 +53,7 @@ export function SelectionToolbar({ editor }: Readonly<{ editor: Editor }>) {
     try {
       if (!(await store.flushNow())) throw new Error(t("먼저 노트를 저장해 주세요."));
       const saved = store.readDraft();
-      if (!saved || saved.id !== draft.id || saved.revision !== draft.revision)
+      if (saved?.id !== draft.id || saved.revision !== draft.revision)
         throw new Error(t("문서가 변경되어 선택을 추출하지 못했습니다."));
       const title = await store.prompt({
         title: t("선택 영역을 새 노트로 추출"),
