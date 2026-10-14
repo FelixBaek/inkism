@@ -29,10 +29,20 @@ export function wikiPrompt(current: { content: string; content_format?: string }
   };
 }
 
-/** Removes a whole-output code fence the model may add despite the instruction. */
-export function cleanOutput(output: string, current: string): string {
-  let body = output.trim();
+/** The whole note comes back, so a proposal may take longer than a short answer (60s ran out in the live eval). */
+export const WIKI_TIMEOUT = 180000;
+
+function unfence(body: string): string | null {
   const open = body.indexOf("\n");
-  if (body.startsWith("```") && body.endsWith("```") && open > 0 && open < body.length - 3) body = body.slice(open + 1, -3).trim();
+  return body.startsWith("```") && body.endsWith("```") && open > 0 && open < body.length - 3 ? body.slice(open + 1, -3).trim() : null;
+}
+
+/** Removes a whole-output code fence the model may add despite the instruction, with a one-line lead-in ("Here is the updated note:") before it. */
+export function cleanOutput(output: string, current: string): string {
+  const trimmed = output.trim();
+  const lead = /^[^\n`]*[:：]\s*\n/.exec(trimmed);
+  // The note's own first line ("Steps:" before a code block) is content, not a lead-in.
+  const extra = lead && !current.trimStart().startsWith(lead[0].trim()) ? lead[0].length : 0;
+  const body = unfence(trimmed) ?? (extra ? unfence(trimmed.slice(extra).trim()) : null) ?? trimmed;
   return current.endsWith("\n") ? body + "\n" : body;
 }

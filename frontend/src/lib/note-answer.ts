@@ -153,7 +153,9 @@ export function relationLines(evidence:Evidence[],edges:RelationEdge[]):string[]
 export function answerPrompt(question:string,evidence:Evidence[],edges:RelationEdge[]=[]){
  const relations=relationLines(evidence,edges);
  return {
-  instruction:'Answer the question using only the numbered sources in the document. Cite each claim with its source number like [1]. If the sources do not answer the question, say so plainly instead of guessing. '+(relations.length?'The Relations block lists typed links between sources (source —relation→ target); follow them to connect facts across sources, chaining hop 1, hop 2… links (A —x→ B, B —y→ C means A reaches C through B), and cite every source you use. ':'')+'Answer in the language of the question.\n\nQuestion: '+question,
+  // Live eval: without "after the names and facts" the model wrote "숙소는 [1]이며", hiding the name behind a citation button.
+  // A stricter "never use a number as a word" rule fixed that too but tripled reasoning time and timed out.
+  instruction:'Answer the question using only the numbered sources in the document. Cite each claim with its source number like [1], placed after the names and facts it supports. If the sources do not answer the question, say so plainly instead of guessing. '+(relations.length?'The Relations block lists typed links between sources (source —relation→ target); follow them to connect facts across sources, chaining hop 1, hop 2… links (A —x→ B, B —y→ C means A reaches C through B), and cite every source you use. ':'')+'Answer in the language of the question.\n\nQuestion: '+question,
   source:evidence.map(e=>`[${e.n}] ${e.note.title}\n${e.text}`).join('\n\n')+(relations.length?'\n\nRelations:\n'+relations.join('\n'):''),
  };
 }
@@ -212,14 +214,15 @@ async function relatedSummaries(edges:RelationEdge[],known:Set<string>,load:Rela
  return notes;
 }
 
-/** Splits an answer into text and citations; numbers the model invented stay plain text. */
+/** Splits an answer into text and citations, lists like [1, 2] included; a bracket with any number the model invented stays plain text. */
 export function answerParts(answer:string,evidence:Evidence[]):AnswerPart[]{
  const parts:AnswerPart[]=[];let at=0;
- for(const m of answer.matchAll(/\[(\d{1,3})\]/g)){
-  const cite=evidence.find(e=>e.n===Number(m[1]));
-  if(!cite)continue;
+ for(const m of answer.matchAll(/\[(\d{1,3}(?:\s*,\s*\d{1,3})*)\]/g)){
+  const cites=m[1].split(',').map(n=>evidence.find(e=>e.n===Number(n)));
+  if(cites.some(c=>!c))continue;
   if(m.index>at)parts.push({text:answer.slice(at,m.index),at});
-  parts.push({cite});at=m.index+m[0].length;
+  for(const cite of cites)parts.push({cite:cite!});
+  at=m.index+m[0].length;
  }
  if(at<answer.length)parts.push({text:answer.slice(at),at});
  return parts;

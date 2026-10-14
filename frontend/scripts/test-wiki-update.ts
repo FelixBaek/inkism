@@ -15,4 +15,8 @@ assert.match(wikiPrompt({ content: '<p>x</p>' }, []).instruction, /as HTML/);
 assert.equal(cleanOutput('```markdown\n# Wiki\nnew [1]\n```', '# Wiki\n'), '# Wiki\nnew [1]\n');
 assert.equal(cleanOutput('  <p>x</p>\n', '<p>y</p>'), '<p>x</p>');
 assert.equal(cleanOutput('```', 'z'), '```', 'a lone fence is kept as text');
+assert.equal(cleanOutput('Here is the updated note:\n\n```markdown\n# Wiki\nnew [1]\n```', '# Wiki\n'), '# Wiki\nnew [1]\n', 'a one-line lead-in before the fence is dropped');
+assert.equal(cleanOutput('갱신된 노트입니다：\n```html\n<p>x [1]</p>\n```', '<p>y</p>'), '<p>x [1]</p>');
+const withCode = '# Steps:\n```sh\nmake\n```';
+assert.equal(cleanOutput(withCode, withCode), withCode, "the note's own first line before a code block is kept");
 console.log('PASS wiki update prompt: numbered bounded passages, format kept, fence stripped');
