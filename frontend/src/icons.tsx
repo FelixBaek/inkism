@@ -16,6 +16,18 @@ const customIcon = (paths: string[]) =>
       </svg>
     );
   };
+/** 아래·위 첨자: 큰 A 옆에 작은 A를 아래나 위에 그린다(x₂ 대신 글자로 알아보기 쉽게). */
+const scriptIcon = (small: string) =>
+  function ScriptIcon({ size = 16, ...rest }: IconProps) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.25} strokeLinecap="round" strokeLinejoin="round" {...(rest as SVGProps<SVGSVGElement>)}>
+        <path d="M1.5 13 5.5 3l4 10M3 9.5h5" />
+        <path d={small} />
+      </svg>
+    );
+  };
+export const SubscriptIcon = scriptIcon("M10.5 14.5 12.5 9.5l2 5M11.25 12.75h2.5");
+export const SuperscriptIcon = scriptIcon("M10.5 6.5 12.5 1.5l2 5M11.25 4.75h2.5");
 /** Figma Icon/sparkles-ai (40:6845): 큰 4각 별 + 작은 별 둘. */
 export const SparklesAi = customIcon([
   "M6 3.4C6.448 6.685 8.315 8.552 11.6 9 8.315 9.448 6.448 11.315 6 14.6 5.552 11.315 3.685 9.448.4 9 3.685 8.552 5.552 6.685 6 3.4Z",
@@ -150,8 +162,6 @@ export {
   FilesIcon as NoteLink,
   SmileyIcon as Smile,
   CodeSimpleIcon as InlineCode,
-  TextSubscriptIcon as SubscriptIcon,
-  TextSuperscriptIcon as SuperscriptIcon,
   TextAUnderlineIcon as TextColor,
   DropSlashIcon as NoColor,
   MagicWandIcon as MagicWand,
