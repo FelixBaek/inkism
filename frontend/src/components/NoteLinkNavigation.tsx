@@ -39,23 +39,26 @@ export function NoteLinkNavigation(){
     if(note){await new Promise<void>(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r())));const deadline=Date.now()+10000;while(document.querySelector('.windowed-editor')&&!document.querySelector('.windowed-editor .ProseMirror')){if(Date.now()>deadline)throw new Error(t('문서를 준비 중입니다. 잠시 후 다시 열어 주세요.'));await new Promise(r=>setTimeout(r,25));}await new Promise<void>(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r())));const draft=latest.current.readDraft();if(note.content_format==='markdown'&&draft?.id===id)note={...note,content:draft.content,text:draft.text};await navigateNoteAnchor(note,anchor,resolved.redirect_sources);}
    })().catch(error=>{if(!controller.signal.aborted)void store.showError(t('노트 연결'),error instanceof Error?error.message:String(error));});
   };
+  const down={x:0,y:0};const press=(event:MouseEvent)=>{down.x=event.clientX;down.y=event.clientY;};
   const follow=(event:MouseEvent)=>{
    const target=event.target instanceof Element?event.target.closest('a[href^="note://"]'):null;
    if(!target||event.button!==0)return;
    event.preventDefault();
-   if(target.closest('[contenteditable]')?.getAttribute('contenteditable')==='true'&&!event.ctrlKey&&!event.metaKey)return;
+   // 편집 중에도 그냥 클릭하면 연다. 끌어서 글을 고른 경우(4px 넘게 움직임)와 Shift·Alt 클릭만 편집에 남긴다.
+   const dragged=Math.abs(event.clientX-down.x)>4||Math.abs(event.clientY-down.y)>4;
+   if(target.closest('[contenteditable]')?.getAttribute('contenteditable')==='true'&&(event.shiftKey||event.altKey||dragged))return;
    event.stopPropagation();
    openHref(target.getAttribute('href')!);
   };
   const openFromOs=(event:Event)=>{const href=(event as CustomEvent<string>).detail;if(typeof href==='string'&&href.startsWith('note://'))openHref(href);};
   const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')removePreview();};
   document.addEventListener('focusin',over,true);document.addEventListener('focusout',out,true);document.addEventListener('keydown',escape,true);
-  document.addEventListener('mouseover',over,true);document.addEventListener('mouseout',out,true);document.addEventListener('click',follow,true);window.addEventListener('inkism-open-link',openFromOs);
+  document.addEventListener('mouseover',over,true);document.addEventListener('mouseout',out,true);document.addEventListener('click',follow,true);document.addEventListener('mousedown',press,true);window.addEventListener('inkism-open-link',openFromOs);
   const pending=(window as Window & {__inkismPendingNoteLink?:unknown}).__inkismPendingNoteLink;
   if(typeof pending==='string'&&pending.startsWith('note://')){
    delete (window as Window & {__inkismPendingNoteLink?:unknown}).__inkismPendingNoteLink;
    queueMicrotask(()=>openHref(pending));
   }
-  return()=>{navigation?.abort();removePreview();document.removeEventListener('focusin',over,true);document.removeEventListener('focusout',out,true);document.removeEventListener('keydown',escape,true);document.removeEventListener('mouseover',over,true);document.removeEventListener('mouseout',out,true);document.removeEventListener('click',follow,true);window.removeEventListener('inkism-open-link',openFromOs);};
+  return()=>{navigation?.abort();removePreview();document.removeEventListener('focusin',over,true);document.removeEventListener('focusout',out,true);document.removeEventListener('keydown',escape,true);document.removeEventListener('mouseover',over,true);document.removeEventListener('mouseout',out,true);document.removeEventListener('click',follow,true);document.removeEventListener('mousedown',press,true);window.removeEventListener('inkism-open-link',openFromOs);};
  },[]);return <AnchorRepairDialog/>;
 }
