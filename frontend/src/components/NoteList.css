@@ -267,3 +267,17 @@ section.note-list {
   margin-right: 3px;
   vertical-align: -1px;
 }
+/* 제목 없는 노트는 흐리게, 자동 복구 사본은 제목 끝 배지 (Figma 01 74:7294 · 74:7286) */
+.note-list .note-row:not(.is-selected) .note-row-title.is-untitled {
+  color: var(--muted);
+}
+.note-list .note-row-badge {
+  flex: none;
+  padding: 0 6px;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: var(--fs-small);
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: nowrap;
+}

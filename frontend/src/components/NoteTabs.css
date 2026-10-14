@@ -36,7 +36,7 @@
   display: flex;
   flex: 1;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 6px;
   min-width: 0;
   height: 28px;
@@ -109,4 +109,16 @@
 .note-tabs .note-tab.is-drop-after::before {
   left: auto;
   right: -5px;
+}
+/* Figma Nocturne/Note tab (190:28221): 제목은 왼쪽 정렬, 닫기는 선택·가리킴·초점일 때만. 자리는 남겨 제목이 흔들리지 않는다. */
+@media (hover: hover) {
+  .note-tabs .note-tab:not(.is-selected, :hover, :focus-within) .note-tab-close {
+    opacity: 0;
+  }
+}
+.note-tabs .note-tab-close {
+  color: var(--muted);
+}
+.note-tabs .note-tab > [role="tab"] span.is-untitled {
+  color: var(--muted);
 }

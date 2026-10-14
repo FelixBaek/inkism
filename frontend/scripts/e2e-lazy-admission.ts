@@ -103,7 +103,7 @@ try{
  const fullNote=await rpc('get',{id:note.id});
  assert.equal(fullNote.content,expected);
  await exactSource(fullNote.content);
- assert.equal(await page.locator('.status-words').textContent(),'30,001 words');
+ assert.equal(await page.locator('.status-words').textContent(),'단어 30,001개');
  assert.ok(fullNote.content.includes('data-admission="미지원-속성"'));
  allowFull=false;
  console.log('phase4 HTML 원문 전환: 명시적 full get 1회 + 정확 원문 표시');

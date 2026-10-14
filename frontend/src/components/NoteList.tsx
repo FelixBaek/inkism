@@ -226,7 +226,7 @@ export function NoteList() {
           ))}
       </div>
 
-      {(items.length > 0 || s.page > 1) && (
+      {(s.page > 1 || hasNext) && (
         <nav className="list-pager" aria-label={t("노트 목록")}>
           <button
             type="button"
@@ -367,6 +367,8 @@ function EmptyList({ view, search }: Readonly<{ view: View; search: string }>) {
   );
 }
 
+const RECOVERY_SUFFIX = /\s*\((분할 )?자동 복구\)$/;
+
 function NoteRow({
   item,
   onMenu,
@@ -391,6 +393,10 @@ function NoteRow({
   const tag = s.view.type === "tag" ? s.view.name : item.tags[0];
   const tagLabel = tag ? `# ${tag}` : "";
   const place = s.view.type !== "tag" && notebookName ? notebookName : tagLabel;
+  // 자동 복구 사본은 제목 끝 접미사를 배지로 떼어, 긴 제목이 잘려도 사본임이 보이게 한다.
+  const suffix = RECOVERY_SUFFIX.exec(item.title);
+  const shownTitle = suffix ? item.title.slice(0, suffix.index) : item.title;
+  const recovery = suffix && (suffix[1] ? t("분할 자동 복구") : t("자동 복구"));
 
   return (
     <article
@@ -433,8 +439,9 @@ function NoteRow({
       >
         <div className="note-row-top">
           {item.color && <span className="note-row-color" style={{ background: item.color }} aria-hidden />}
-          <h3 className="note-row-title">{item.title || t("제목 없음")}</h3>
+          <h3 className={`note-row-title${shownTitle ? "" : " is-untitled"}`}>{shownTitle || t("제목 없음")}</h3>
           <span className="note-row-flags">
+            {recovery && <span className="note-row-badge">{recovery}</span>}
             {item.readonly && <PencilOff size={12} aria-label={t("읽기 전용")} />}
             {item.archived && s.view.type !== "archive" && <Archive size={12} aria-label={t("보관됨")} />}
             {item.pinned && <Pin size={12} aria-label={t("고정됨")} />}

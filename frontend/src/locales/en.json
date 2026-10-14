@@ -2482,5 +2482,10 @@
   "뜻 달기": "Add definition",
   "기본 색": "Basic colors",
   "직접 고른 색 · 최근 7개": "Custom colors · last 7",
-  "가": "A"
+  "가": "A",
+  "단어": "Words",
+  "공백": "Spaces",
+  "단어 {n}개": "{n} words",
+  "자동 복구": "Recovered",
+  "분할 자동 복구": "Recovered (split)"
 }

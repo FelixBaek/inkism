@@ -470,18 +470,18 @@ function WordCount({
         onClick={() => setOpen((v) => !v)}
         aria-label={stats ? t("단어 {n}개 — 글자 통계 보기", { n: stats.words }) : t("글자 통계 보기")}
       >
-        {stats ? `${n(stats.words)} words` : t("원문 {size}", { size })}
+        {stats ? t("단어 {n}개", { n: n(stats.words) }) : t("원문 {size}", { size })}
       </button>
       {open && (
         <div className="word-count-pop" role="dialog" aria-label={t("글자 통계")}>
           <dl>
-            <dt>Words</dt>
+            <dt>{t("단어")}</dt>
             <dd>{n(stats?.words ?? null)}</dd>
-            <dt>Characters</dt>
+            <dt>{t("글자")}</dt>
             <dd>{n(stats?.chars ?? null)}</dd>
-            <dt>Paragraphs</dt>
+            <dt>{t("문단")}</dt>
             <dd>{n(stats?.paragraphs ?? null)}</dd>
-            <dt>Spaces</dt>
+            <dt>{t("공백")}</dt>
             <dd>{n(stats?.spaces ?? null)}</dd>
           </dl>
           <button

@@ -333,7 +333,7 @@ export function NoteTabs() {
             }}
           >
             <FileText size={13} aria-hidden />
-            <span>{tab.title || t("제목 없음")}</span>
+            <span className={tab.title ? undefined : "is-untitled"}>{tab.title || t("제목 없음")}</span>
           </button>
           <button
             type="button"
