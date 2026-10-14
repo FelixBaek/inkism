@@ -10,6 +10,7 @@ import {LibraryMoreTools} from "./components/LibraryMoreTools";
 import {loadFontResources} from "./lib/font-resources";
 import {registerCommands,listenCommandShortcuts} from "./lib/app-commands";
 import React, { useEffect, useRef, useState } from "react";
+import { startSemanticIndexer } from "./lib/semantic-index";
 import { SecurityBoundary } from "./components/AppSecurity";
 import { StoreProvider, useStore, viewTitle } from "./store";
 import { Sidebar } from "./components/Sidebar";
@@ -77,7 +78,8 @@ function Shell() {
     window.addEventListener("inkism-sync-check",refreshFonts);
     installPluginFontStyles();
     const unsubscribe=subscribePlugins(installPluginFontStyles);
-    return ()=>{unsubscribe();window.removeEventListener("inkism-sync-check",refreshFonts);};
+    const stopSemantic=startSemanticIndexer();
+    return ()=>{unsubscribe();stopSemantic();window.removeEventListener("inkism-sync-check",refreshFonts);};
   }, []);
   const [navigation, setNavigation] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(() => {
