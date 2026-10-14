@@ -2069,8 +2069,8 @@ kbd {
   .editor-toolbar > * {
     flex-shrink: 0;
   }
-  /* body 한 단계 위로 올려 .dialog-wide 같은 변형 크기보다 앞선다. */
-  body .dialog[open] {
+  /* body와 [class]로 한 단계 올려 .dialog-wide 같은 변형 크기보다 앞선다(.dialog는 div라 [open]이 없다). */
+  body .dialog[class] {
     width: calc(100vw - 24px);
     max-width: 100%;
   }
