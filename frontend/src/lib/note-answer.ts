@@ -163,21 +163,32 @@ type RelationLoaders={relations:(id:string,signal?:AbortSignal)=>Promise<Relatio
 export async function relatedNotes(evidence:Evidence[],candidates:Summary[],load:RelationLoaders,options:{signal?:AbortSignal;maxFrom?:number;maxNotes?:number}={}):Promise<{notes:Summary[];edges:RelationEdge[]}>{
  const {signal,maxFrom=3,maxNotes=5}=options;
  const known=new Set(candidates.map(n=>n.id)),from=[...new Set(evidence.map(e=>e.note.id))].slice(0,maxFrom);
- const edges:RelationEdge[]=[],notes:Summary[]=[];
+ const edges=await loadEdges(from,load,signal);
+ return {notes:await relatedSummaries(edges,known,load,maxNotes,signal),edges};
+}
+
+async function loadEdges(from:string[],load:RelationLoaders,signal?:AbortSignal){
+ const edges:RelationEdge[]=[];
  for(const id of from){
   try{edges.push(...await load.relations(id,signal));} // NOSONAR: sequential so cancelling stops further reads
   catch(error){if(signal?.aborted)throw error;}
  }
+ return edges;
+}
+
+/** Readable notes at the far end of each edge, not already known, at most `maxNotes`. */
+async function relatedSummaries(edges:RelationEdge[],known:Set<string>,load:RelationLoaders,maxNotes:number,signal?:AbortSignal){
+ const notes:Summary[]=[];
  for(const edge of edges){
   const id=edge.direction==='out'?edge.target:edge.source;
   if(known.has(id)||notes.length===maxNotes)continue;
   known.add(id);
   try{
    const note=await load.summary(id,signal); // NOSONAR: sequential so cancelling stops further reads
-   if(!note.trashed&&!('locked' in note&&note.locked))notes.push(note);
+   if(readable(note))notes.push(note);
   }catch(error){if(signal?.aborted)throw error;}
  }
- return {notes,edges};
+ return notes;
 }
 
 /** Splits an answer into text and citations; numbers the model invented stay plain text. */

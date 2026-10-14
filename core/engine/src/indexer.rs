@@ -465,6 +465,17 @@ impl Worker {
     }
 }
 
+/// Plain text that search (and the semantic index) reads for one note body.
+pub(crate) fn search_text<'a>(format: &str, content: &'a str, stored_text: &'a str) -> crate::error::Result<Cow<'a, str>> {
+    Ok(if format == "text" {
+        Cow::Borrowed(content)
+    } else if format == "html" && stored_text != content {
+        Cow::Borrowed(stored_text)
+    } else {
+        Cow::Owned(crate::source_format::search_text(format, content)?)
+    })
+}
+
 #[cfg(test)]
 mod batch_tests {
     use super::*;
@@ -588,13 +599,3 @@ mod batch_tests {
     }
 }
 
-/// Plain text that search (and the semantic index) reads for one note body.
-pub(crate) fn search_text<'a>(format: &str, content: &'a str, stored_text: &'a str) -> crate::error::Result<Cow<'a, str>> {
-    Ok(if format == "text" {
-        Cow::Borrowed(content)
-    } else if format == "html" && stored_text != content {
-        Cow::Borrowed(stored_text)
-    } else {
-        Cow::Owned(crate::source_format::search_text(format, content)?)
-    })
-}
