@@ -35,3 +35,12 @@
 .writing-link:hover:not(:disabled){color:var(--accent-text);text-decoration:underline}
 .writing-tools-fieldset{margin:0;padding:12px 0 0;border:0;border-top:1px solid var(--border);min-width:0}
 .writing-tools-fieldset legend{float:left;width:100%;padding:0}
+
+/* 위키 갱신 제안 */
+.wiki-update-dialog{width:min(760px,calc(100vw - 32px))}
+.wiki-update-dialog h3{margin:0;font-size:var(--fs-caption);font-weight:500}
+.wiki-proposal{display:flex;flex-direction:column;gap:8px}
+.wiki-evidence,.wiki-changes{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:4px}
+.wiki-evidence small{color:var(--muted)}
+.wiki-change{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.wiki-stale{padding:0 6px;border:1px solid var(--danger);color:var(--danger);font-size:var(--fs-small)}

@@ -10,6 +10,7 @@ import {LibraryMoreTools} from "./components/LibraryMoreTools";
 import {loadFontResources} from "./lib/font-resources";
 import {registerCommands,listenCommandShortcuts} from "./lib/app-commands";
 import React, { useEffect, useRef, useState } from "react";
+import { startSemanticIndexer } from "./lib/semantic-index";
 import { SecurityBoundary } from "./components/AppSecurity";
 import { StoreProvider, useStore, viewTitle } from "./store";
 import { Sidebar } from "./components/Sidebar";
@@ -34,6 +35,7 @@ import { installPluginFontStyles, subscribePlugins } from "./lib/plugins";
 import { NoteLinkNavigation } from "./components/NoteLinkNavigation";
 import { KnowledgeTools } from "./components/KnowledgeTools";
 import { WritingTools } from "./components/WritingTools";
+import { WikiUpdate } from "./components/WikiUpdate";
 import "./mobile.css";
 
 type ShellStore = ReturnType<typeof useStore>;
@@ -77,7 +79,8 @@ function Shell() {
     window.addEventListener("inkism-sync-check",refreshFonts);
     installPluginFontStyles();
     const unsubscribe=subscribePlugins(installPluginFontStyles);
-    return ()=>{unsubscribe();window.removeEventListener("inkism-sync-check",refreshFonts);};
+    const stopSemantic=startSemanticIndexer();
+    return ()=>{unsubscribe();stopSemantic();window.removeEventListener("inkism-sync-check",refreshFonts);};
   }, []);
   const [navigation, setNavigation] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(() => {
@@ -239,6 +242,7 @@ function Shell() {
           {/* 라이브러리 도구는 늘 붙어 있어야 단축키와 대화상자가 동작한다. 닫혀 있을 때는 보이지만 않게 둔다. */}
           <div ref={tools} className={"library-tools" + (toolsOpen ? " is-open" : "")} aria-label={t("라이브러리 도구")}>
             <WritingTools />
+            <WikiUpdate />
             <KnowledgeTools />
             <LibraryMoreTools />
             <Whiteboard />

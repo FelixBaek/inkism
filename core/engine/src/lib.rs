@@ -25,6 +25,7 @@ pub mod ids;
 pub mod indexer;
 pub mod limits;
 pub mod links;
+pub mod relations;
 pub mod knowledge;
 mod redirect_backup;
 pub mod model;
@@ -41,6 +42,7 @@ pub mod plaintext;
 pub mod schema;
 mod search;
 pub mod segments;
+pub mod semantic;
 pub mod settings;
 pub mod source_format;
 pub mod storage;
@@ -55,6 +57,7 @@ pub mod protocol;
 
 pub mod writing_ops;
 pub mod merge_changes;
+pub mod wiki_changes;
 
 pub mod resources;
 
