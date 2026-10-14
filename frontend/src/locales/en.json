@@ -2487,5 +2487,11 @@
   "공백": "Spaces",
   "단어 {n}개": "{n} words",
   "자동 복구": "Recovered",
-  "분할 자동 복구": "Recovered (split)"
+  "분할 자동 복구": "Recovered (split)",
+  "배경": "Background",
+  "하위 페이지 카드": "Subpage cards",
+  "그림자": "Shadow",
+  "하위 페이지 추가": "Add subpage",
+  "저장한 스타일": "Saved styles",
+  "스타일 메뉴": "Style menu"
 }

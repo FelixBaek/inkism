@@ -4,7 +4,7 @@ import { SyncIndicator } from "./SyncSettings";
 import { EditorZoom } from "./EditorZoom";
 import React, { useState, useMemo, useRef, lazy, Suspense } from "react";
 import { editorLocation, rememberLocation } from "../lib/editor-location";
-import { Type, FileCode2, X, Loader2, CheckCircle2, AlertTriangle, CloudUpload, RefreshCw, List, Settings, PanelRight, Eye } from "../icons";
+import { Type, FileCode2, X, Loader2, CheckCircle2, AlertTriangle, CloudUpload, RefreshCw, List, Settings, PanelRight, Eye, ChevronDown } from "../icons";
 import { PREVIEW_EVENT } from "./PreviewExport";
 import { IconButton } from "./IconButton";
 import { CoverBanner } from "./NotebookCover";
@@ -151,6 +151,7 @@ export function EditorPane({
           <label className="visually-hidden" htmlFor="notebook-select">
             {t("폴더 지정")}
           </label>
+          <span className="meta-select-chip">
           {d.notebook_id && (
             <span className="meta-select-icon">
               <NotebookGlyph nb={s.notebooks.find((n) => n.id === d.notebook_id)} />
@@ -171,6 +172,8 @@ export function EditorPane({
               </option>
             ))}
           </select>
+          <ChevronDown size={12} className="meta-select-caret" aria-hidden />
+          </span>
           <span className="classification-divider" aria-hidden>
             |
           </span>

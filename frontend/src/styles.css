@@ -630,13 +630,19 @@ textarea {
   align-items: flex-start;
   gap: 4px;
   padding: 18px 32px 0 0;
+  border: 0;
+  background: transparent;
 }
 .editor-pane:not(.editor-empty):has(> .csv-file-tools) > .note-classification {
   grid-column: 1 / 3;
 }
 .csv-file-tools > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 30px;
   padding: 0 10px;
+  border-radius: 0;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text);
@@ -644,6 +650,9 @@ textarea {
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
+}
+.csv-file-tools > button svg {
+  color: var(--muted);
 }
 .csv-file-tools > button:hover:not(:disabled) {
   background: var(--hover);
@@ -676,11 +685,12 @@ textarea {
 .editor-pane:not(.editor-empty) > :last-child {
   grid-row: 11;
 }
+/* 제목 아래 왼쪽에 HTML·MD 변환 칩 (Figma 09 편집기 변환): 오른쪽 끝에 떠 보이지 않게 한 열로 쌓는다. */
 .editor-meta-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
   padding: 32px 32px 0;
 }
 .meta-left {
@@ -690,23 +700,63 @@ textarea {
   gap: 8px;
   min-width: 0;
 }
+.meta-select-chip {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  max-width: min(200px, 45%);
+  height: 30px;
+  border: 1px solid var(--border);
+  background: var(--hover);
+  color: var(--text);
+}
+.meta-select-chip:hover {
+  background: var(--active);
+}
+.meta-select-chip:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
 .meta-select-icon {
   display: inline-flex;
   align-items: center;
-  height: 30px;
-  margin-right: -4px;
+  padding-left: 10px;
   color: var(--muted);
 }
+/* 기본 select 화살표 대신 Phosphor 캐럿을 그린다. 고르는 동작은 기본 select 그대로. */
 .meta-select {
-  max-width: 180px;
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 26px 0 10px;
+  border: 0;
   border-radius: 0;
-  background: var(--hover);
+  background: transparent;
   font-size: var(--fs-caption);
   font-weight: 500;
   color: var(--text);
+  text-overflow: ellipsis;
+  cursor: pointer;
+  /* 고른 폴더 이름 폭만큼만: 기본 폭 계산은 캐럿 여백을 빼먹어 글자가 잘린다. */
+  field-sizing: content;
+}
+.meta-select-icon + .meta-select {
+  padding-left: 6px;
+}
+.meta-select:focus-visible {
+  outline: none;
+}
+.meta-select option {
+  background: var(--raised);
+}
+.meta-select-caret {
+  position: absolute;
+  right: 9px;
+  color: var(--muted);
+  pointer-events: none;
 }
 .large-badge {
   font-size: var(--fs-small);
@@ -753,9 +803,15 @@ textarea {
 }
 .editor-compatibility-switch {
   flex: none;
-  height: 26px;
+  align-self: flex-start;
+  height: 24px;
+  margin-left: -6px;
+  padding: 0 6px;
   color: var(--muted);
   font-size: var(--fs-small);
+}
+.editor-compatibility-switch:hover:not(:disabled) {
+  color: var(--text);
 }
 .title-input {
   flex: 1;
@@ -787,10 +843,6 @@ textarea {
   gap: 8px;
   padding: 18px 32px 0;
   min-width: 0;
-}
-.note-classification .meta-select {
-  flex: none;
-  max-width: min(180px, 40%);
 }
 .classification-divider {
   display: none;
