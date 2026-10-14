@@ -89,7 +89,7 @@ function PanelFrame({
             <p>{t("불러오는 중…")}</p>
           </div>
         )}
-        {list.page && list.page.items.length === 0 && (
+        {list.page?.items.length === 0 && (
           <div className="list-state">
             <p>{empty}</p>
           </div>
