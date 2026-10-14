@@ -1229,7 +1229,7 @@ textarea {
   background: var(--hover);
   text-decoration: underline;
 }
-.inkism-link-preview{position:fixed;z-index:90;max-width:min(360px,calc(100vw - 16px));padding:10px 12px;border:1px solid var(--border-strong);border-radius:0;background:var(--raised);color:var(--text);pointer-events:none}.inkism-link-preview strong{display:block;margin-bottom:4px}.inkism-link-preview p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}
+.inkism-link-preview{position:fixed;z-index:90;max-width:min(360px,calc(100vw - 16px));padding:10px 12px;border:1px solid var(--border-strong);border-radius:0;background:var(--raised);color:var(--text);pointer-events:none}.inkism-link-preview strong{display:block;margin-bottom:4px}.inkism-link-preview p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}.inkism-link-preview small{display:block;margin-top:6px;color:var(--muted);font-size:11px}
 
 /* 상태 표시줄 */
 .status-bar {
