@@ -9,8 +9,10 @@ use sha2::{Digest, Sha256};
 
 const CHUNK_CHARS: usize = 800;
 const OVERLAP_CHARS: usize = 80;
-// shortcut: only the first 64 chunks (~46k chars) of a note are embedded; raise with a streaming put if long notes matter.
-const MAX_CHUNKS: usize = 64;
+/// Hard cap per note (~4M chars) against abuse; text past it is not embedded.
+const MAX_CHUNKS: usize = 5000;
+/// Chunks per pending/put page, which bounds each request.
+const PAGE: usize = 64;
 const MAX_DIM: usize = 4096;
 const MAX_PENDING: u64 = 16;
 const MAX_RESULTS: u64 = 50;
@@ -106,6 +108,15 @@ fn hash(text: &str) -> String {
 }
 
 const ELIGIBLE: &str = "m.locked=0 AND m.trashed=0";
+/// A note is indexed once its final page wrote the ordinal -1 marker. Older builds wrote one page of at most
+/// 64 chunks and a marker only for empty notes, so rows without ordinal 63 also count as complete.
+const DONE: &str = "EXISTS(SELECT 1 FROM semantic_chunks s WHERE s.note_id=m.id AND s.model=?1 AND s.revision=m.revision AND (s.ordinal=-1 OR s.ordinal=0 AND NOT EXISTS(SELECT 1 FROM semantic_chunks t WHERE t.note_id=m.id AND t.ordinal=63)))";
+
+/// Vectors already stored for this exact revision and model; pages are written in order, so this is the next offset.
+fn stored(c: &Connection, id: &str, revision: i64, model: &str) -> Result<usize> {
+    let n: i64 = c.query_row("SELECT count(*) FROM semantic_chunks WHERE note_id=?1 AND revision=?2 AND model=?3 AND ordinal>=0", params![id, revision, model], |r| r.get(0))?;
+    Ok(n as usize)
+}
 /// Body columns read by `plain`, in this order.
 const BODY: &str = "m.content_format,b.content,b.text";
 
@@ -115,30 +126,36 @@ fn plain(r: &rusqlite::Row, at: usize) -> rusqlite::Result<String> {
     Ok(crate::indexer::search_text(&format, &content, &text).map(|t| t.into_owned()).unwrap_or_default())
 }
 
+/// Notes not fully indexed, each with its next page of chunks (`offset` of `total`).
 pub fn pending(c: &Connection, args: &Value) -> Result<Value> {
     setup(c)?;
     let model = model(args)?;
     let limit = args.get("limit").and_then(Value::as_u64).unwrap_or(8).clamp(1, MAX_PENDING);
-    let mut stmt = c.prepare(&format!("SELECT m.id,m.revision,m.title,{BODY} FROM notes_meta m JOIN notes_body b ON b.note_id=m.id WHERE {ELIGIBLE} AND NOT EXISTS(SELECT 1 FROM semantic_chunks s WHERE s.note_id=m.id AND s.model=?1 AND s.revision=m.revision) ORDER BY m.updated_at DESC,m.id LIMIT ?2"))?;
+    let mut stmt = c.prepare(&format!("SELECT m.id,m.revision,m.title,{BODY} FROM notes_meta m JOIN notes_body b ON b.note_id=m.id WHERE {ELIGIBLE} AND NOT {DONE} ORDER BY m.updated_at DESC,m.id LIMIT ?2"))?;
     let rows = stmt.query_map(params![model, limit as i64], |r| {
         Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?, plain(r, 3)?))
     })?;
     let mut items = Vec::new();
     for row in rows {
         let (id, revision, title, text) = row?;
-        let parts: Vec<Value> = chunks(&text)
+        let all = chunks(&text);
+        let offset = stored(c, &id, revision, model)?;
+        let offset = if offset < all.len() { offset } else { 0 };
+        let parts: Vec<Value> = all
             .iter()
             .enumerate()
+            .skip(offset)
+            .take(PAGE)
             .map(|(i, k)| json!({"ordinal":i,"start":k.start,"end":k.end,"text":k.text}))
             .collect();
-        items.push(json!({"id":id,"revision":revision,"title":title,"chunks":parts}));
+        items.push(json!({"id":id,"revision":revision,"title":title,"offset":offset,"total":all.len(),"chunks":parts}));
     }
     Ok(json!({ "items": items }))
 }
 
 fn parse_vectors(args: &Value) -> Result<Vec<Vec<f32>>> {
     let list = args.get("vectors").and_then(Value::as_array).ok_or_else(|| EngineError::invalid("vectors must be an array"))?;
-    if list.len() > MAX_CHUNKS {
+    if list.len() > PAGE {
         return Err(EngineError::invalid("too many vectors"));
     }
     let vectors = list.iter().map(vector).collect::<Result<Vec<_>>>()?;
@@ -146,6 +163,11 @@ fn parse_vectors(args: &Value) -> Result<Vec<Vec<f32>>> {
         return Err(EngineError::invalid("vector dimensions differ"));
     }
     Ok(vectors)
+}
+
+fn dim(c: &Connection, id: &str) -> Result<usize> {
+    let d: i64 = c.query_row("SELECT dim FROM semantic_chunks WHERE note_id=?1 AND ordinal=0", [id], |r| r.get(0))?;
+    Ok(d as usize)
 }
 
 fn transaction<T>(c: &Connection, f: impl FnOnce() -> Result<T>) -> Result<T> {
@@ -159,12 +181,15 @@ fn transaction<T>(c: &Connection, f: impl FnOnce() -> Result<T>) -> Result<T> {
     result
 }
 
-/// Replaces a note's vectors only while `revision` is current and the note is eligible.
+/// Stores one page of a note's vectors only while `revision` is current and the note is eligible.
+/// Offset 0 drops whatever the note had; a later page must continue exactly where this revision and model stopped,
+/// so pages of an older revision are refused and never mix. The final page writes the completion marker.
 pub fn put(c: &Connection, args: &Value) -> Result<Value> {
     setup(c)?;
     let model = model(args)?;
     let id = args.get("note_id").and_then(Value::as_str).ok_or_else(|| EngineError::invalid("missing note_id"))?;
     let revision = args.get("revision").and_then(Value::as_i64).ok_or_else(|| EngineError::invalid("missing revision"))?;
+    let offset = args.get("offset").and_then(Value::as_u64).unwrap_or(0) as usize;
     let vectors = parse_vectors(args)?;
     transaction(c, || {
         let row: Option<(i64, bool, bool, String)> = c
@@ -174,21 +199,28 @@ pub fn put(c: &Connection, args: &Value) -> Result<Value> {
         if current != revision || locked || trashed {
             return Err(EngineError::Conflict("note changed or is not indexable".into()));
         }
-        let parts = chunks(&text);
-        if parts.len() != vectors.len() {
+        let all = chunks(&text);
+        let parts = all.get(offset..).unwrap_or_default();
+        let parts = &parts[..parts.len().min(PAGE)];
+        if parts.len() != vectors.len() || (offset > 0 && parts.is_empty()) {
             return Err(EngineError::invalid("vector count must match chunk count"));
         }
-        c.execute("DELETE FROM semantic_chunks WHERE note_id=?1", [id])?;
+        if offset == 0 {
+            c.execute("DELETE FROM semantic_chunks WHERE note_id=?1", [id])?;
+        } else if stored(c, id, revision, model)? != offset || vectors[0].len() != dim(c, id)? {
+            return Err(EngineError::Conflict("earlier pages are missing or changed".into()));
+        }
         let mut insert = c.prepare("INSERT INTO semantic_chunks VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)")?;
         for (i, (k, v)) in parts.iter().zip(&vectors).enumerate() {
             let blob: Vec<u8> = v.iter().flat_map(|f| f.to_le_bytes()).collect();
-            insert.execute(params![id, revision, model, i as i64, k.start as i64, k.end as i64, hash(&k.text), v.len() as i64, blob])?;
+            insert.execute(params![id, revision, model, (offset + i) as i64, k.start as i64, k.end as i64, hash(&k.text), v.len() as i64, blob])?;
         }
-        if parts.is_empty() {
-            // Marker so empty notes do not stay pending forever; search skips ordinal -1.
-            insert.execute(params![id, revision, model, -1i64, 0i64, 0i64, "", 0i64, Vec::<u8>::new()])?;
+        let done = offset + parts.len() == all.len();
+        if done {
+            // Completion marker, also for empty notes so they do not stay pending; search skips ordinal -1.
+            insert.execute(params![id, revision, model, -1i64, 0i64, all.len() as i64, "", 0i64, Vec::<u8>::new()])?;
         }
-        Ok(json!({ "stored": parts.len() }))
+        Ok(json!({ "stored": parts.len(), "done": done }))
     })
 }
 
@@ -268,7 +300,7 @@ pub fn search(c: &Connection, args: &Value) -> Result<Value> {
 pub fn status(c: &Connection, args: &Value) -> Result<Value> {
     setup(c)?;
     let model = model(args)?;
-    let (total, indexed): (i64, i64) = c.query_row(&format!("SELECT count(*),count(*) FILTER (WHERE EXISTS(SELECT 1 FROM semantic_chunks s WHERE s.note_id=m.id AND s.model=?1 AND s.revision=m.revision)) FROM notes_meta m WHERE {ELIGIBLE}"), [model], |r| Ok((r.get(0)?, r.get(1)?)))?;
+    let (total, indexed): (i64, i64) = c.query_row(&format!("SELECT count(*),count(*) FILTER (WHERE {DONE}) FROM notes_meta m WHERE {ELIGIBLE}"), [model], |r| Ok((r.get(0)?, r.get(1)?)))?;
     Ok(json!({ "indexed": indexed, "pending": total - indexed }))
 }
 
@@ -295,5 +327,100 @@ mod tests {
         }
         assert!(parts.last().unwrap().text.ends_with("짧은 끝"));
         assert!(chunks(" \n\t").is_empty());
+    }
+
+    fn run(e: &crate::Engine, req: Value) -> Value {
+        let v = e.execute(req);
+        assert_eq!(v["ok"], true, "{v}");
+        v["data"].clone()
+    }
+
+    fn fixture() -> (std::path::PathBuf, crate::Engine) {
+        let root = std::env::temp_dir().join(format!("semantic-unit-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let e = crate::Engine::open(root.join("notes.db").to_str().unwrap()).unwrap();
+        (root, e)
+    }
+
+    /// About 110 chunks: two pages.
+    fn long_note(e: &crate::Engine, prev: Option<&Value>, tail: &str) -> Value {
+        let body: String = (0..200).map(|i| format!("<p>{i}번째 문단. {}</p>", "채움 문장이 이어집니다. ".repeat(25))).collect();
+        let mut note = json!({"title":"Long","content":format!("{body}<p>{tail}</p>"),"content_format":"html"});
+        if let Some(p) = prev {
+            note["id"] = p["id"].clone();
+            note["revision"] = p["revision"].clone();
+        }
+        run(e, json!({"op":"save","note":note}))
+    }
+
+    fn next_page(e: &crate::Engine) -> Value {
+        run(e, json!({"op":"semantic_pending","model":"m","limit":16}))["items"][0].clone()
+    }
+
+    /// Chunks mentioning the tail point one way, filler the other.
+    fn put_page(e: &crate::Engine, p: &Value, revision: &Value, offset: usize) -> Value {
+        let vectors: Vec<Value> = p["chunks"].as_array().unwrap().iter().map(|k| if k["text"].as_str().unwrap().contains("꼬리") { json!([0.0, 1.0]) } else { json!([1.0, 0.0]) }).collect();
+        e.execute(json!({"op":"semantic_put","model":"m","note_id":p["id"],"revision":revision,"offset":offset,"vectors":vectors}))
+    }
+
+    fn status(e: &crate::Engine) -> Value {
+        run(e, json!({"op":"semantic_status","model":"m"}))
+    }
+
+    fn tail_hits(e: &crate::Engine) -> Vec<Value> {
+        run(e, json!({"op":"semantic_search","model":"m","vector":[0.0,1.0],"limit":3}))["items"].as_array().unwrap().clone()
+    }
+
+    #[test]
+    fn long_note_is_indexed_page_by_page_and_its_tail_is_found() {
+        let (root, e) = fixture();
+        long_note(&e, None, "꼬리 문단: 마지막 결론은 여기에 있다.");
+        let (mut offset, mut pages) = (0, 0);
+        loop {
+            let p = next_page(&e);
+            if p.is_null() {
+                break;
+            }
+            assert!(p["total"].as_u64().unwrap() as usize > PAGE);
+            assert_eq!(p["offset"].as_u64().unwrap() as usize, offset);
+            assert_eq!(status(&e), json!({"indexed":0,"pending":1}));
+            assert_eq!(put_page(&e, &p, &p["revision"], offset + PAGE)["ok"], false, "pages go in order");
+            assert_eq!(put_page(&e, &p, &p["revision"], offset)["ok"], true);
+            offset += p["chunks"].as_array().unwrap().len();
+            pages += 1;
+        }
+        assert!(pages >= 2 && offset > PAGE);
+        assert_eq!(status(&e), json!({"indexed":1,"pending":0}));
+        let hits = tail_hits(&e);
+        assert!(hits[0]["snippet"].as_str().unwrap().contains("마지막 결론"), "{hits:?}");
+        drop(e);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn revision_change_mid_way_discards_partial_pages() {
+        let (root, e) = fixture();
+        let first = long_note(&e, None, "꼬리 문단: 옛 결론.");
+        let p = next_page(&e);
+        assert_eq!(put_page(&e, &p, &first["revision"], 0)["ok"], true);
+        let edited = long_note(&e, Some(&first), "꼬리 문단: 새 결론.");
+        // The rest of the old revision is refused; its first page no longer counts or matches.
+        let mut rest = p.clone();
+        rest["chunks"] = json!(p["chunks"].as_array().unwrap()[..1]);
+        assert_eq!(put_page(&e, &rest, &first["revision"], PAGE)["ok"], false);
+        assert_eq!(status(&e), json!({"indexed":0,"pending":1}));
+        assert!(run(&e, json!({"op":"semantic_search","model":"m","vector":[1.0,0.0]}))["items"].as_array().unwrap().is_empty());
+        let fresh = next_page(&e);
+        assert_eq!((fresh["revision"].clone(), fresh["offset"].as_u64()), (edited["revision"].clone(), Some(0)));
+        assert_eq!(put_page(&e, &fresh, &edited["revision"], 0)["ok"], true);
+        let old: i64 = e.connection().query_row("SELECT count(*) FROM semantic_chunks WHERE revision=?1", [first["revision"].as_i64()], |r| r.get(0)).unwrap();
+        assert_eq!(old, 0);
+        let p2 = next_page(&e);
+        assert_eq!(p2["offset"].as_u64(), Some(PAGE as u64));
+        assert_eq!(put_page(&e, &p2, &edited["revision"], PAGE)["ok"], true);
+        assert_eq!(status(&e), json!({"indexed":1,"pending":0}));
+        assert!(tail_hits(&e)[0]["snippet"].as_str().unwrap().contains("새 결론"));
+        drop(e);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

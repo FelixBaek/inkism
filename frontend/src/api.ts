@@ -152,13 +152,13 @@ async function postFile(path: string, form: FormData, signal?: AbortSignal) {
   });
 }
 
-export type SemanticPending = { id: string; revision: number; title: string; chunks: { ordinal: number; start: number; end: number; text: string }[] };
+export type SemanticPending = { id: string; revision: number; title: string; offset: number; total: number; chunks: { ordinal: number; start: number; end: number; text: string }[] };
 export type SemanticHit = { note: Summary; start: number; end: number; score: number; snippet: string };
 export type SemanticStatus = { indexed: number; pending: number };
 
 export const api = {
   semanticPending: (model: string, limit: number) => rpc<{ items: SemanticPending[] }>("semantic_pending", { model, limit }),
-  semanticPut: (note_id: string, revision: number, model: string, vectors: number[][]) => rpc<{ stored: number }>("semantic_put", { note_id, revision, model, vectors }),
+  semanticPut: (note_id: string, revision: number, model: string, offset: number, vectors: number[][]) => rpc<{ stored: number; done: boolean }>("semantic_put", { note_id, revision, model, offset, vectors }),
   semanticSearch: (model: string, vector: number[], limit: number, signal?: AbortSignal) => rpc<{ items: SemanticHit[] }>("semantic_search", { model, vector, limit }, { signal }),
   semanticStatus: (model: string) => rpc<SemanticStatus>("semantic_status", { model }),
   semanticReset: () => rpc<object>("semantic_reset"),
