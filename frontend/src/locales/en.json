@@ -2485,5 +2485,6 @@
   "코드를 고정폭 글꼴로 적습니다.": "Write code in a monospace font.",
   "큰 제목으로 구역을 나눕니다.": "Divide sections with a large heading.",
   "파일을 첨부합니다.": "Attach a file.",
-  "행과 열이 있는 표를 넣습니다.": "Insert a table with rows and columns."
+  "행과 열이 있는 표를 넣습니다.": "Insert a table with rows and columns.",
+  "클릭: 아래에 추가 · Alt+클릭: 위에 추가": "Click: add below · Alt+click: add above"
 }
