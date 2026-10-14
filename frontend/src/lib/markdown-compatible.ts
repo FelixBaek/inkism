@@ -12,24 +12,32 @@ import {TermDefinition, termAttrs, validTermDefinition} from "../extensions/term
 import { t } from "../i18n";
 
 // A single audited inline extension; arbitrary HTML remains outside the GFM editor.
+const isSpace = (c: string | undefined) => c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f";
+const skipSpace = (source: string, i: number) => { while (isSpace(source[i])) i++; return i; };
+/** Index just past the attribute value starting at `i`, or -1 when its quote is never closed. */
+function valueEnd(source: string, i: number): number {
+  const quote = source[i];
+  if (quote === '"' || quote === "'") {
+    const end = source.indexOf(quote, i + 1);
+    return end < 0 ? -1 : end + 1;
+  }
+  while (i < source.length && !isSpace(source[i])) i++;
+  return i;
+}
 /** Attribute names in source order, including duplicates the DOM parser would drop. */
 function attributeNames(source: string): string[] {
   const names: string[] = [];
-  const space = (c: string | undefined) => c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f";
   let i = 0;
-  const skip = () => { while (space(source[i])) i++; };
   while (i < source.length) {
-    skip();
+    i = skipSpace(source, i);
     const start = i;
-    while (i < source.length && !space(source[i]) && source[i] !== "=") i++;
+    while (i < source.length && !isSpace(source[i]) && source[i] !== "=") i++;
     if (i === start) break;
     names.push(source.slice(start, i).toLowerCase());
-    skip();
+    i = skipSpace(source, i);
     if (source[i] !== "=") continue;
-    i++; skip();
-    const quote = source[i];
-    if (quote === '"' || quote === "'") { const end = source.indexOf(quote, i + 1); if (end < 0) break; i = end + 1; }
-    else while (i < source.length && !space(source[i])) i++;
+    i = valueEnd(source, skipSpace(source, i + 1));
+    if (i < 0) break;
   }
   return names;
 }
