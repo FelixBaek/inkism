@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
 
 pub const DEFAULT_PORT: u16 = 47832;
@@ -154,7 +154,7 @@ impl AgentApi {
     }
 
     fn lock(&self) -> MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(|e| e.into_inner())
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     fn listen(self: &Arc<Self>, s: &mut State) {
@@ -399,7 +399,7 @@ impl Receiver for AgentApi {
 impl Drop for AgentApi {
     fn drop(&mut self) {
         // Dropping a runtime inside async context panics; background shutdown never does.
-        Self::stop(self.state.get_mut().unwrap_or_else(|e| e.into_inner()));
+        Self::stop(self.state.get_mut().unwrap_or_else(PoisonError::into_inner));
     }
 }
 

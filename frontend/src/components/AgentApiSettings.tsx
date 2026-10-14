@@ -22,7 +22,11 @@ export function AgentApiSettings() {
   useEffect(() => { agentApi().then(v => setStatus(v.data as Status)).catch(e => setError(String(e.message || e))); }, []);
   const run = async (body: object) => {
     setBusy(true); setError('');
-    try { const v = await agentApi(body); if (v.status) setStatus(v.status); return v.data; }
+    try {
+      const v = await agentApi(body);
+      if (v.status) setStatus(v.status);
+      return v.data;
+    }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); return null; }
     finally { setBusy(false); }
   };
@@ -59,8 +63,8 @@ export function AgentApiSettings() {
           </>}
         </fieldset>
         <button className="btn" disabled={busy || !name.trim() || (limited && !scope.notebooks.length && !scope.tags.length)} onClick={() => void create()}>{t('토큰 만들기')}</button>
-        {secret && <div className="agent-api-secret" role="status">
-          <p>{t('이 토큰은 지금 한 번만 보여 줍니다. 복사해 에이전트 설정에 넣어 주세요.')}</p>
+        {secret && <div className="agent-api-secret">
+          <p><output>{t('이 토큰은 지금 한 번만 보여 줍니다. 복사해 에이전트 설정에 넣어 주세요.')}</output></p>
           <input readOnly value={secret} aria-label={t('새 토큰')} onFocus={e => e.target.select()}/>
           <button className="btn" onClick={() => void navigator.clipboard.writeText(secret).then(() => setCopied(true), () => setError(t('복사하지 못했습니다')))}>{copied ? t('복사됨') : t('복사')}</button>
         </div>}

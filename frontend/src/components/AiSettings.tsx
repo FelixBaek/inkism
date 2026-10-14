@@ -15,10 +15,10 @@ export function AiSettings(){const [config,setConfig]=useState(aiConfig),[key,se
  <button className="btn" disabled={busy} onClick={()=>{try{configureAI({...config,enabled:true},key);setKey('');setMessage(t('저장됨'));}catch(e){setMessage(e instanceof Error?e.message:String(e));}}}>{t('AI 연결 저장')}</button>
  <button className="btn" disabled={busy} onClick={()=>run(async()=>setMessage(t('연결됨: {reply}',{reply:(await completeAI('Reply with OK.','')).slice(0,80)})))}>{t('AI 연결 테스트')}</button>
  <button className="btn" onClick={()=>{clearAI();setConfig(aiConfig());setKey('');setModels([]);setMessage('');}}>{t('AI 연결 삭제')}</button>
- {message&&<p role="status">{message}</p>}
- <div className="ai-disclosure" role="group" aria-label={t('AI로 보내는 내용')}><p>{host?t('AI를 실행할 때만 아래 내용이 {host}로 전송됩니다.',{host}):t('AI를 실행할 때만 아래 내용이 등록한 서버로 전송됩니다.')}</p><ul>
+ {message&&<p><output>{message}</output></p>}
+ <section className="ai-disclosure" aria-label={t('AI로 보내는 내용')}><p>{host?t('AI를 실행할 때만 아래 내용이 {host}로 전송됩니다.',{host}):t('AI를 실행할 때만 아래 내용이 등록한 서버로 전송됩니다.')}</p><ul>
   <li>{t('글 다듬기·요약 등 AI 메뉴: 고른 글(없으면 노트 전체 글)과 요청')}</li>
   <li>{t('AI 블록: 블록에 적은 요청만')}</li>
   <li>{t('용어 풀이: 고른 용어와 앞뒤 약 1,200자')}</li>
   <li>{t('내 노트에 묻기: 질문과 검색으로 찾은 노트 구절(최대 8개, 12,000자). 잠긴 노트와 휴지통은 보내지 않습니다.')}</li>
- </ul></div></section>;}
+ </ul></section></section>;}

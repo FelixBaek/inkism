@@ -33,3 +33,5 @@
 .writing-template-row>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:var(--fs-small)}
 .writing-link{padding:0;border:0;background:none;color:var(--text);font:inherit;cursor:pointer}
 .writing-link:hover:not(:disabled){color:var(--accent-text);text-decoration:underline}
+.writing-tools-fieldset{margin:0;padding:12px 0 0;border:0;border-top:1px solid var(--border);min-width:0}
+.writing-tools-fieldset legend{float:left;width:100%;padding:0}
