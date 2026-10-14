@@ -1,7 +1,7 @@
 <!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Inkism 보관함 복구</title>
-<style>body{font-family:system-ui,sans-serif;background:#f6f5f3;color:#292724;margin:0;padding:24px;line-height:1.6}main{max-width:480px;margin:12vh auto}button{font:inherit;padding:12px 16px;margin:8px 8px 8px 0;border:1px solid #b6b1aa;border-radius:8px;background:#fff;color:inherit}section{padding:16px;background:#eeece8;border-radius:12px}h1{font-size:24px}small{display:block}</style>
+<style>body{font-family:system-ui,sans-serif;background:#f6f5f3;color:#292724;margin:0;padding:24px;line-height:1.6}main{max-width:480px;margin:12vh auto}button{font:inherit;padding:12px 16px;margin:8px 8px 8px 0;border:1px solid #b6b1aa;border-radius:8px;background:#fff;color:inherit}section{padding:16px;background:#eeece8;border-radius:12px}h1{font-size:24px}small,output{display:block}</style>
 <main><h1>보관함을 열 수 없습니다</h1><p>기기에 저장된 키를 읽지 못했거나 이전 형식의 보관함입니다. 기존 파일은 그대로 보존했습니다.</p>
-<button id="retry">다시 시도</button><button id="recovery" aria-expanded="false">안전 복구 안내</button><p id="status" role="status" aria-live="polite"></p>
+<button id="retry">다시 시도</button><button id="recovery" aria-expanded="false">안전 복구 안내</button><output id="status" aria-live="polite"></output>
 <section id="guide" hidden><h2>기존 자료를 보존하며 복구하기</h2><p>먼저 기기 잠금을 해제한 뒤 다시 시도해 주세요.</p><p>기기를 옮겼거나 앱을 복원했다면 원래 기기에서 Inkism 내보내기 또는 동기화를 사용해 자료를 복구해야 합니다. 이 기기의 파일만으로 저장키를 다시 만들 수는 없습니다.</p><p>이전 평문 보관함은 이전 버전에서 내보내야 합니다. 자료를 확보하기 전에는 앱을 삭제하거나 앱 데이터를 초기화하지 마세요.</p><small>이 화면에서는 보관함 파일을 삭제하거나 변환하지 않습니다.</small></section></main>
 <script>
 const retry=document.getElementById('retry'),status=document.getElementById('status');

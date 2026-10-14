@@ -47,7 +47,7 @@ export const Model3d = Node.create({
 
 // Import the renderer and load the model only after an explicit request.
 let viewer: Promise<unknown> | null = null;
-function ModelPreview({src,title,retry}:{src:string;title:string;retry:()=>void}) {
+function ModelPreview({src,title,retry}:Readonly<{src:string;title:string;retry:()=>void}>) {
   const element=useRef<HTMLElement|null>(null);
   const [state,setState]=useState<"loading"|"ready"|"error">("loading");
   useEffect(()=>{
@@ -72,7 +72,7 @@ function ModelPreview({src,title,retry}:{src:string;title:string;retry:()=>void}
   return <>
     {state!=="ready"&&<Cube size={96} className="model-placeholder" aria-hidden/>}
     {React.createElement("model-viewer",{ref:element,src,alt:title||t("3D 모델"),"camera-controls":"","interaction-prompt":"none","touch-action":"pan-y","shadow-intensity":"0.6",style:{display:state==="error"?"none":undefined,opacity:state==="ready"?1:0,pointerEvents:state==="ready"?"auto":"none"}})}
-    <span className="model-hint" role="status">{state==="error"?t("모델을 불러오지 못했습니다"):state==="loading"?t("불러오는 중…"):t("끌어서 돌리기 · 휠로 확대")}</span>
+    <output className="model-hint">{state==="error"?t("모델을 불러오지 못했습니다"):state==="loading"?t("불러오는 중…"):t("끌어서 돌리기 · 휠로 확대")}</output>
     {state==="error"&&<button type="button" className="media-action" onClick={retry}>{t("다시 시도")}</button>}
   </>;
 }

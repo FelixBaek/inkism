@@ -78,7 +78,7 @@ pub fn load(db: &Path) -> Result<inkism_runtime::local_storage::StorageKey> {
 
 #[cfg(target_os = "ios")]
 mod platform {
-    use super::*;
+    use local_api::Result;
     use rand::RngCore;
     use security_framework::access_control::{ProtectionMode, SecAccessControl};
     use security_framework::passwords::{

@@ -1,7 +1,7 @@
 import {commandHistory,recordCommand,toggleCommandFavorite,clearCommandHistory,COMMAND_HISTORY_CHANGED} from "../lib/command-history";
 import {appCommands,COMMANDS_CHANGED} from "../lib/app-commands";
 import { t } from "../i18n";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useReducer, useRef, useState } from "react";
 import { ArrowElbowDownLeftIcon as ArrowElbowDownLeft } from "@phosphor-icons/react";
 import { X, ChevronRight, Check, Eye } from "../icons";
 import { useStore } from "../store";
@@ -43,8 +43,8 @@ export function CommandPalette({ open, onClose }: Readonly<{ open: boolean; onCl
   const [history,setHistory]=useState(commandHistory),[filter,setFilter]=useState<"all"|"recent"|"frequent"|"favorites">("all");
   useEffect(()=>{const update=()=>setHistory(commandHistory());window.addEventListener(COMMAND_HISTORY_CHANGED,update);return()=>window.removeEventListener(COMMAND_HISTORY_CHANGED,update);},[]);
   const note = s.note;
-  const [,rerender]=useState(0);
-  useEffect(()=>{const changed=()=>rerender(n=>n+1);window.addEventListener(COMMANDS_CHANGED,changed);return()=>window.removeEventListener(COMMANDS_CHANGED,changed);},[]);
+  const [,rerender]=useReducer((n:number)=>n+1,0);
+  useEffect(()=>{const changed=()=>rerender();window.addEventListener(COMMANDS_CHANGED,changed);return()=>window.removeEventListener(COMMANDS_CHANGED,changed);},[]);
   const noteCommands=useNoteCommands(
       { id:"",title:"",tags:[],notebook_ids:[], ...note, preview: "" } as Parameters<typeof useNoteCommands>[0],
       () => setAction("reminder"),

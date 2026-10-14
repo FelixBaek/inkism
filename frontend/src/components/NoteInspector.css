@@ -353,6 +353,7 @@
   margin: 0;
 }
 .inspector-properties .knowledge-row output,
+.inspector-properties .knowledge-property output,
 .inspector-properties [role="status"] {
   color: var(--muted);
   font-size: var(--fs-small);

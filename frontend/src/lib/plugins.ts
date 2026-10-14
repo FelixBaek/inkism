@@ -21,9 +21,9 @@ const KEY = "inkism.plugins.v1";
 export const PLUGIN_EVENT = "inkism-plugins";
 const ID = /^[a-z][a-z0-9._-]{1,63}$/;
 const VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
-const FAMILY = /^[\p{L}\p{N} _.,'()\-]{1,100}$/u;
+const FAMILY = /^[\p{L}\p{N} _.,'()-]{1,100}$/u;
 const COLOR = /^#[0-9a-f]{6}$/i;
-const RESOURCE = /^(?:\/fonts\/[A-Za-z0-9_-]+\.(?:woff2?|ttf|otf)|\/api\/attachments\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const RESOURCE = /^(?:\/fonts\/[\w-]+\.(?:woff2?|ttf|otf)|\/api\/attachments\/[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12})$/i;
 export const PLUGIN_PACKAGE_LIMIT = 256 * 1024;
 const BUILTIN: EditorPlugin = {
   id: "inkism.bundled-editor",
@@ -110,7 +110,7 @@ export function installPluginFontStyles() {
   const id = "inkism-plugin-fonts";
   document.getElementById(id)?.remove();
   const style = document.createElement("style"); style.id = id;
-  style.textContent = activePluginFonts().filter((f) => f.url).map((f) => { const format = f.format === "ttf" ? "truetype" : f.format === "otf" ? "opentype" : f.format ?? (f.url?.endsWith(".woff") ? "woff" : f.url?.endsWith(".ttf") ? "truetype" : f.url?.endsWith(".otf") ? "opentype" : "woff2"); return `@font-face{font-family:"${f.family.replace(/"/g, "")}";src:url("${f.url}") format("${format}");font-display:swap}`; }).join("\n");
+  style.textContent = activePluginFonts().filter((f) => f.url).map((f) => { const format = f.format === "ttf" ? "truetype" : f.format === "otf" ? "opentype" : f.format ?? (f.url?.endsWith(".woff") ? "woff" : f.url?.endsWith(".ttf") ? "truetype" : f.url?.endsWith(".otf") ? "opentype" : "woff2"); return `@font-face{font-family:"${f.family.replaceAll('"', "")}";src:url("${f.url}") format("${format}");font-display:swap}`; }).join("\n");
   document.head.appendChild(style);
 }
 export function subscribePlugins(onChange: () => void) { window.addEventListener(PLUGIN_EVENT, onChange); return () => window.removeEventListener(PLUGIN_EVENT, onChange); }

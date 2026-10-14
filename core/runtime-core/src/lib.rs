@@ -40,7 +40,7 @@ use local_storage::LocalStorage;
 pub use config::{StoredConfig, SyncScope};
 pub use error::{Result, RuntimeError};
 
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -53,7 +53,7 @@ use sync_core::{Key, SyncConfig, SyncEngine};
 pub const AUTO_SYNC_INTERVAL: Duration = Duration::from_secs(15);
 
 fn lock_ok<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 fn now_ms() -> i64 {

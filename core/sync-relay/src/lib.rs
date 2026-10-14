@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::path::Path;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::task::{Context, Poll};
 use std::time::Duration;
 use store::{Error, Store, IDENTITIES, RECORDS};
@@ -57,13 +57,15 @@ impl Relay {
     // ponytail: one connection serializes readers too; bbolt allowed parallel reads.
     async fn db<T: Send + 'static>(&self, f: impl FnOnce(&mut Store) -> Result<T, Error> + Send + 'static) -> Result<T, Error> {
         let store = self.store.clone();
-        tokio::task::spawn_blocking(move || f(&mut store.lock().unwrap_or_else(|e| e.into_inner())))
-            .await
-            .map_err(|e| -> Error { e.to_string().into() })?
+        tokio::task::spawn_blocking(move || {
+            f(&mut store.lock().unwrap_or_else(PoisonError::into_inner))
+        })
+        .await
+        .map_err(|e| -> Error { e.to_string().into() })?
     }
 
     fn db_sync<T>(&self, f: impl FnOnce(&mut Store) -> Result<T, Error>) -> Result<T, Error> {
-        f(&mut self.store.lock().unwrap_or_else(|e| e.into_inner()))
+        f(&mut self.store.lock().unwrap_or_else(PoisonError::into_inner))
     }
 
     pub async fn handle<B>(&self, req: Request<B>) -> Response<Body>

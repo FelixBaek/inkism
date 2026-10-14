@@ -1,6 +1,5 @@
 import { openBacklinkLocation, readBacklinkLocation, type BacklinkLocation } from "../lib/backlink-location";
 import { knowledge } from "../lib/knowledge";
-import type { Note } from "../types";
 import React, { useEffect, useRef, useState } from "react";
 import { X, Pin, Star, Archive, PencilOff, FileText } from "../icons";
 import { KNOWLEDGE_EVENT, PropertyEditor } from "./KnowledgeTools";

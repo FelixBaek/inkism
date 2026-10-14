@@ -9,7 +9,8 @@ pub fn references(source:&str,format:&str)->Vec<Value>{
  }}else if format=="markdown"{
   use pulldown_cmark::{Event,Parser,Tag,TagEnd};let mut active:Option<(String,String,bool)>=None;let mut hidden:Option<&str>=None;
   for (event,range) in Parser::new_ext(source,pulldown_cmark::Options::all()).into_offset_iter(){
-   if let Event::Html(value)|Event::InlineHtml(value)=&event{let lower=value.to_ascii_lowercase();if let Some(tag)=hidden{if lower.contains(&format!("</{tag}")){hidden=None;}continue;}hidden=["code","pre","script","style","textarea","template"].into_iter().find(|tag|lower.trim_start().strip_prefix(&format!("<{tag}")).is_some_and(|s|s.starts_with('>')||s.starts_with(char::is_whitespace))&&!lower.contains(&format!("</{tag}")));}if hidden.is_some(){continue;}
+   if let Event::Html(value)|Event::InlineHtml(value)=&event{let lower=value.to_ascii_lowercase();if let Some(tag)=hidden{if lower.contains(&format!("</{tag}")){hidden=None;}continue;}hidden=["code","pre","script","style","textarea","template"].into_iter().find(|tag|lower.trim_start().strip_prefix(&format!("<{tag}")).is_some_and(|s|s.starts_with('>')||s.starts_with(char::is_whitespace))&&!lower.contains(&format!("</{tag}")));}
+   if hidden.is_some(){continue;}
    match event{Event::Start(Tag::Link{dest_url,link_type,..})|Event::Start(Tag::Image{dest_url,link_type,..})=>{if dest_url.starts_with("note://")||matches!(link_type,pulldown_cmark::LinkType::WikiLink{..}){let embed=source[range.clone()].starts_with("!");active=Some((dest_url.to_string(),String::new(),embed));}},Event::Text(text)|Event::Code(text)=>{if let Some((_,label,_))=&mut active{if label.len()+text.len()<=4096{label.push_str(&text);}else{active=None;}}},Event::End(TagEnd::Link)|Event::End(TagEnd::Image)=>{if let Some((target,label,embed))=active.take(){if target.len()<=8192{out.push(json!({"reference":target,"label":label,"embed":embed}));}}},_=>{}}
   }
  }

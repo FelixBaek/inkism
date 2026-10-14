@@ -93,7 +93,7 @@ export function saveCanvas(key: string, state: CanvasState) { try { localStorage
  * at gesture start so crossing another card while dragging never picks it up. */
 export function canvasMoveIds(state: CanvasState, nodeId: string): string[] {
   const group = state.nodes.find(n => n.id === nodeId);
-  if (!group || group.kind !== "group") return group ? [nodeId] : [];
+  if (group?.kind !== "group") return group ? [nodeId] : [];
   return state.nodes.filter(n => n.id === nodeId || (n.x >= group.x && n.y >= group.y && n.x+n.width <= group.x+group.width && n.y+n.height <= group.y+group.height)).map(n => n.id);
 }
 export function moveCanvasNodes(state: CanvasState, ids: readonly string[], dx: number, dy: number): CanvasState {

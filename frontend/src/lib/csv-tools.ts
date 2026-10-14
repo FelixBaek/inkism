@@ -14,6 +14,6 @@ export function csvRows(source: string) { if (new Blob([source]).size > CSV_MAX_
         throw new Error('CSV exceeds 200,000 cells or 2,000 columns');
 } if (!rows.length)
     throw new Error('CSV is empty'); return rows; }
-export function writeCsv(rows: readonly (readonly string[])[], newline = '\r\n') { return rows.map(row => row.map(value => /[",\r\n]/.test(value) ? '"' + value.replace(/"/g, '""') + '"' : value).join(',')).join(newline); }
-export const escapeCsvHTML = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+export function writeCsv(rows: readonly (readonly string[])[], newline = '\r\n') { return rows.map(row => row.map(value => /[",\r\n]/.test(value) ? '"' + value.replaceAll('"', '""') + '"' : value).join(',')).join(newline); }
+export const escapeCsvHTML = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 export function csvTableHTML(rows: string[][]) { const width = rows.reduce((n, row) => Math.max(n, row.length), 0); return '<table>' + rows.map(row => '<tr>' + Array.from({ length: width }, (_, i) => '<td><p>' + escapeCsvHTML(row[i] ?? '').replace(/\r\n|\r|\n/g, '<br>') + '</p></td>').join('') + '</tr>').join('') + '</table>'; }

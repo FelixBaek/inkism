@@ -426,7 +426,7 @@ export function WritingTools() {
     });
   return (
     <>
-      <div className="writing-tools" role="group" aria-label={t("작성 도구")}>
+      <fieldset className="writing-tools plain-fieldset" aria-label={t("작성 도구")}>
         <button
           type="button"
           className="btn btn-secondary"
@@ -478,7 +478,7 @@ export function WritingTools() {
         >
           <span>{t("노트 합치기")}</span>
         </button>
-      </div>
+      </fieldset>
       {!panel && error && (
         <span role="alert" className="writing-tools-error">
           {error}

@@ -13,6 +13,7 @@ use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 use local_api::engine::Process;
 use local_api::{Handler, Request, Response};
+use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -272,7 +273,7 @@ fn static_file(root: &Path, method: &str, path: &str) -> Response {
 }
 
 fn media_type(path: &Path) -> &'static str {
-    match path.extension().and_then(|e| e.to_str()).unwrap_or("") {
+    match path.extension().and_then(OsStr::to_str).unwrap_or("") {
         "html" | "htm" => "text/html; charset=utf-8",
         "js" | "mjs" => "text/javascript; charset=utf-8",
         "css" => "text/css; charset=utf-8",

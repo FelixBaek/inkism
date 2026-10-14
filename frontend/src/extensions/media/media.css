@@ -298,6 +298,7 @@ input.media-caption-title:focus {
 /* Diagram */
 .diagram-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
@@ -494,4 +495,3 @@ input.media-caption-title:focus {
 .diagram-zoom-content svg { width:100%; height:auto; max-width:none !important; }
 .diagram-dialog button:focus-visible,.diagram-zoom-scroll:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .media-error pre { white-space:pre-wrap; overflow-wrap:anywhere; }
-.diagram-head { flex-wrap:wrap; }

@@ -306,7 +306,7 @@ export function BlockActionMenu({
                       aria-pressed={!!action.checked}
                       onClick={() => onSpecific(action)}
                     >
-                      {group === "size" ? action.label.match(/\d+%/)?.[0] : <action.icon size={16} />}
+                      {group === "size" ? /(?<!\d)\d+%/.exec(action.label)?.[0] : <action.icon size={16} />}
                     </button>
                   ))}
               </fieldset>

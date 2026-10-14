@@ -322,215 +322,213 @@ export function SyncSettings({ part = "sync" }: Readonly<{ part?: "sync" | "stor
     finally { setBusy(false); }
   };
   return (
-    <>
-      <div className={"sync-settings sync-settings--" + part}>
-        <fieldset className="sync-fields" disabled={working}>
-          {part === "sync" && (status?.configured && !editing ? (
-            <section className="sync-card" aria-label={t("동기화 상태")}>
-              <h3>{t("동기화 상태")}</h3>
-              <p className="sync-state">
-                <span className={dotClass(status)} aria-hidden />
-                <output>{stateLabel(status)}</output>
-              </p>
-              <dl className="sync-rows">
-                <dt>{t("서버")}</dt>
-                <dd>{status.server_url}</dd>
-                <dt>{t("최근 동기화")}</dt>
-                <dd>{status.last_sync ? new Date(status.last_sync).toLocaleString(lang) : t("아직 없음")}</dd>
-                <dt>{t("전송 대기")}</dt>
-                <dd>{t("{n}개", { n: status.pending ?? 0 })}</dd>
-              </dl>
+    <div className={"sync-settings sync-settings--" + part}>
+      <fieldset className="sync-fields" disabled={working}>
+        {part === "sync" && (status?.configured && !editing ? (
+          <section className="sync-card" aria-label={t("동기화 상태")}>
+            <h3>{t("동기화 상태")}</h3>
+            <p className="sync-state">
+              <span className={dotClass(status)} aria-hidden />
+              <output>{stateLabel(status)}</output>
+            </p>
+            <dl className="sync-rows">
+              <dt>{t("서버")}</dt>
+              <dd>{status.server_url}</dd>
+              <dt>{t("최근 동기화")}</dt>
+              <dd>{status.last_sync ? new Date(status.last_sync).toLocaleString(lang) : t("아직 없음")}</dd>
+              <dt>{t("전송 대기")}</dt>
+              <dd>{t("{n}개", { n: status.pending ?? 0 })}</dd>
+            </dl>
+            <div className="sync-actions">
+              <button
+                className="btn btn-primary"
+                disabled={busy || status.running || status.paused}
+                onClick={() => void rpc("sync_now").catch((e) => setError(e.message))}
+              >
+                {t("지금 동기화")}
+              </button>
+              <button
+                className="btn btn-secondary"
+                disabled={busy || status.running}
+                onClick={() => void setPaused(!status.paused)}
+              >
+                {status.paused ? t("동기화 다시 시작") : t("동기화 일시중지")}
+              </button>
+              <button className="btn" disabled={busy || status.running} onClick={() => setEditing(true)}>
+                {t("연결 정보 바꾸기")}
+              </button>
+            </div>
+            <section className="sync-scope" aria-label={t("동기화 범위")}>
+              <strong>{t("동기화 범위")}</strong>
+              <p className="sync-hint">{t("비워 두면 전체 노트를 동기화합니다. 둘 다 입력하면 폴더와 태그를 모두 만족하는 노트만 선택합니다.")}</p>
+              <label>{t("폴더 ID")}
+                <input value={scopeNotebooks} onChange={e => { scopeDirty.current = true; setScopeNotebooks(e.target.value); }} placeholder="id1, id2" />
+              </label>
+              <label>{t("태그")}
+                <input value={scopeTags} onChange={e => { scopeDirty.current = true; setScopeTags(e.target.value); }} placeholder="work, urgent" />
+              </label>
+              <button type="button" className="btn" disabled={busy || status.running} onClick={() => void saveScope()}>{t("동기화 범위 저장")}</button>
+            </section>
+            <SyncHeldNotices status={status} />
+            {status.paused && (
+              <p className="sync-hint">{t("이 기기의 변경은 보관됩니다. 다시 시작하면 그때 보냅니다.")}</p>
+            )}
+          </section>
+        ) : (
+          <>
+            {!status?.configured && (
+              <section className="sync-card sync-guide" aria-label={t("동기화 안내")}>
+                <h3>{t("동기화 안내")}</h3>
+                <p className="sync-state">
+                  <span className="connection-dot off" aria-hidden />
+                  <output>{t("꺼져 있음 — 노트는 이 기기에만 저장됩니다.")}</output>
+                </p>
+                <ol className="sync-steps">
+                  <li>
+                    <b>{t("서버 준비")}</b>{" "}
+                    {t(
+                      "직접 운영하는 동기화 서버의 주소와 접속 토큰이 필요합니다. 만드는 방법은 README의 ‘동기화 중계 서버’에 있습니다.",
+                    )}
+                  </li>
+                  <li>
+                    <b>{t("첫 기기")}</b>{" "}
+                    {t("주소·토큰을 넣고 ‘첫 기기용 키 만들기’를 누른 뒤 키를 따로 보관하세요.")}
+                  </li>
+                  <li>
+                    <b>{t("다른 기기")}</b> {t("같은 주소·토큰·키를 넣으면 노트가 맞춰집니다.")}
+                  </li>
+                </ol>
+                <p className="sync-hint">{t("노트는 기기에서 암호화한 뒤 보내므로 서버는 내용을 볼 수 없습니다.")}</p>
+              </section>
+            )}
+            <form className="sync-card" onSubmit={configure} aria-label={t("연결 설정")}>
+              <h3>{t("연결 설정")}</h3>
+              {editing && (
+                <p className="sync-hint">
+                  {t(
+                    "서버나 키를 바꾸면 이 기기의 노트를 새 곳으로 처음부터 다시 보냅니다. 토큰만 바꿀 때는 기존 키를 그대로 넣으세요.",
+                  )}
+                </p>
+              )}
+              <label>
+                {t("서버 주소")}
+                <input
+                  type="url"
+                  required
+                  placeholder="https://"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                />
+              </label>
+              <label>
+                {t("접속 토큰")}
+                <input
+                  type="password"
+                  required
+                  autoComplete="off"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                />
+              </label>
+              <label>
+                {t("암호화 키")}
+                <input
+                  type="password"
+                  required
+                  autoComplete="off"
+                  value={key}
+                  onChange={(e) => setKey(e.target.value)}
+                />
+              </label>
               <div className="sync-actions">
                 <button
-                  className="btn btn-primary"
-                  disabled={busy || status.running || status.paused}
-                  onClick={() => void rpc("sync_now").catch((e) => setError(e.message))}
+                  type="button"
+                  className="btn"
+                  onClick={() =>
+                    void rpc<{ key: string }>("sync_keygen")
+                      .then((v) => setKey(v.key))
+                      .catch((e) => setError(e.message))
+                  }
                 >
-                  {t("지금 동기화")}
+                  {t("첫 기기용 키 만들기")}
                 </button>
-                <button
-                  className="btn btn-secondary"
-                  disabled={busy || status.running}
-                  onClick={() => void setPaused(!status.paused)}
-                >
-                  {status.paused ? t("동기화 다시 시작") : t("동기화 일시중지")}
-                </button>
-                <button className="btn" disabled={busy || status.running} onClick={() => setEditing(true)}>
-                  {t("연결 정보 바꾸기")}
-                </button>
-              </div>
-              <section className="sync-scope" aria-label={t("동기화 범위")}>
-                <strong>{t("동기화 범위")}</strong>
-                <p className="sync-hint">{t("비워 두면 전체 노트를 동기화합니다. 둘 다 입력하면 폴더와 태그를 모두 만족하는 노트만 선택합니다.")}</p>
-                <label>{t("폴더 ID")}
-                  <input value={scopeNotebooks} onChange={e => { scopeDirty.current = true; setScopeNotebooks(e.target.value); }} placeholder="id1, id2" />
-                </label>
-                <label>{t("태그")}
-                  <input value={scopeTags} onChange={e => { scopeDirty.current = true; setScopeTags(e.target.value); }} placeholder="work, urgent" />
-                </label>
-                <button type="button" className="btn" disabled={busy || status.running} onClick={() => void saveScope()}>{t("동기화 범위 저장")}</button>
-              </section>
-              <SyncHeldNotices status={status} />
-              {status.paused && (
-                <p className="sync-hint">{t("이 기기의 변경은 보관됩니다. 다시 시작하면 그때 보냅니다.")}</p>
-              )}
-            </section>
-          ) : (
-            <>
-              {!status?.configured && (
-                <section className="sync-card sync-guide" aria-label={t("동기화 안내")}>
-                  <h3>{t("동기화 안내")}</h3>
-                  <p className="sync-state">
-                    <span className="connection-dot off" aria-hidden />
-                    <output>{t("꺼져 있음 — 노트는 이 기기에만 저장됩니다.")}</output>
-                  </p>
-                  <ol className="sync-steps">
-                    <li>
-                      <b>{t("서버 준비")}</b>{" "}
-                      {t(
-                        "직접 운영하는 동기화 서버의 주소와 접속 토큰이 필요합니다. 만드는 방법은 README의 ‘동기화 중계 서버’에 있습니다.",
-                      )}
-                    </li>
-                    <li>
-                      <b>{t("첫 기기")}</b>{" "}
-                      {t("주소·토큰을 넣고 ‘첫 기기용 키 만들기’를 누른 뒤 키를 따로 보관하세요.")}
-                    </li>
-                    <li>
-                      <b>{t("다른 기기")}</b> {t("같은 주소·토큰·키를 넣으면 노트가 맞춰집니다.")}
-                    </li>
-                  </ol>
-                  <p className="sync-hint">{t("노트는 기기에서 암호화한 뒤 보내므로 서버는 내용을 볼 수 없습니다.")}</p>
-                </section>
-              )}
-              <form className="sync-card" onSubmit={configure} aria-label={t("연결 설정")}>
-                <h3>{t("연결 설정")}</h3>
-                {editing && (
-                  <p className="sync-hint">
-                    {t(
-                      "서버나 키를 바꾸면 이 기기의 노트를 새 곳으로 처음부터 다시 보냅니다. 토큰만 바꿀 때는 기존 키를 그대로 넣으세요.",
-                    )}
-                  </p>
-                )}
-                <label>
-                  {t("서버 주소")}
-                  <input
-                    type="url"
-                    required
-                    placeholder="https://"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                  />
-                </label>
-                <label>
-                  {t("접속 토큰")}
-                  <input
-                    type="password"
-                    required
-                    autoComplete="off"
-                    value={token}
-                    onChange={(e) => setToken(e.target.value)}
-                  />
-                </label>
-                <label>
-                  {t("암호화 키")}
-                  <input
-                    type="password"
-                    required
-                    autoComplete="off"
-                    value={key}
-                    onChange={(e) => setKey(e.target.value)}
-                  />
-                </label>
-                <div className="sync-actions">
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() =>
-                      void rpc<{ key: string }>("sync_keygen")
-                        .then((v) => setKey(v.key))
-                        .catch((e) => setError(e.message))
-                    }
-                  >
-                    {t("첫 기기용 키 만들기")}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={!key}
-                    onClick={() =>
-                      void navigator.clipboard.writeText(key).catch(() => setError(t("키를 복사할 수 없습니다")))
-                    }
-                  >
-                    {t("키 복사")}
-                  </button>
-                </div>
-                <p className="sync-hint">
-                  {t("서버는 키를 보관하지 않습니다. 키를 잃으면 다른 기기를 연결할 수 없습니다.")}
-                </p>
-                <div className="sync-actions">
-                  <button type="submit" className="btn btn-primary" disabled={busy}>
-                    {submitLabel(busy, editing)}
-                  </button>
-                  {editing && (
-                    <button type="button" className="btn" disabled={busy} onClick={() => setEditing(false)}>
-                      {t("취소")}
-                    </button>
-                  )}
-                </div>
-              </form>
-            </>
-          ))}
-          {part === "storage" && <section className="sync-card" aria-labelledby="storage-title">
-            <h3 id="storage-title">{t("이 기기의 저장 보호")}</h3>
-            <p>
-              <output>{storageLine(storageError, storage)}</output>
-            </p>
-            {storage && (
-              <StorageDetails
-                storage={storage}
-                canCopy={Boolean(store.info?.native_encrypted_copy)}
-                disabled={busy || working}
-                copying={copying}
-                onCopy={() => void copyEncrypted()}
-              />
-            )}
-            {store.info?.native_open_library && (
-              <>
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  disabled={busy || working}
-                  onClick={() => void openLibrary()}
+                  className="btn"
+                  disabled={!key}
+                  onClick={() =>
+                    void navigator.clipboard.writeText(key).catch(() => setError(t("키를 복사할 수 없습니다")))
+                  }
                 >
-                  {opening ? t("저장 후 저장소 여는 중…") : t("다른 저장소 열기")}
+                  {t("키 복사")}
                 </button>
-                <p className="sync-hint">{t("고른 저장소로 앱을 다시 열고, 다음에도 그 저장소를 씁니다.")}</p>
-              </>
-            )}
-          </section>}
-        </fieldset>
-        {opening && (
+              </div>
+              <p className="sync-hint">
+                {t("서버는 키를 보관하지 않습니다. 키를 잃으면 다른 기기를 연결할 수 없습니다.")}
+              </p>
+              <div className="sync-actions">
+                <button type="submit" className="btn btn-primary" disabled={busy}>
+                  {submitLabel(busy, editing)}
+                </button>
+                {editing && (
+                  <button type="button" className="btn" disabled={busy} onClick={() => setEditing(false)}>
+                    {t("취소")}
+                  </button>
+                )}
+              </div>
+            </form>
+          </>
+        ))}
+        {part === "storage" && <section className="sync-card" aria-labelledby="storage-title">
+          <h3 id="storage-title">{t("이 기기의 저장 보호")}</h3>
           <p>
-            <output>{t("열 저장소 파일을 선택해 주세요.")}</output>
+            <output>{storageLine(storageError, storage)}</output>
           </p>
-        )}
-        {copying && (
-          <p>
-            <output>{t("폴더를 선택하면 복사를 시작합니다. 완료될 때까지 기다려 주세요.")}</output>
-          </p>
-        )}
-        {copyMessage && (
-          <p>
-            <output>{copyMessage}</output>
-          </p>
-        )}
-        {(error || status?.error) && (
-          <p role="alert" className="sync-error">
-            {error || status?.error}
-          </p>
-        )}
-      </div>
-    </>
+          {storage && (
+            <StorageDetails
+              storage={storage}
+              canCopy={Boolean(store.info?.native_encrypted_copy)}
+              disabled={busy || working}
+              copying={copying}
+              onCopy={() => void copyEncrypted()}
+            />
+          )}
+          {store.info?.native_open_library && (
+            <>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy || working}
+                onClick={() => void openLibrary()}
+              >
+                {opening ? t("저장 후 저장소 여는 중…") : t("다른 저장소 열기")}
+              </button>
+              <p className="sync-hint">{t("고른 저장소로 앱을 다시 열고, 다음에도 그 저장소를 씁니다.")}</p>
+            </>
+          )}
+        </section>}
+      </fieldset>
+      {opening && (
+        <p>
+          <output>{t("열 저장소 파일을 선택해 주세요.")}</output>
+        </p>
+      )}
+      {copying && (
+        <p>
+          <output>{t("폴더를 선택하면 복사를 시작합니다. 완료될 때까지 기다려 주세요.")}</output>
+        </p>
+      )}
+      {copyMessage && (
+        <p>
+          <output>{copyMessage}</output>
+        </p>
+      )}
+      {(error || status?.error) && (
+        <p role="alert" className="sync-error">
+          {error || status?.error}
+        </p>
+      )}
+    </div>
   );
 }
 

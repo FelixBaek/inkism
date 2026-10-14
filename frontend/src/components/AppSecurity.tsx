@@ -24,7 +24,7 @@ function SetupNotice() {
       <strong>{t("Google 로그인 설정이 필요합니다.")}</strong>
       <p>
         {t(
-          "Google OAuth 데스크톱 클라이언트 ID를 준비하고 %APPDATA%\\Inkism\\google-client.json 파일의 client_id에 설정한 뒤 앱을 다시 열어 주세요. 현재는 Google 로그인을 시작할 수 없습니다.",
+          String.raw`Google OAuth 데스크톱 클라이언트 ID를 준비하고 %APPDATA%\Inkism\google-client.json 파일의 client_id에 설정한 뒤 앱을 다시 열어 주세요. 현재는 Google 로그인을 시작할 수 없습니다.`,
         )}
       </p>
     </div>

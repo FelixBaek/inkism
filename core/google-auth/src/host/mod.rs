@@ -3,7 +3,7 @@
 //! consumed only by the host recovery hook and never enter a policy file or
 //! renderer response.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
 
@@ -227,7 +227,7 @@ impl Controller {
     }
 
     fn lock_state(&self) -> std::sync::MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(|e| e.into_inner())
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Called by the trusted host before serving UI requests.

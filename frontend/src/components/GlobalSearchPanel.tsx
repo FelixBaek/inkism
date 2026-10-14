@@ -19,7 +19,7 @@ export function GlobalSearchPanel({ notes = [], loadPage, loadText, loadCandidat
     active.current?.abort();const controller=new AbortController();active.current=controller;
     setProgress(0);setBusy(true);setError("");setHits([]);setSearched(false);
     try {
-      await searchPages(loadPage ?? (async()=>({items:notes,next_cursor:null})),query,loadText,
+      await searchPages(loadPage ?? (()=>Promise.resolve({items:notes,next_cursor:null})),query,loadText,
         (loaded,texts)=>searchInWorker(loaded,texts,query,{regex},1500,controller.signal),
         {signal:controller.signal,onProgress:(count,result)=>{if(active.current===controller){setProgress(count);setHits([...result]);}}});
       if(active.current===controller)setSearched(true);
