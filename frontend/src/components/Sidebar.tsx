@@ -25,7 +25,7 @@ import {
 import { useStore, type StoreValue } from "../store";
 import type { Notebook, View } from "../types";
 import { Menu } from "./Menu";
-import { CalendarBlankIcon, FolderIcon } from "@phosphor-icons/react";
+import { CalendarBlankIcon } from "@phosphor-icons/react";
 import { KNOWLEDGE_EVENT } from "./KnowledgeTools";
 import { SyncIndicator } from "./SyncSettings";
 import { WRITING_TOOL_EVENT } from "./WritingTools";
@@ -33,7 +33,7 @@ import type { ShellPanel } from "./ShellLists";
 import { useNarrow } from "../lib/narrow";
 import { api } from "../api";
 import { IconButton } from "./IconButton";
-import { colorMenu } from "./LibraryStyle";
+import { colorMenu, iconMenu, NotebookGlyph } from "./LibraryStyle";
 import "./Sidebar.css";
 
 type SideTab = "menu" | "notebooks" | "tags";
@@ -349,8 +349,8 @@ function NotebookRow({
         onClick={() => store.setView({ type: "notebook", id: nb.id })}
         aria-current={active ? "page" : undefined}
       >
-        <span className="side-icon" aria-hidden style={nb.color ? { color: nb.color } : undefined}>
-          <FolderIcon size={16} />
+        <span className="side-icon" aria-hidden>
+          <NotebookGlyph nb={nb} />
         </span>
         <span className="side-label">{nb.name}</span>
         {!!count && <span className="side-count">{count}</span>}
@@ -374,6 +374,8 @@ function NotebookRow({
             icon: <Folder size={14} aria-hidden />,
             onSelect: () => store.toggleDefaultNotebook(nb),
           },
+          colorMenu(nb.color, (color) => void store.styleNotebook(nb, { color })),
+          iconMenu(nb, (icon) => void store.styleNotebook(nb, { icon })),
           {
             label: t("삭제"),
             icon: <Trash2 size={14} aria-hidden />,

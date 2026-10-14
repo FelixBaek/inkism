@@ -690,6 +690,13 @@ textarea {
   gap: 8px;
   min-width: 0;
 }
+.meta-select-icon {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  margin-right: -4px;
+  color: var(--muted);
+}
 .meta-select {
   max-width: 180px;
   height: 30px;

@@ -337,7 +337,7 @@ fn tag_color(e: &Engine, name: &str) -> Value {
     tags.as_array().unwrap().iter().find(|t| t["name"] == name).map(|t| t["color"].clone()).unwrap_or(Value::Null)
 }
 #[test]
-fn tag_color_follows_rename_undo_and_removal() {
+fn tag_color_follows_rename_undo_and_removal_and_notebook_icon() {
     let db = Db::new();
     let e = db.open();
     note(&e, "A", json!(["old", "other"]));
@@ -359,4 +359,11 @@ fn tag_color_follows_rename_undo_and_removal() {
     note(&e, "B", json!(["other"]));
     assert_eq!(tag_color(&e, "other"), Value::Null, "removal drops the color");
 
+    let nb = ok(e.execute(json!({"op":"save_notebook","name":"N"})))["id"].clone();
+    assert_eq!(e.execute(json!({"op":"notebook_icon_set","id":nb,"icon":"Bad Icon"}))["ok"], false);
+    ok(e.execute(json!({"op":"notebook_icon_set","id":nb,"icon":"briefcase"})));
+    let icon = |e: &Engine| ok(e.execute(json!({"op":"notebooks"})))[0]["icon"].clone();
+    assert_eq!(icon(&e), "briefcase");
+    ok(e.execute(json!({"op":"notebook_icon_set","id":nb,"icon":null})));
+    assert_eq!(icon(&e), Value::Null);
 }

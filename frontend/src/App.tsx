@@ -21,7 +21,8 @@ import { DueReminders } from "./components/Reminders";
 import { DialogHost } from "./components/DialogHost";
 import { StatusBar } from "./components/EditorPane";
 import { CommandPalette } from "./components/CommandPalette";
-import { DotsThreeIcon, FolderIcon } from "@phosphor-icons/react";
+import { DotsThreeIcon } from "@phosphor-icons/react";
+import { NotebookGlyph } from "./components/LibraryStyle";
 import { Menu as MenuButton, type MenuItemSpec } from "./components/Menu";
 import { NoteShareDialog } from "./components/NoteShareDialog";
 import { NoteTabs } from "./components/NoteTabs";
@@ -171,6 +172,8 @@ function Shell() {
   // 상단 경로: 열린 노트의 폴더를 상위부터 잇는다. 노트가 없으면 지금 보는 목록 이름.
   const path = notebookPath(s.note, s.notebooks);
   const viewName = shellViewName(panel, s.view, s.notebooks);
+  const topbarId = path.length ? s.note?.notebook_id : s.view.type === "notebook" ? s.view.id : null;
+  const topbarNotebook = s.notebooks.find((n) => n.id === topbarId);
   const inspectorLabel = inspectorOpen ? t("노트 속성 닫기") : t("노트 속성 열기");
   const moreItems = (compact: boolean): MenuItemSpec[] => [
     ...(compact ? [{ label: t("공유"), disabled: !s.note, onSelect: () => setSharing(true) }] : []),
@@ -220,7 +223,7 @@ function Shell() {
         <Sidebar panel={panel} onPanel={showPanel} onDaily={() => void openDaily()} />
         <div className="app-main">
           <header className="app-topbar" aria-label={t("노트 상단바")} data-tauri-drag-region="deep">
-            {panel === "reminders" ? <Bell size={16} aria-hidden /> : <FolderIcon size={16} aria-hidden />}
+            {panel === "reminders" ? <Bell size={16} aria-hidden /> : <NotebookGlyph nb={topbarNotebook} />}
             <span className="app-topbar-path">{(panel !== "reminders" && path.length ? path : [viewName]).join("  /  ")}</span>
             <div className="app-topbar-actions" data-tauri-drag-region="false">
               <IconButton

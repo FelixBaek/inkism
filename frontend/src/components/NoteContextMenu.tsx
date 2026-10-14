@@ -7,6 +7,7 @@ import { sourceFilename } from "../lib/source-format";
 import { plainTextOf } from "../lib/text";
 import { openInNewTab } from "./NoteTabs";
 import { ContextMenu, type MenuItemSpec } from "./Menu";
+import { NotebookGlyph } from "./LibraryStyle";
 import { printNote } from "../lib/print-note";
 import { PREVIEW_EVENT } from "./PreviewExport";
 import {
@@ -162,7 +163,7 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
         ...(s.notebooks.length
           ? s.notebooks.map((nb) => ({
               commandId: "context.note.notebook:"+nb.id, label: nb.name,
-              icon: icon(<Folder />),
+              icon: <NotebookGlyph nb={nb} size={15} />,
               checked: notebookIds.includes(nb.id),
               onSelect: () =>
                 patch({

@@ -18,7 +18,7 @@ import { TrashedNoteBanner } from "./TrashedNoteBanner";
 import { NoteInspector } from "./NoteInspector";
 import { SourceEditor } from "./SourceEditor";
 import { TagInput } from "./TagInput";
-import { tagChipStyle, tagColor } from "./LibraryStyle";
+import { NotebookGlyph, tagChipStyle, tagColor } from "./LibraryStyle";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { usePref } from "../lib/pref";
 import { lang, t } from "../i18n";
@@ -151,6 +151,11 @@ export function EditorPane({
           <label className="visually-hidden" htmlFor="notebook-select">
             {t("폴더 지정")}
           </label>
+          {d.notebook_id && (
+            <span className="meta-select-icon">
+              <NotebookGlyph nb={s.notebooks.find((n) => n.id === d.notebook_id)} />
+            </span>
+          )}
           <select
             id="notebook-select"
             className="meta-select"

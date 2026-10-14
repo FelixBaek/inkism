@@ -38,6 +38,7 @@ const RENDERER_OPS: &[&str] = &[
     "defaults_get",
     "defaults_set",
     "tag_color_set",
+    "notebook_icon_set",
     "vault_status",
     "vault_create",
     "vault_unlock",

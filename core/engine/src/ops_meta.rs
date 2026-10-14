@@ -9,7 +9,8 @@ use serde_json::{json, Value};
 /// Live notebooks for screens; trashed ones are listed by `trashed_notebooks`.
 pub fn notebooks(conn: &Connection) -> Result<Value> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, color, parent_id, description, cover FROM notebooks WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE, id",
+        "SELECT id, name, color, parent_id, description, cover, (SELECT value FROM settings WHERE key='notebook_icon:'||notebooks.id)
+         FROM notebooks WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE, id",
     )?;
     let rows = stmt.query_map([], |r| {
         Ok(json!({
@@ -19,6 +20,7 @@ pub fn notebooks(conn: &Connection) -> Result<Value> {
             "parent_id": r.get::<_, Option<String>>(3)?,
             "description": r.get::<_, String>(4)?,
             "cover": crate::notebook_cover::to_value(r.get(5)?),
+            "icon": r.get::<_, Option<String>>(6)?,
         }))
     })?;
     let mut out = Vec::new();

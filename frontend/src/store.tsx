@@ -109,6 +109,7 @@ export interface StoreValue {
   renameTag: (name: string) => Promise<void>;
   removeTag: (name: string) => Promise<void>;
   setTagColor: (name: string, color: string | null) => Promise<void>;
+  styleNotebook: (nb: Notebook, change: { color?: string | null; icon?: string | null }) => Promise<void>;
   stats: Stats | null;
   addNotebook: (parent?: Notebook) => Promise<void>;
   renameNotebook: (nb: Notebook) => Promise<void>;
@@ -2072,6 +2073,20 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     [prompt, refreshMeta, showError],
   );
 
+  const styleNotebook = useCallback(
+    async (nb: Notebook, change: { color?: string | null; icon?: string | null }) => {
+      try {
+        // save_notebook은 빠진 color를 지우고 나머지 칸(상위·설명·표지)은 그대로 둔다.
+        if ("color" in change) await api.saveNotebook({ id: nb.id, name: nb.name, color: change.color ?? undefined });
+        if ("icon" in change) await api.setNotebookIcon(nb.id, change.icon ?? null);
+        await refreshMeta();
+      } catch (e) {
+        await showError(t("폴더 변경 실패"), e instanceof Error ? e.message : t("알 수 없는 오류"));
+      }
+    },
+    [refreshMeta, showError],
+  );
+
   const removeNotebook = useCallback(
     async (nb: Pick<Notebook, "id" | "name">, confirmed = false) => {
       const ok =
@@ -2280,6 +2295,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     renameTag,
     removeTag,
     setTagColor,
+    styleNotebook,
     stats,
     addNotebook,
     renameNotebook,

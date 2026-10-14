@@ -19,9 +19,14 @@ pub const DEFAULT_TAG: &str = "default_tag";
 pub const VAULT_KEY_PREFIX: &str = "vault_key:";
 /// `tag_color:<tag name>` is a `#rrggbb` color; NULL means no color.
 pub const TAG_COLOR_PREFIX: &str = "tag_color:";
+/// `notebook_icon:<notebook id>` is an app icon name; NULL means the default.
+pub const NOTEBOOK_ICON_PREFIX: &str = "notebook_icon:";
 
 fn valid_color(c: &str) -> bool {
     c.len() == 7 && c.starts_with('#') && c[1..].bytes().all(|b| b.is_ascii_hexdigit())
+}
+fn valid_icon(i: &str) -> bool {
+    (1..=32).contains(&i.len()) && i.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
 pub fn is_known_key(key: &str) -> bool {
@@ -30,6 +35,7 @@ pub fn is_known_key(key: &str) -> bool {
         || key == DEFAULT_TAG
         || key.strip_prefix(VAULT_KEY_PREFIX).is_some_and(ids::valid_id)
         || key.strip_prefix(TAG_COLOR_PREFIX).is_some_and(|tag| crate::ops_notes::check_tags(&[tag.to_string()]).is_ok())
+        || key.strip_prefix(NOTEBOOK_ICON_PREFIX).is_some_and(ids::valid_id)
 }
 
 /// Shape check per key. Existence of a notebook is checked only for local sets.
@@ -45,6 +51,7 @@ pub fn validate(key: &str, value: Option<&str>) -> Result<()> {
         (DEFAULT_NOTEBOOK, Some(id)) if ids::valid_id(id) => Ok(()),
         (DEFAULT_TAG, Some(tag)) => crate::ops_notes::check_tags(&[tag.to_string()]),
         (_, Some(c)) if key.starts_with(TAG_COLOR_PREFIX) && valid_color(c) => Ok(()),
+        (_, Some(i)) if key.starts_with(NOTEBOOK_ICON_PREFIX) && valid_icon(i) => Ok(()),
         (_, Some(envelope))
             if key.starts_with(VAULT_KEY_PREFIX)
                 && !envelope.is_empty()
@@ -143,6 +150,12 @@ fn set_one(conn: &Connection, key: &str, value: Option<String>) -> Result<Value>
 pub fn set_tag_color(conn: &Connection, args: &Value) -> Result<Value> {
     let name = args["name"].as_str().ok_or_else(|| EngineError::invalid("missing tag name"))?;
     set_one(conn, &format!("{TAG_COLOR_PREFIX}{name}"), crate::model::opt_string(args, "color")?.flatten())
+}
+
+/// `{id, icon: name|null}`.
+pub fn set_notebook_icon(conn: &Connection, args: &Value) -> Result<Value> {
+    let id = args["id"].as_str().filter(|id| ids::valid_id(id)).ok_or_else(|| EngineError::invalid("bad id"))?;
+    set_one(conn, &format!("{NOTEBOOK_ICON_PREFIX}{id}"), crate::model::opt_string(args, "icon")?.flatten())
 }
 
 /// Caller owns the transaction. A renamed tag keeps its color unless the target
