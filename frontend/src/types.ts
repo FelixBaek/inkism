@@ -119,6 +119,8 @@ export interface Defaults {
 export interface TagCount {
   name: string;
   count: number;
+  /** 동기화되는 태그 색(#rrggbb). 없으면 null. */
+  color?: string | null;
 }
 
 export interface Stats {

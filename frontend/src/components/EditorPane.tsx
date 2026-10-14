@@ -18,6 +18,7 @@ import { TrashedNoteBanner } from "./TrashedNoteBanner";
 import { NoteInspector } from "./NoteInspector";
 import { SourceEditor } from "./SourceEditor";
 import { TagInput } from "./TagInput";
+import { tagChipStyle, tagColor } from "./LibraryStyle";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { usePref } from "../lib/pref";
 import { lang, t } from "../i18n";
@@ -262,7 +263,7 @@ function TagEditor() {
   return (
     <div className="tag-editor" aria-label={t("태그 편집")}>
       {d.tags.map((tag) => (
-        <span key={tag} className="tag-chip">
+        <span key={tag} className="tag-chip" style={tagChipStyle(tagColor(s.tags, tag))}>
           <span className="tag-chip-label" title={tag}>
             #{tag}
           </span>

@@ -222,7 +222,8 @@ pub fn delete_notebook(conn: &Connection, args: &Value) -> Result<Value> {
 
 pub fn tags(conn: &Connection) -> Result<Value> {
     let mut stmt = conn.prepare(
-        "SELECT je.value, COUNT(*) FROM notes_meta m, json_each(m.tags) je
+        "SELECT je.value, COUNT(*), (SELECT value FROM settings WHERE key='tag_color:'||je.value)
+         FROM notes_meta m, json_each(m.tags) je
          WHERE m.trashed = 0
          GROUP BY je.value ORDER BY COUNT(*) DESC, je.value",
     )?;
@@ -230,6 +231,7 @@ pub fn tags(conn: &Connection) -> Result<Value> {
         Ok(json!({
             "name": r.get::<_, String>(0)?,
             "count": r.get::<_, i64>(1)?,
+            "color": r.get::<_, Option<String>>(2)?,
         }))
     })?;
     let mut out = Vec::new();
@@ -363,6 +365,7 @@ pub fn change_tag(conn: &Connection, args: &Value) -> Result<Value> {
         if crate::settings::default_tag(conn)?.as_deref() == Some(name) {
             crate::settings::write_local(conn, crate::settings::DEFAULT_TAG, replacement)?;
         }
+        crate::settings::move_tag_color(conn, name, replacement)?;
         let summary = current
             .map(|(id, _)| crate::ops_notes::load_summary(conn, id))
             .transpose()?;

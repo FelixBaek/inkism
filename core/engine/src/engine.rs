@@ -215,6 +215,7 @@ impl Engine {
             "type_preset_apply" => { let v=crate::knowledge::type_preset_apply(conn,&req)?; self.wakeup.notify(); v },
             "defaults_get" => crate::settings::get(conn)?,
             "defaults_set" => crate::settings::set(conn, &req)?,
+            "tag_color_set" => crate::settings::set_tag_color(conn, &req)?,
             "tags" => ops_meta::tags(conn)?,
             "tag_change_preview" => crate::tag_changes::preview(conn,&req)?,
             "tag_change_list" => crate::tag_changes::list(conn)?,

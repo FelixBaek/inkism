@@ -305,6 +305,7 @@ export const api = {
 
   defaults: () => rpc<Defaults>("defaults_get"),
   setDefaults: (changes: Partial<Defaults>) => rpc<Defaults>("defaults_set", changes),
+  setTagColor: (name: string, color: string | null) => rpc<unknown>("tag_color_set", { name, color }),
   deleteNotebook: (id: string, current_id?: string, current_revision?: number) =>
     rpc<{ deleted: boolean; current: Summary | null }>("delete_notebook", { id, current_id, current_revision }),
 

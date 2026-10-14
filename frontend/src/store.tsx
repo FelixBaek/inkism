@@ -108,6 +108,7 @@ export interface StoreValue {
   performTagChange: (action:(currentId?:string,currentRevision?:number)=>Promise<TagChangeResult>)=>Promise<TagChangeResult>;
   renameTag: (name: string) => Promise<void>;
   removeTag: (name: string) => Promise<void>;
+  setTagColor: (name: string, color: string | null) => Promise<void>;
   stats: Stats | null;
   addNotebook: (parent?: Notebook) => Promise<void>;
   renameNotebook: (nb: Notebook) => Promise<void>;
@@ -1998,6 +1999,17 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     [prompt],
   );
   const removeTag = useCallback((name:string)=>{requestTagChange({name,replacement:null});return Promise.resolve();},[]);
+  const setTagColor = useCallback(
+    async (name: string, color: string | null) => {
+      try {
+        await api.setTagColor(name, color);
+        await refreshMeta();
+      } catch (e) {
+        await showError(t("색 변경 실패"), e instanceof Error ? e.message : t("알 수 없는 오류"));
+      }
+    },
+    [refreshMeta, showError],
+  );
 
   // ---------- 폴더 관리 ----------
   const addNotebook = useCallback(
@@ -2267,6 +2279,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     performTagChange,
     renameTag,
     removeTag,
+    setTagColor,
     stats,
     addNotebook,
     renameNotebook,

@@ -812,6 +812,20 @@ textarea {
   color: var(--text);
   white-space: nowrap;
 }
+/* 색 있는 태그: 점과 옅은 바탕만 칠하고 글자는 기본 색으로 둔다. */
+.tag-chip[style*="--tag-color"] {
+  border-color: color-mix(in srgb, var(--tag-color) 50%, var(--border));
+  background: color-mix(in srgb, var(--tag-color) 14%, var(--hover));
+}
+.tag-chip[style*="--tag-color"]::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--tag-color);
+}
 .tag-chip-label {
   overflow: hidden;
   text-overflow: ellipsis;

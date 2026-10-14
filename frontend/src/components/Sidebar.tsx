@@ -33,6 +33,7 @@ import type { ShellPanel } from "./ShellLists";
 import { useNarrow } from "../lib/narrow";
 import { api } from "../api";
 import { IconButton } from "./IconButton";
+import { colorMenu } from "./LibraryStyle";
 import "./Sidebar.css";
 
 type SideTab = "menu" | "notebooks" | "tags";
@@ -204,7 +205,7 @@ export function Sidebar({
                   onClick={() => s.setView({ type: "tag", name: tag.name })}
                   aria-current={isActive(s.view, { type: "tag", name: tag.name }) ? "page" : undefined}
                 >
-                  <span className="side-icon" aria-hidden>
+                  <span className="side-icon" aria-hidden style={tag.color ? { color: tag.color } : undefined}>
                     <Hash size={16} />
                   </span>
                   <span className="side-label">{tag.name}</span>
@@ -224,6 +225,7 @@ export function Sidebar({
                       icon: <TagIcon size={14} aria-hidden />,
                       onSelect: () => s.toggleDefaultTag(tag.name),
                     },
+                    colorMenu(tag.color, (color) => void s.setTagColor(tag.name, color)),
                     {
                       label: t("태그 제거"),
                       icon: <Trash2 size={14} aria-hidden />,

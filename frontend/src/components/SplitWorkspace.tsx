@@ -4,6 +4,7 @@ import { inspectRichHTML } from "../lib/rich-document";
 import { usePref } from "../lib/pref";
 import { RichEditor } from "./RichEditor";
 import { TagInput } from "./TagInput";
+import { tagChipStyle, tagColor } from "./LibraryStyle";
 import { X } from "../icons";
 import { withReadonly } from "../lib/readonly-permission";
 import { errorText } from "../lib/text";
@@ -566,7 +567,7 @@ export function SplitWorkspace({
           </h2>
           <div className="split-tags tag-editor" aria-label={t("분할 노트 태그")}>
             {note.tags.map((tag) => (
-              <span key={tag} className="tag-chip">
+              <span key={tag} className="tag-chip" style={tagChipStyle(tagColor(s.tags, tag))}>
                 <span className="tag-chip-label" title={tag}>
                   #{tag}
                 </span>

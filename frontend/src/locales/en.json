@@ -379,6 +379,8 @@
   "기본 컬러 보기": "View default colors",
   "기본 태그 해제": "Unset default tag",
   "기본 태그로 설정": "Set as default tag",
+  "색 변경": "Change color",
+  "색 변경 실패": "Could not change color",
   "기본값 변경 실패": "Couldn't change defaults",
   "기본값 복원": "Restore defaults",
   "기울임": "Italic",

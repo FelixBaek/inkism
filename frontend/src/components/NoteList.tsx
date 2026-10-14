@@ -34,6 +34,7 @@ import {
 } from "./TrashTools";
 import "./NoteList.css";
 import { t } from "../i18n";
+import { tagColor } from "./LibraryStyle";
 
 function trashRowLabel(at: number | undefined, archived: boolean, retention: TrashDays) {
   return trashLabel(at, archived ? null : retention);
@@ -440,7 +441,21 @@ function NoteRow({
           </span>
         </div>
         <p className={`note-row-preview${item.preview ? "" : " is-empty"}`}>{item.preview || t("내용 없음")}</p>
-        <p className="note-row-meta">{meta || [formatRelative(item.updated_at), place].filter(Boolean).join(" · ")}</p>
+        <p className="note-row-meta">
+          {meta || (
+            <>
+              {formatRelative(item.updated_at)}
+              {place && " · "}
+              {place && place === tagLabel ? (
+                <>
+                  <span style={{ color: tagColor(s.tags, tag!) }}>#</span> {tag}
+                </>
+              ) : (
+                place
+              )}
+            </>
+          )}
+        </p>
       </button>
       {trashMode && (
         <div className="note-row-actions">

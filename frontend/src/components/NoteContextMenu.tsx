@@ -186,7 +186,7 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
       items: s.tags.length
         ? s.tags.map((tag) => ({
             commandId: "context.note.tag:"+tag.name, label: tag.name,
-            icon: icon(<Hash />),
+            icon: icon(<Hash style={tag.color ? { color: tag.color } : undefined} />),
             checked: item.tags.includes(tag.name),
             onSelect: () =>
               patch({

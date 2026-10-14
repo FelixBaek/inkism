@@ -42,3 +42,10 @@
   position: static;
   min-width: 250px;
 }
+.menu-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
