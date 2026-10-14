@@ -10,7 +10,11 @@
   padding: 0 4px;
   overflow-x: auto;
   background: var(--surface);
-  scrollbar-width: thin;
+  /* 탭이 많아도 스크롤바(화살표 포함)는 숨기고 휠·끌기로 넘긴다 */
+  scrollbar-width: none;
+}
+.note-tabs::-webkit-scrollbar {
+  display: none;
 }
 .note-tabs .note-tab {
   display: flex;

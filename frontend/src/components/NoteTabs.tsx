@@ -183,7 +183,16 @@ export function NoteTabs() {
   };
   if (!tabs.length && !workspaceError) return null;
   return (
-    <div className="note-tabs" role="tablist" aria-label={t("열린 노트")} data-tauri-drag-region="false">
+    <div
+      className="note-tabs"
+      role="tablist"
+      aria-label={t("열린 노트")}
+      data-tauri-drag-region="false"
+      // 세로 휠로도 탭 줄을 가로로 넘긴다(스크롤바를 숨겼으므로).
+      onWheel={(event) => {
+        if (!event.deltaX) event.currentTarget.scrollLeft += event.deltaY;
+      }}
+    >
       {workspaceError && (
         <button
           type="button"
