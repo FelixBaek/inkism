@@ -70,7 +70,9 @@ export function BlockInsertPanel({ editor, onClose }: Readonly<{ editor: Editor;
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-            const first = groups[0]?.entries.find((entry) => entry.item.available(editor));
+            const first =
+              groups[0]?.entries.find((entry) => entry.item.available(editor)) ??
+              (ai && showAi && ai.available(editor) ? { item: ai } : undefined);
             if (first) {
               event.preventDefault();
               run(first);
