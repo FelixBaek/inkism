@@ -92,6 +92,17 @@ fn feed_base_rules() {
     );
 }
 
+#[test]
+fn redirect_only_to_github_release_hosts() {
+    let ok = |u: &str| redirect_allowed(&Url::parse(u).unwrap());
+    assert!(ok("https://github.com/FelixBaek/inkism/releases/download/v0.1.0/latest.json"));
+    assert!(ok("https://release-assets.githubusercontent.com/github-production-release-asset/1"));
+    assert!(ok("https://objects.githubusercontent.com/x"));
+    assert!(!ok("http://github.com/x"), "plain http redirect allowed");
+    assert!(!ok("https://evil.example/x"), "foreign host allowed");
+    assert!(!ok("https://github.com.evil.example/x"), "lookalike host allowed");
+}
+
 /// Minimal stored-entry zip writer: unlike `zip::ZipWriter` it keeps hostile
 /// names (duplicates, "..", absolute) exactly as given.
 fn make_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
