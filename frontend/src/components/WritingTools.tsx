@@ -15,7 +15,7 @@ import {
   reorderHTMLHeading,
 } from "../lib/writing-tools";
 import { navigateNoteAnchor, noteAnchors, type NoteAnchor } from "../lib/note-anchor";
-import { knowledge } from "../lib/knowledge";
+import { knowledge, type NoteProperty } from "../lib/knowledge";
 import { readPref, writePref } from "../lib/pref";
 import "./WritingTools.css";
 interface KnowledgeSettings {
@@ -49,6 +49,23 @@ function writingPanelTitle(panel: Panel) {
   if (panel === "templates") return t("템플릿");
   if (panel === "merge") return t("노트 합치기");
   return t("목차");
+}
+
+type TypePreset = { name: string; view: "table" | "cards" | "kanban"; content: string; properties: Omit<NoteProperty, "definition_id">[] };
+const sections = (...names: string[]) => names.map((name) => `<h2>${name}</h2><p></p>`).join("");
+// Localized at creation: definitions are stored data, so re-running in another language creates a separate set.
+function typePresets(): TypePreset[] {
+  const select = (name: string, options: string[], value = "") => ({ name, type: "select" as const, options, value });
+  return [
+    { name: t("독서 노트"), view: "table", content: `<h1>{{title}}</h1>${sections(t("요약"), t("인상 깊은 구절"), t("생각"))}`,
+      properties: [{ name: t("저자"), type: "text", value: "" }, select(t("독서 상태"), [t("읽을 예정"), t("읽는 중"), t("완독")], t("읽을 예정")), { name: t("평점"), type: "number", value: 0 }] },
+    { name: t("회의록"), view: "table", content: `<h1>{{title}}</h1><p>{{date}} {{time}}</p>${sections(t("안건"), t("결정 사항"), t("할 일"))}`,
+      properties: [{ name: t("참석자"), type: "person", value: [] }, select(t("회의 상태"), [t("예정"), t("완료")], t("예정"))] },
+    { name: t("프로젝트"), view: "kanban", content: `<h1>{{title}}</h1>${sections(t("목표"), t("범위"), t("진행 기록"))}`,
+      properties: [select(t("진행 상태"), [t("계획"), t("진행 중"), t("완료")], t("계획")), select(t("우선순위"), [t("높음"), t("보통"), t("낮음")], t("보통")), { name: t("담당자"), type: "person", value: [] }] },
+    { name: t("사람"), view: "cards", content: `<h1>{{title}}</h1>${sections(t("만난 기록"), t("메모"))}`,
+      properties: [{ name: t("회사"), type: "text", value: "" }, { name: t("역할"), type: "text", value: "" }, select(t("관계"), [t("동료"), t("친구"), t("가족"), t("기타")])] },
+  ];
 }
 
 export function WritingTools() {
@@ -390,6 +407,14 @@ export function WritingTools() {
       setPanel(null);
       setTimeout(() => setPanel("outline"), 0);
     });
+  const applyPreset = (preset: TypePreset) =>
+    void run(async () => {
+      if (!settings) return;
+      const result = await rpc<{ template_id: string; settings: KnowledgeSettings }>("type_preset_apply", { version: settings.version, ...preset });
+      setSettings(result.settings);
+      const note = await api.get(result.template_id);
+      setTemplates((rows) => (rows.some((row) => row.id === note.id) ? rows : [...rows, { ...note, preview: "" }]));
+    });
   const unregisterTemplate = (id: string) =>
     void run(async () => {
       if (!settings) return;
@@ -594,6 +619,17 @@ export function WritingTools() {
               ))}
             </div>
             {!templates.length && !busy && <p className="writing-tools-hint">{t("등록한 템플릿이 없습니다.")}</p>}
+            <fieldset className="writing-tools-field writing-tools-divided writing-tools-fieldset">
+              <legend>{t("유형 프리셋")}</legend>
+              <div className="writing-tools-actions">
+                {typePresets().map((preset) => (
+                  <button key={preset.name} type="button" className="btn btn-secondary" disabled={busy} onClick={() => applyPreset(preset)}>
+                    {t("{name} 만들기", { name: preset.name })}
+                  </button>
+                ))}
+              </div>
+              <p className="writing-tools-hint">{t("공통 속성, 기본값, 템플릿, 보기를 한 번에 만듭니다. 이미 있는 항목은 그대로 둡니다.")}</p>
+            </fieldset>
             <p className="writing-tools-hint">
               {t("템플릿의 {{title}}, {{date}}, {{time}}는 새 노트의 제목, 날짜, 시각으로 바뀝니다.")}
             </p>

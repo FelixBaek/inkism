@@ -617,3 +617,11 @@
   background: none;
   overflow: visible;
 }
+/* 설정 › 외부 AI 연결: 토큰 목록과 한 번만 보이는 새 토큰 */
+.agent-api-tokens { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.agent-api-tokens li { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.agent-api-secret { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.agent-api-secret p { flex-basis: 100%; }
+.agent-api-secret input { flex: 1; min-width: 0; font-family: var(--mono, monospace); }
+.agent-api-settings fieldset { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.agent-api-settings fieldset label { display: inline-flex; align-items: center; gap: 6px; }

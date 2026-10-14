@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
-const out=await build({stdin:{contents:"export * from './lib/portable-sync'; export {sha256} from './lib/portable-library';",resolveDir:new URL('../src/',import.meta.url).pathname,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'node',logLevel:'error'});
+const out=await build({stdin:{contents:"export * from './lib/portable-sync'; export {sha256} from './lib/portable-library';",resolveDir:new URL('../src/',import.meta.url).pathname,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'node',logLevel:'error',loader:{'.css':'empty'}});
 const m={exports:{} as any};new Function('module','exports',out.outputFiles[0].text)(m,m.exports);const {sha256,planFolderChanges,applyFolderChanges,readFolderHandle}=m.exports;
 const hash=async(s:string)=>sha256(new TextEncoder().encode(s));
 const id='12345678-1234-1234-1234-123456789012',aid='22345678-1234-1234-1234-123456789012',newAid='32345678-1234-1234-1234-123456789012';
@@ -39,3 +39,17 @@ p=await planFolderChanges([...files(),f('notes/A.md','[B](B.md)'),f('notes/B.md'
 p=await planFolderChanges([...files(),f('notes/Self.md','[self](Self.md)')],get);let self:any;await applyFolderChanges(p,new Set(p.changes.map((c:any)=>c.key)),{save:async(n:any)=>{self=n;return n;},patch:()=>{throw Error('unexpected');},upload:()=>{throw Error('unexpected');}});assert.equal(self.content,`[self](note://${self.id})`);
 p=await planFolderChanges([...files(),f('notes/Missing.md','![missing](../attachments/no.png)')],get);assert.equal(p.changes.length,0);assert.match(p.conflicts[0],/첨부파일/);
 console.log('PASS portable new-note cycles refused, self-links preserved, missing assets rejected in preview');
+
+// HTML note exported as Markdown with informational front matter: strip it, restore links, convert back.
+const hid='42345678-1234-1234-1234-123456789012',html='<p>Rich <a href="note://'+id+'">md</a> <a href="note://locked-1">x</a></p>';
+const hfile=`---\nid: "${hid}"\ntitle: "Rich: \\"q\\""\nproperties:\n  "rating": 4\n---\nRich [md](${id}.md) [x](inkism://note/locked-1)\n`;
+const hentry={id:hid,path:`notes/${hid}.md`,revision:2,format:'html',file_format:'markdown',source_sha256:await hash(html),portable_sha256:await hash(hfile),metadata:{title:'Rich'},baseline_metadata:{title:'Rich'}};
+const hmanifest={...manifest,notes:[entry,hentry]};const hnote={id:hid,title:'Rich',content:html,revision:2,content_format:'html',tags:[],notebook_id:null};
+const hget=async(x:string)=>x===hid?hnote:note;
+p=await planFolderChanges([...files(portable,hmanifest),f(hentry.path,hfile)],hget);assert.equal(p.unchanged,2);
+p=await planFolderChanges([...files(portable,hmanifest),f(hentry.path,hfile.replace('Rich [','Edited ['))],hget);assert.equal(p.changes.length,1);assert.equal(p.changes[0].content,`Edited [md](${id}.md) [x](inkism://note/locked-1)\n`);
+let converted:any;await applyFolderChanges(p,new Set([hid]),{save:async(n:any)=>{converted=n;return n;},patch:()=>{throw Error('unexpected');},upload:()=>{throw Error('unexpected');},fromMarkdown:async(md:string,format:string)=>`<${format}>${md}`});
+assert.equal(converted.content,`<html>Edited [md](note://${id}) [x](note://locked-1)\n`);assert.equal(converted.content_format,'html');assert.equal(converted.expected_source_sha256,hentry.source_sha256);
+const hrenamed=[...files(portable,hmanifest),f('notes/Rich title.md',hfile)];p=await planFolderChanges(hrenamed,hget);assert.equal(p.changes[0].kind,'rename');assert.equal(p.changes[0].key,hid);
+await assert.rejects(()=>planFolderChanges(files(portable,{...manifest,notes:[{...entry,file_format:'html'}]}),get),/목록/);
+console.log('PASS portable Markdown copies: front matter stripped, links restored, HTML/text notes converted back, renames by file format');

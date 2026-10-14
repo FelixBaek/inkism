@@ -5,7 +5,7 @@
 use crate::{integrate, launch, security};
 use google_auth::host::Controller;
 use local_api::engine::Process;
-use local_api::{start_upload_server, Clipper, Deadline, Engine, Handler, Native, Request, Response, SessionGate};
+use local_api::{start_upload_server, AgentApi, Clipper, Deadline, Engine, Handler, Native, Request, Response, SessionGate};
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -103,6 +103,8 @@ pub fn run(session: Session) -> local_api::Result<Option<PathBuf>> {
     handler.clipper = Some(clipper.clone());
     let mut uploads = start_upload_server(session.engine.clone(), session.gate.clone())?;
     handler.upload = Some(uploads.access.clone());
+    let agent = AgentApi::start(session.engine.clone(), session.gate.clone());
+    handler.agent = Some(agent.clone());
     let handler = Arc::new(handler);
 
     #[cfg(windows)]
@@ -179,6 +181,7 @@ pub fn run(session: Session) -> local_api::Result<Option<PathBuf>> {
         stop();
     }
     clipper.close();
+    agent.close();
     uploads.close();
     result?;
     let next = state.next_library.lock().unwrap_or_else(|p| p.into_inner()).take();
