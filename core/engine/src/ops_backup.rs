@@ -332,6 +332,7 @@ fn import_note(
         n.get("content").and_then(Value::as_str).unwrap_or(""),
         note_ids,
     );
+    let content = crate::links::remap_term_references(&content, content_format, note_ids);
     let text = crate::links::remap_note_urls(
         n.get("text").and_then(Value::as_str).unwrap_or(""),
         note_ids,
@@ -390,7 +391,7 @@ fn import_note(
     )?;
     conn.execute(
         "INSERT INTO notes_body(note_id, content, text) VALUES(?1,?2,?3)",
-        params![new_id, content.as_ref(), text.as_ref()],
+        params![new_id, content.as_str(), text.as_ref()],
     )?;
     // New-style backups carry the full membership list: remap every
     // entry through nb_map and rewrite memberships exactly (primary

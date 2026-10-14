@@ -81,3 +81,11 @@ to convert an old database once.
 
 [MIT](LICENSE). Bundled third-party files keep their own licenses:
 IBM Plex and Noto Emoji fonts (OFL, `frontend/public/fonts/`), Unicode data (`frontend/public/licenses/`).
+
+### Term definitions
+
+Select a short term in the rich editor and press `Ctrl+G` (`Cmd+G` on macOS), or choose **Term definition** in the selection toolbar. A short definition is stored inside the document. Hover, focus or click its dotted underline to read it. AI explanations use your configured provider and remain a draft until you explicitly save them.
+
+Optionally collect a definition in the glossary, link an existing note, or expand it into a new note. Removing an annotation does not delete the glossary entry or linked note. Markdown editing preserves definitions as inline HTML spans; exporting an HTML document to Markdown produces readable footnotes. Original Markdown exports preserve the source.
+
+[Figma: term-definition UI](https://www.figma.com/design/HJUtpZHxA9ssJQS6CSVhko/inkism?node-id=127-26733)

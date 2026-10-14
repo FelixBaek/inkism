@@ -83,3 +83,11 @@ Rust 테스트에 `--features encrypted-storage`를 붙이면 암호화 저장�
 
 [MIT](LICENSE). 함께 들어 있는 외부 파일은 각자의 라이선스를 따릅니다:
 IBM Plex·Noto Emoji 글꼴(OFL, `frontend/public/fonts/`), Unicode 데이터(`frontend/public/licenses/`).
+
+### 용어 설명
+
+서식 편집 화면에서 짧은 단어를 선택하고 `Ctrl+G`(macOS `Cmd+G`) 또는 선택 툴바의 **용어 설명**을 누릅니다. 설명은 본문 안에 저장되며, 점선 밑줄의 단어를 가리키거나 누르면 다시 볼 수 있습니다. AI 설명은 설정된 AI 연결을 사용하며, 초안을 확인하고 **설명 저장**을 눌러야 반영됩니다.
+
+필요할 때만 **용어집 · 노트 연결**을 펼쳐 용어집에 수집하거나 기존 노트를 연결하고 새 노트로 확장합니다. 설명 제거는 연결된 노트나 용어집 항목을 지우지 않습니다. Markdown 편집에서는 설명을 HTML span으로 보존하며, HTML 문서의 Markdown 내보내기는 읽을 수 있는 각주를 만듭니다. 원문 Markdown 내보내기는 원문을 보존합니다.
+
+[Figma: 용어 설명 UI](https://www.figma.com/design/HJUtpZHxA9ssJQS6CSVhko/inkism?node-id=127-26733)

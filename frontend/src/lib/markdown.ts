@@ -3,6 +3,7 @@ import { MarkdownManager } from "@tiptap/markdown";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { contentExtensions } from "../extensions/content-schema";
 import { sanitizeRichHtml } from "./sanitize";
+import { termAttrs, validTermDefinition } from "../extensions/term-definition";
 import { t } from "../i18n";
 import { inspectRichHTML } from "./rich-document";
 
@@ -15,7 +16,7 @@ const normalized = (doc: JSONContent) => schema.nodeFromJSON(doc).toJSON() as JS
 const equal = (a: JSONContent, b: JSONContent) => JSON.stringify(normalized(a)) === JSON.stringify(normalized(b));
 const needsHTML = (node: JSONContent): boolean =>
   ["details", "callout", "attachment"].includes(node.type || "") ||
-  Boolean(node.marks?.some((mark) => mark.type === "underline" || mark.type === "highlight")) ||
+  Boolean(node.marks?.some((mark) => mark.type === "underline" || mark.type === "highlight" || mark.type === "termDefinition")) ||
   Boolean(node.content?.some(needsHTML));
 const docOf = (node: JSONContent): JSONContent => ({ type: "doc", content: [node] });
 
@@ -83,7 +84,30 @@ export function textToMarkdown(text: string): string {
 
 export function sourceToMarkdown(content: string, format: "text" | "html" | "markdown" = "html"): string {
   if (format === "markdown") return content;
-  return format === "text" ? textToMarkdown(content) : htmlToMarkdown(content);
+  return format === "text" ? textToMarkdown(content) : portableTermMarkdown(content);
+}
+
+/** Portable copies expose definitions as ordinary Markdown footnotes. Canonical
+ * editing uses htmlToMarkdown and retains the lossless annotation span instead. */
+export function portableTermMarkdown(html: string): string {
+  if (!inspectRichHTML(html).editable) return htmlToMarkdown(html); // same loss checks
+  const root = document.createElement('div'); root.innerHTML = html;
+  const notes: {token:string; label:string; definition:string}[] = [];
+  for (const span of root.querySelectorAll<HTMLElement>('span[data-term-id][data-term-definition]')) {
+    const attrs = termAttrs(span);
+    if (!validTermDefinition(attrs)) continue;
+    // Unique per occurrence, even when a pasted term shares an annotation ID.
+    let token = `INKISMTERM${notes.length}END`;
+    while (html.includes(token)) token += 'X';
+    const label = `inkism-term-${notes.length + 1}-${attrs.id}`;
+    notes.push({token,label,definition:attrs.definition});
+    span.replaceWith(...Array.from(span.childNodes), document.createTextNode(token));
+  }
+  let body = htmlToMarkdown(root.innerHTML);
+  for (const note of notes) body = body.replace(note.token, `[^${note.label}]`);
+  if (!notes.length) return body;
+  const footnotes = notes.map(note => `[^${note.label}]: ${textToMarkdown(note.definition).replaceAll('\n', '\n    ')}`).join('\n\n');
+  return body.trimEnd() + '\n\n' + footnotes + '\n';
 }
 
 export function markdownFilename(title: string): string {

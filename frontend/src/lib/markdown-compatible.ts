@@ -5,12 +5,82 @@ import Image from "@tiptap/extension-image";
 import { TaskList, TaskItem } from "@tiptap/extension-list";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import { DOMParser as SchemaDOMParser } from "@tiptap/pm/model";
+import {canonicalRichHTML,inspectRichHTML} from "./rich-document";
 import { editableMarkdown } from "./markdown";
 import { sanitizeRichHtml } from "./sanitize";
+import {TermDefinition, termAttrs, validTermDefinition} from "../extensions/term-definition";
 import { t } from "../i18n";
 
-// Markdown with tables/checklists (GFM). No HTML-only marks or custom nodes.
+// A single audited inline extension; arbitrary HTML remains outside the GFM editor.
+const isSpace = (c: string | undefined) => c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f";
+function skipSpace(source: string, i: number): number {
+  while (isSpace(source[i])) i++;
+  return i;
+}
+/** Index just past the attribute value starting at `i`, or -1 when its quote is never closed. */
+function valueEnd(source: string, i: number): number {
+  const quote = source[i];
+  if (quote === '"' || quote === "'") {
+    const end = source.indexOf(quote, i + 1);
+    return end < 0 ? -1 : end + 1;
+  }
+  while (i < source.length && !isSpace(source[i])) i++;
+  return i;
+}
+/** Attribute names in source order, including duplicates the DOM parser would drop. */
+function attributeNames(source: string): string[] {
+  const names: string[] = [];
+  let i = 0;
+  while (i < source.length) {
+    i = skipSpace(source, i);
+    const start = i;
+    while (i < source.length && !isSpace(source[i]) && source[i] !== "=") i++;
+    if (i === start) break;
+    names.push(source.slice(start, i).toLowerCase());
+    i = skipSpace(source, i);
+    if (source[i] !== "=") continue;
+    i = valueEnd(source, skipSpace(source, i + 1));
+    if (i < 0) break;
+  }
+  return names;
+}
+
+const MarkdownTermDefinition = TermDefinition.extend({
+  markdownTokenName: 'termDefinition',
+  markdownTokenizer: {
+    name: 'termDefinition', level: 'inline', start: '<span',
+    tokenize(source, _tokens, lexer) {
+      const match = /^<span\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/span\s*>/i.exec(source);
+      if (!match || /(^|[^\\])<\/?[a-z!]/i.test(match[2]) || /\n\s*\n/.test(match[2])) return undefined;
+      const template = document.createElement('template'); template.innerHTML = match[0];
+      const span = template.content.firstElementChild;
+      if (!span || template.content.childNodes.length !== 1 || span.tagName !== 'SPAN') return undefined;
+      const allowed = new Set(['data-term-id','data-term-definition','data-term-glossary-id','data-term-note-id']);
+      if (Array.from(span.attributes).some(a => !allowed.has(a.name))) return undefined;
+      // Reject duplicate attributes before the DOM parser can normalize them away.
+      const names = attributeNames(match[1]);
+      if (new Set(names).size !== names.length || names.length !== span.attributes.length) return undefined;
+      const attrs = termAttrs(span as HTMLElement);
+      if (!validTermDefinition(attrs)) return undefined;
+      return {type:'termDefinition',raw:match[0],attrs,tokens:lexer.inlineTokens(match[2])};
+    },
+  },
+  parseMarkdown(token, helpers) {
+    return helpers.applyMark('termDefinition', helpers.parseInline(token.tokens || []), token.attrs);
+  },
+  renderMarkdown(node, helpers) {
+    if (!validTermDefinition(node.attrs)) throw compatibilityError();
+    const span = document.createElement('span'),a=node.attrs;
+    span.dataset.termId=a.id;span.dataset.termDefinition=a.definition;
+    if(a.glossaryId)span.dataset.termGlossaryId=a.glossaryId;
+    if(a.noteId)span.dataset.termNoteId=a.noteId;
+    return span.outerHTML.replace('</span>',helpers.renderChildren(node)+'</span>');
+  },
+});
+
+// Markdown with tables/checklists and validated inline term definitions.
 export const markdownContentExtensions = () => [
+  MarkdownTermDefinition,
   StarterKit.configure({
     trailingNode: false,
     underline: false,
@@ -81,6 +151,13 @@ export function compatibleMarkdownHTML(source: string): string {
   return html;
 }
 export function compatibleHTMLMarkdown(html: string): string {
+  if (html.includes('data-term-id')) {
+    if (!inspectRichHTML(html).editable) throw compatibilityError();
+    const template = document.createElement('template'); template.innerHTML = sanitizeRichHtml(html);
+    const doc = SchemaDOMParser.fromSchema(schema).parse(template.content, {preserveWhitespace:'full'}).toJSON();
+    if (canonicalRichHTML(html) !== canonicalRichHTML(generateHTML(doc,extensions))) throw compatibilityError();
+    return serializeCompatibleMarkdown(doc);
+  }
   const source = editableMarkdown(html);
   compatibleMarkdownHTML(source); // refuses HTML fallbacks rather than dropping them
   return source;
