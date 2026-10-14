@@ -1343,3 +1343,17 @@
   font: normal 11px/1 var(--font-sans);
   color: var(--muted);
 }
+/* 글자색·형광펜 단추: 아이콘 아래 색 막대 */
+.tb-color-icon {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.tb-color-icon > i {
+  display: block;
+  width: 16px;
+  height: 3px;
+  border-radius: 1px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
+}

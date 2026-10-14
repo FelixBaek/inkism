@@ -28,7 +28,6 @@ import {
   SubscriptIcon,
   SuperscriptIcon,
   TaskList,
-  TextColor,
   Underline as UnderlineIcon,
 } from "../icons";
 import { useStore } from "../store";
@@ -85,6 +84,20 @@ const FONTS: [string, string | null][] = [
   [t("명조"), SERIF],
   [t("고정폭"), MONO],
 ];
+/** 아이콘 아래 굵은 막대로 지금 색(없으면 누르면 칠할 색)을 보여 준다. */
+function ColorSwatchIcon({ color, children }: Readonly<{ color: string; children: ReactNode }>) {
+  return (
+    <span className="tb-color-icon" aria-hidden>
+      {children}
+      <i style={{ background: color }} />
+    </span>
+  );
+}
+const TextGlyph = () => (
+  <svg width={13} height={13} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 14 8 2l5 12M4.9 9.5h6.2" />
+  </svg>
+);
 const PARAGRAPHS: [string, string][] = [
   ["paragraph", t("본문")],
   ["1", t("제목 1")],
@@ -751,7 +764,9 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
               0,
               t("글자색"),
               t("글자색 고르기"),
-              <TextColor size={16} aria-hidden />,
+              <ColorSwatchIcon color={colorOf("color") ?? lastColor.color}>
+                <TextGlyph />
+              </ColorSwatchIcon>,
               Boolean(colorOf("color")),
               () => applyColor("color", colorOf("color") ? null : lastColor.color),
             )}
@@ -760,7 +775,9 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
               0,
               t("형광펜·배경색"),
               t("형광펜·배경색 고르기"),
-              <Highlighter size={16} aria-hidden />,
+              <ColorSwatchIcon color={colorOf("highlight") ?? lastColor.highlight}>
+                <Highlighter size={13} aria-hidden />
+              </ColorSwatchIcon>,
               editor.isActive("highlight"),
               () => applyColor("highlight", editor.isActive("highlight") ? null : lastColor.highlight),
             )}
