@@ -182,57 +182,57 @@
   font-weight: 500;
 }
 
-/* 색 선택 26:3923 */
+/* 색 선택 (Figma Nocturne/Editor popover/Color palette 163:36906) */
 .tb-palette {
   width: 278px;
   box-sizing: border-box;
   padding: 12px 16px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 .tb-palette-head {
   display: flex;
   align-items: center;
   gap: 2px;
-  height: 28px;
+  height: 32px;
 }
 .tb-palette-head h3 {
   flex: 1;
   margin: 0;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
 }
-.tb-swatches {
+.tb-palette-tools {
   display: grid;
-  grid-template-columns: repeat(7, 28px);
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
-.tb-swatch {
+.tb-palette-tool {
   position: relative;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  cursor: pointer;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  padding: 0 12px 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--hover);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
 }
-.tb-swatch-action {
-  background: var(--surface);
+.tb-palette-tool svg {
   color: var(--muted);
 }
-.tb-swatch-action:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--hover);
+.tb-palette-tool:hover {
+  background: var(--active);
 }
-.tb-swatch:disabled {
-  opacity: 0.4;
-  cursor: default;
+.tb-palette-tool:has(input:focus-visible) {
+  outline: var(--focus-ring);
 }
-.tb-swatch input[type="color"] {
+.tb-palette-tool input[type="color"] {
   position: absolute;
   inset: 0;
   opacity: 0;
@@ -242,16 +242,48 @@
   border: 0;
   padding: 0;
 }
-.tb-swatch:has(input:focus-visible) {
-  outline: var(--focus-ring);
+.tb-palette-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.tb-swatch:not(.tb-swatch-action):hover {
-  transform: scale(1.08);
+.tb-palette-section-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: -4px;
+}
+.tb-palette-label {
+  flex: 1;
+  font-size: 12px;
+  color: var(--faint);
+}
+.tb-swatches {
+  display: grid;
+  grid-template-columns: repeat(7, 28px);
+  gap: 8px;
+}
+.tb-swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--hover);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.is-highlight .tb-swatch {
+  color: #1c1b19;
+}
+.tb-swatch:hover {
+  border-color: var(--border-strong);
 }
 .tb-swatch.is-active {
-  box-shadow:
-    0 0 0 2px var(--raised),
-    0 0 0 3.5px var(--green);
+  border: 2px solid var(--accent-text);
 }
 
 /* 목록 모양 26:4042 · 26:4103 */

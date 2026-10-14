@@ -2478,5 +2478,8 @@
   "CLI 기본 모델": "Default CLI model",
   "{cli}에 로그인된 계정으로 실행합니다. 주소와 API 키는 필요 없습니다.": "Runs with the account signed in to {cli}. No address or API key is needed.",
   "이 컴퓨터의 CLI": "CLIs on this computer",
-  "뜻 달기": "Add definition"
+  "뜻 달기": "Add definition",
+  "기본 색": "Basic colors",
+  "직접 고른 색 · 최근 7개": "Custom colors · last 7",
+  "가": "A"
 }

@@ -158,6 +158,7 @@ export {
   CodeSimpleIcon as InlineCode,
   TextAUnderlineIcon as TextColor,
   DropSlashIcon as NoColor,
+  ProhibitIcon as Prohibit,
   MagicWandIcon as MagicWand,
   ArrowsInSimpleIcon as Shorter,
   ArrowsOutSimpleIcon as Longer,
