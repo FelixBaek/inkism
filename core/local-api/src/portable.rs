@@ -1,13 +1,13 @@
 //! Explicit portable copies. The database remains authoritative; folder import
 //! checks both the source digest and revision before any individual note save.
-use crate::{Deadline, Handler, Request, Response, Result};
+use crate::{Deadline, Engine, Handler, Request, Response, Result};
 use regex::{Captures, Regex};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap};
 use std::io::{Cursor, Read, Write, Seek, SeekFrom};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
 const LIMIT: usize = 64 << 20;
@@ -87,32 +87,17 @@ fn sources(h: &Handler, deadline: Deadline) -> Result<Vec<u8>> {
     let notes: Vec<Value> = snapshot["notes"].as_array().unwrap().iter().filter(|n| exported(n) && n["content_format"] != "markdown").map(|n| json!({"id":n["id"],"revision":n["revision"],"format":n["content_format"].as_str().unwrap_or("html"),"content":n["content"]})).collect();
     Ok(serde_json::to_vec(&json!({"notes":notes}))?)
 }
-fn bundle(h: &Handler, req: &ExportRequest, deadline: Deadline) -> Result<(Vec<u8>, usize)> {
-    let engine = h.engine()?;
-    let (snapshot, size) = snapshot(h, deadline)?;
-    let notes = snapshot["notes"].as_array().unwrap();
-    let mut files = BTreeMap::new();
-    let mut bodies = BTreeMap::new();
-    let mut skipped = Vec::new();
-    for note in notes {
-        let id = note["id"].as_str().ok_or("노트 ID가 없습니다")?; if id.is_empty() || id.len()>64 || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b==b'-' || b==b'_') { return Err("올바르지 않은 문서 ID입니다".into()); }
-        // Locked bodies are never decrypted; the manifest lists them so the user sees what is missing.
-        if !exported(note) { skipped.push(json!({"id":id,"title":note["title"],"reason":if note["locked"] == true {"locked"} else {"trashed"}})); continue; }
-        let format = note["content_format"].as_str().unwrap_or("html");
-        let source = note["content"].as_str().ok_or("본문이 없습니다")?;
-        let (body, converted) = match req.markdown.get(id) {
-            Some(c) if format != "markdown" => {
-                if note["revision"].as_i64() != Some(c.revision) { return Err("노트가 변경되었습니다. 다시 시도해 주세요".into()); }
-                // A conversion must not introduce a reference to an unrelated attachment.
-                for x in ASSET.captures_iter(&c.markdown) { if !ASSET.captures_iter(source).any(|y| y[2] == x[2]) { return Err("변환 결과의 첨부파일이 원문과 다릅니다".into()); } }
-                (c.markdown.as_str(), true)
-            }
-            _ => (source, false),
-        };
-        files.insert(id.to_owned(), format!("notes/{id}.{}", if converted { "md" } else { ext(format)? }));
-        bodies.insert(id.to_owned(), body);
-    }
-    if let Some(id) = req.markdown.keys().find(|id| !bodies.contains_key(*id)) { return Err(format!("노트가 변경되었습니다. 다시 시도해 주세요: {id}").into()); }
+/// The app's Markdown conversion when one was sent, otherwise the exact source.
+fn note_body<'a>(note: &Value, source: &'a str, converted: Option<&'a Converted>) -> Result<(&'a str, bool)> {
+    let Some(c) = converted else { return Ok((source, false)) };
+    if note["revision"].as_i64() != Some(c.revision) { return Err("노트가 변경되었습니다. 다시 시도해 주세요".into()); }
+    // A conversion must not introduce a reference to an unrelated attachment.
+    if ASSET.captures_iter(&c.markdown).any(|x| !ASSET.captures_iter(source).any(|y| y[2] == x[2])) { return Err("변환 결과의 첨부파일이 원문과 다릅니다".into()); }
+    Ok((c.markdown.as_str(), true))
+}
+type Assets = (BTreeMap<String, String>, BTreeMap<String, Vec<u8>>, Vec<Value>);
+/// Verified copies of every attachment the bodies reference, within the size budget.
+fn collect_assets(engine: &Arc<dyn Engine>, bodies: &BTreeMap<String, &str>, size: usize, deadline: Deadline) -> Result<Assets> {
     let mut assets = BTreeMap::new();
     let mut asset_bytes = BTreeMap::new();
     let mut budget = size;
@@ -135,6 +120,27 @@ fn bundle(h: &Handler, req: &ExportRequest, deadline: Deadline) -> Result<(Vec<u
             assets.insert(id.to_owned(), path.clone()); asset_bytes.insert(path, bytes.bytes);
         }
     }
+    Ok((assets, asset_bytes, asset_manifest))
+}
+fn bundle(h: &Handler, req: &ExportRequest, deadline: Deadline) -> Result<(Vec<u8>, usize)> {
+    let engine = h.engine()?;
+    let (snapshot, size) = snapshot(h, deadline)?;
+    let notes = snapshot["notes"].as_array().unwrap();
+    let mut files = BTreeMap::new();
+    let mut bodies = BTreeMap::new();
+    let mut skipped = Vec::new();
+    for note in notes {
+        let id = note["id"].as_str().ok_or("노트 ID가 없습니다")?; if id.is_empty() || id.len()>64 || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b==b'-' || b==b'_') { return Err("올바르지 않은 문서 ID입니다".into()); }
+        // Locked bodies are never decrypted; the manifest lists them so the user sees what is missing.
+        if !exported(note) { skipped.push(json!({"id":id,"title":note["title"],"reason":if note["locked"] == true {"locked"} else {"trashed"}})); continue; }
+        let format = note["content_format"].as_str().unwrap_or("html");
+        let source = note["content"].as_str().ok_or("본문이 없습니다")?;
+        let (body, converted) = note_body(note, source, req.markdown.get(id).filter(|_| format != "markdown"))?;
+        files.insert(id.to_owned(), format!("notes/{id}.{}", if converted { "md" } else { ext(format)? }));
+        bodies.insert(id.to_owned(), body);
+    }
+    if let Some(id) = req.markdown.keys().find(|id| !bodies.contains_key(*id)) { return Err(format!("노트가 변경되었습니다. 다시 시도해 주세요: {id}").into()); }
+    let (assets, asset_bytes, asset_manifest) = collect_assets(engine, &bodies, size, deadline)?;
     let mut entries = Vec::new();
     let mut archive = ZipWriter::new(LimitedZip(Cursor::new(Vec::new())));
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);

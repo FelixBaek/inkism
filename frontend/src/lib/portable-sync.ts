@@ -12,7 +12,11 @@ const safePath=(path:string)=>!path.startsWith('/')&&!path.includes('\\')&&!path
 const rx=(text:string)=>text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 export { stripFrontmatter };
 const fileFormat=(entry:PortableEntry)=>entry.file_format??entry.format;
-const fromMarkdown=async(markdown:string,format:ContentFormat)=>{if(format==='markdown')return markdown;const html=(await import('./markdown')).markdownToHTML(markdown);return format==='text'?html.text:html.content;};
+const fromMarkdown=async(markdown:string,format:ContentFormat)=>{
+ if(format==='markdown')return markdown;
+ const html=(await import('./markdown')).markdownToHTML(markdown);
+ return format==='text'?html.text:html.content;
+};
 const refs=(source:string,path:string)=>new RegExp(`(^|[="'\\s(<])\\.\\./${rx(path)}(?=[?"'\\s<>\\)\\]#]|$)`,'gm');
 export async function collectFolderFiles(files:File[]):Promise<Map<string,File>> {
  if(files.length>4096||files.reduce((n,f)=>n+f.size,0)>LIMIT)throw new Error(t('외부 편집 폴더는 64 MiB 이하만 지원합니다.'));
@@ -46,7 +50,8 @@ export async function planFolderChanges(files:File[],get:typeof api.get=api.get)
    if(restorePortableLinks(current.content,manifest)!==current.content)throw new Error(t('원문에 내보낸 파일과 같은 상대 경로가 있어 자동으로 반영할 수 없습니다.'));
    if(metadataChanged){if(typeof metadata.title!=='string'||!Array.isArray(metadata.tags)||metadata.tags.some(t=>typeof t!=='string')||!(metadata.notebook_id===null||typeof metadata.notebook_id==='string'))throw new Error(t('제목·태그·폴더 메타데이터가 올바르지 않습니다.'));details.push(t('제목·태그·폴더'));}
    if(bodyChanged)details.push(t('본문'));if(assets.length)details.push(t('첨부파일 새 사본'));
-   plan.changes.push({key:entry.id,kind,path,previousPath:kind==='rename'?entry.path:undefined,title:kind==='rename'?path.slice(6).replace(/\.[^.]+$/,''):(metadataChanged?metadata.title!:current.title),tags:metadataChanged?metadata.tags:current.tags,notebook_id:metadataChanged?metadata.notebook_id:current.notebook_id,entry,current,content:path.endsWith('.md')?stripFrontmatter(portable):portable,assets,details});
+   const keptTitle=metadataChanged?metadata.title!:current.title;
+   plan.changes.push({key:entry.id,kind,path,previousPath:kind==='rename'?entry.path:undefined,title:kind==='rename'?path.slice(6).replace(/\.[^.]+$/,''):keptTitle,tags:metadataChanged?metadata.tags:current.tags,notebook_id:metadataChanged?metadata.notebook_id:current.notebook_id,entry,current,content:path.endsWith('.md')?stripFrontmatter(portable):portable,assets,details});
   }catch(e){plan.conflicts.push(`${path}: ${e instanceof Error?e.message:'확인 실패'}`);}
  }
  for(const [path,{file}] of candidates){if(used.has(path))continue;try{const content=await decode(file);for(const match of content.matchAll(/\.\.\/attachments\/[^\s\"'<>\)\]?#]+/g)){if(!plan.assets.has(match[0].slice(3)))throw new Error(t('참조하는 첨부파일이 없습니다.'));}const assets=[...plan.assets.keys()].filter(p=>refs(content,p).test(content)&&changedAssets.has(p));plan.changes.push({key:'portable-'+(await hashText(JSON.stringify(manifest.notes.map(n=>[n.id,n.source_sha256]).sort((a,b)=>String(a)<String(b)?-1:String(a)>String(b)?1:0))+'\n'+path)).slice(0,48),kind:'create',path,title:path.slice(6).replace(/\.[^.]+$/,''),content,assets,details:[t('새 노트')]});}catch(e){plan.conflicts.push(`${path}: ${e instanceof Error?e.message:'확인 실패'}`);}}
@@ -54,29 +59,49 @@ export async function planFolderChanges(files:File[],get:typeof api.get=api.get)
  return plan;
 }
 export type FolderApplyResult={saved:number;errors:string[];applied:Map<string,Note|{id:string;revision:number}>};
-/** Immutable attachment copies and guarded individual writes: no destructive file writes. */
-export async function applyFolderChanges(plan:FolderPlan,selected:Set<string>,deps:{save:typeof api.save;patch:(id:string,revision:number,sourceHash:string)=>Promise<{id:string;revision:number}>;upload:typeof api.uploadAttachment;fromMarkdown?:typeof fromMarkdown}={save:api.save,patch:(id:string,revision:number,sourceHash:string)=>rpc<{id:string;revision:number}>('patch',{id,revision,changes:{trashed:true},require_editable:true,expected_source_sha256:sourceHash}),upload:api.uploadAttachment}):Promise<FolderApplyResult>{
- const result:FolderApplyResult={saved:0,errors:[],applied:new Map()},uploaded=new Map<string,string>();
- const selectedChanges=plan.changes.filter(c=>selected.has(c.key));
- const references=(content:string,path:string)=>new RegExp(`(^|[="'\\s(<\\[])(?:\\./)?${rx(path.slice(6))}(?=[#?|"'\\s<>\\)\\]]|$)`,'m').test(content);
- const dependencies=new Map(selectedChanges.map(c=>[c.key,plan.changes.filter(other=>other.kind==='create'&&other.key!==c.key&&references(c.content,other.path)).map(other=>other.key)]));
+type FolderDeps={save:typeof api.save;patch:(id:string,revision:number,sourceHash:string)=>Promise<{id:string;revision:number}>;upload:typeof api.uploadAttachment;fromMarkdown?:typeof fromMarkdown};
+const folderDeps:FolderDeps={save:api.save,patch:(id:string,revision:number,sourceHash:string)=>rpc<{id:string;revision:number}>('patch',{id,revision,changes:{trashed:true},require_editable:true,expected_source_sha256:sourceHash}),upload:api.uploadAttachment};
+const noteReference=(path:string)=>new RegExp(`(^|[="'\\s(<[])(?:\\./)?${rx(path.slice(6))}(?=[#?|"'\\s<>)\\]]|$)`,'m');
+/** Dependency order: a change comes after the new notes it links to; cycles fail. */
+function orderChanges(plan:FolderPlan,selectedChanges:FolderChange[]){
+ const dependencies=new Map(selectedChanges.map(c=>[c.key,plan.changes.filter(other=>other.kind==='create'&&other.key!==c.key&&noteReference(other.path).test(c.content)).map(other=>other.key)]));
  const ordered:FolderChange[]=[],visited=new Set<string>(),visiting=new Set<string>(),failed=new Set<string>();
  const visit=(c:FolderChange):boolean=>{if(visiting.has(c.key)){failed.add(c.key);return false;}if(visited.has(c.key))return !failed.has(c.key);visiting.add(c.key);for(const key of dependencies.get(c.key)??[]){const target=selectedChanges.find(x=>x.key===key);if(!target||!visit(target))failed.add(c.key);}visiting.delete(c.key);visited.add(c.key);ordered.push(c);return !failed.has(c.key);};
  selectedChanges.forEach(visit);
+ return {dependencies,ordered,failed};
+}
+type ApplyContext={plan:FolderPlan;selected:Set<string>;deps:FolderDeps;uploaded:Map<string,string>;links:PortableManifest};
+/** Writes one change; attachments upload once and are shared between notes. */
+async function applyChange(c:FolderChange,{plan,selected,deps,uploaded,links}:ApplyContext){
+ if(c.kind==='delete')return deps.patch(c.key,c.current!.revision,c.entry!.source_sha256);
+ let content=c.content;
+ for(const match of content.matchAll(/\.\.\/attachments\/[^\s"'<>)\]?#]+/g)){if(!plan.assets.has(match[0].slice(3)))throw new Error(t('참조하는 첨부파일이 없습니다.'));}
+ if(plan.changes.some(x=>x.kind==='create'&&!selected.has(x.key)&&noteReference(x.path).test(content)))throw new Error(t('참조하는 새 노트도 함께 선택해 주세요.'));
+ for(const path of c.assets){
+  let id=uploaded.get(path);
+  if(!id){const file=plan.assets.get(path);if(!file)throw new Error(t('첨부파일이 없습니다.'));id=(await deps.upload(file,new AbortController().signal)).id;uploaded.set(path,id);} // NOSONAR: each upload is reused by later notes
+  content=content.replace(refs(content,path),(_all,prefix)=>`${prefix}/api/attachments/${id}`);
+ }
+ content=restorePortableLinks(content,links);
+ // HTML/text notes exported as Markdown are converted back to their own format.
+ if(c.entry&&fileFormat(c.entry)!==c.entry.format)content=await (deps.fromMarkdown??fromMarkdown)(content,c.entry.format);
+ return deps.save({id:c.key,title:c.title,content,content_format:c.entry?.format??extension(c.path)!,tags:c.tags??[],notebook_id:c.notebook_id??null,...(c.current?{revision:c.current.revision,require_existing:true,expected_source_sha256:c.entry!.source_sha256}:{require_absent:true})});
+}
+/** Immutable attachment copies and guarded individual writes: no destructive file writes. */
+export async function applyFolderChanges(plan:FolderPlan,selected:Set<string>,deps:FolderDeps=folderDeps):Promise<FolderApplyResult>{
+ const result:FolderApplyResult={saved:0,errors:[],applied:new Map()};
+ const selectedChanges=plan.changes.filter(c=>selected.has(c.key));
+ const {dependencies,ordered,failed}=orderChanges(plan,selectedChanges);
  // Include renamed and newly created targets so links keep note IDs.
  const links={...plan.manifest,notes:[...plan.manifest.notes,...plan.changes.filter(c=>c.kind==='rename').map(c=>({...c.entry!,path:c.path})),...selectedChanges.filter(c=>c.kind==='create').map(c=>({id:c.key,path:c.path,format:extension(c.path)!,revision:1,source_sha256:'',portable_sha256:'',metadata:{title:c.title}}))]};
- for(const c of ordered){try{
-  if(failed.has(c.key)||(dependencies.get(c.key)??[]).some(key=>failed.has(key)))throw new Error(t('참조하는 새 노트 반영에 실패했습니다. 순환 링크는 파일에서 잠시 제거하고 노트를 반영한 뒤 다시 추가해 주세요.'));
-  if(c.kind==='delete'){const saved=await deps.patch(c.key,c.current!.revision,c.entry!.source_sha256);result.applied.set(c.key,saved);result.saved++;continue;}
-  let content=c.content;
-  for(const match of content.matchAll(/\.\.\/attachments\/[^\s\"'<>\)\]?#]+/g)){if(!plan.assets.has(match[0].slice(3)))throw new Error(t('참조하는 첨부파일이 없습니다.'));}
-  for(const other of plan.changes.filter(x=>x.kind==='create'&&!selected.has(x.key))){if(new RegExp(`(^|[=\"'\\s(<\\[])(?:\\./)?${rx(other.path.slice(6))}(?=[#?|\"'\\s<>\\)\\]]|$)`,'m').test(content))throw new Error(t('참조하는 새 노트도 함께 선택해 주세요.'));}
-  for(const path of c.assets){let id=uploaded.get(path);if(!id){const file=plan.assets.get(path);if(!file)throw new Error(t('첨부파일이 없습니다.'));id=(await deps.upload(file,new AbortController().signal)).id;uploaded.set(path,id);}content=content.replace(refs(content,path),(_all,prefix)=>`${prefix}/api/attachments/${id}`);}
-  content=restorePortableLinks(content,links);
-  // HTML/text notes exported as Markdown are converted back to their own format.
-  if(c.entry&&fileFormat(c.entry)!==c.entry.format)content=await (deps.fromMarkdown??fromMarkdown)(content,c.entry.format);
-  const saved=await deps.save({id:c.key,title:c.title,content,content_format:c.entry?.format??extension(c.path)!,tags:c.tags??[],notebook_id:c.notebook_id??null,...(c.current?{revision:c.current.revision,require_existing:true,expected_source_sha256:c.entry!.source_sha256}:{require_absent:true})});result.applied.set(c.key,saved);result.saved++;
- }catch(e){failed.add(c.key);result.errors.push(`${c.title||c.path}: ${e instanceof Error?e.message:'저장 실패'}`);}}
+ const context:ApplyContext={plan,selected,deps,uploaded:new Map(),links};
+ for(const c of ordered){
+  try{
+   if(failed.has(c.key)||(dependencies.get(c.key)??[]).some(key=>failed.has(key)))throw new Error(t('참조하는 새 노트 반영에 실패했습니다. 순환 링크는 파일에서 잠시 제거하고 노트를 반영한 뒤 다시 추가해 주세요.'));
+   result.applied.set(c.key,await applyChange(c,context)); // NOSONAR: dependency order requires one write at a time
+   result.saved++;
+  }catch(e){failed.add(c.key);result.errors.push(`${c.title||c.path}: ${e instanceof Error?e.message:'저장 실패'}`);}
+ }
  return result;
 }
 /** Directory handles stay only in memory. Reconnect after closing settings/restarting. */
@@ -97,7 +122,11 @@ export interface WritableFolderHandle extends FolderHandle {
 /** HTML/text notes are converted with the editor's lossless Markdown converter;
  * a note it cannot preserve keeps its exact source file. */
 export async function fetchPortableZip():Promise<{response:Response;locked:number}> {
- const post=async(body:unknown)=>{const response=await fetch('/api/portable/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!response.ok)throw new Error((await response.json().catch(()=>({}))).error||t('폴더 내보내기에 실패했습니다.'));return response;};
+ const post=async(body:unknown)=>{
+  const response=await fetch('/api/portable/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!response.ok)throw new Error((await response.json().catch(()=>({}))).error||t('폴더 내보내기에 실패했습니다.'));
+  return response;
+ };
  const {notes}=await (await post({sources:true})).json() as {notes:{id:string;revision:number;format:ContentFormat;content:string}[]};
  const markdown:Record<string,{revision:number;markdown:string}>={};
  if(notes.length){const m=await import('./markdown');for(const n of notes){try{markdown[n.id]={revision:n.revision,markdown:n.format==='text'?m.textToMarkdown(n.content):m.htmlToMarkdown(n.content)};}catch{/* exact source file */}}}

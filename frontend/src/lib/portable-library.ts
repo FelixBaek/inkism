@@ -30,7 +30,7 @@ function escaped(text: string) { return text.replace(/[.*+?^${}()|[\]\\]/g,"\\$&
 export function restorePortableLinks(source: string, manifest: PortableManifest): string {
   let result = source;
   for (const a of manifest.attachments) result = result.replace(new RegExp(`(^|[="'\\s(<])\\.\\./${escaped(a.path)}(?=[?"'\\s<>\\)\\]#]|$)`,"gm"), (_all, prefix) => `${prefix}/api/attachments/${a.id}`);
-  result = result.replace(/(^|[="'\s(<\[])inkism:\/\/note\/([A-Za-z0-9_-]+)(?=[#?|"'\s<>\)\]]|$)/gm, (_all, prefix, id) => `${prefix}note://${id}`);
+  result = result.replace(/(^|[="'\s(<[])inkism:\/\/note\/([A-Za-z0-9_-]+)(?=[#?|"'\s<>)\]]|$)/gm, (_all, prefix, id) => `${prefix}note://${id}`);
   for (const n of manifest.notes) result = result.replace(new RegExp(`(^|[="'\\s(<\\[])(?:\\./)?${escaped(n.path.slice(6))}(?=[#?|"'\\s<>\\)\\]]|$)`,"gm"), (_all, prefix) => `${prefix}note://${n.id}`);
   return result;
 }

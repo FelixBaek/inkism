@@ -619,8 +619,8 @@ export function WritingTools() {
               ))}
             </div>
             {!templates.length && !busy && <p className="writing-tools-hint">{t("등록한 템플릿이 없습니다.")}</p>}
-            <div className="writing-tools-field writing-tools-divided" role="group" aria-label={t("유형 프리셋")}>
-              {t("유형 프리셋")}
+            <fieldset className="writing-tools-field writing-tools-divided writing-tools-fieldset">
+              <legend>{t("유형 프리셋")}</legend>
               <div className="writing-tools-actions">
                 {typePresets().map((preset) => (
                   <button key={preset.name} type="button" className="btn btn-secondary" disabled={busy} onClick={() => applyPreset(preset)}>
@@ -629,7 +629,7 @@ export function WritingTools() {
                 ))}
               </div>
               <p className="writing-tools-hint">{t("공통 속성, 기본값, 템플릿, 보기를 한 번에 만듭니다. 이미 있는 항목은 그대로 둡니다.")}</p>
-            </div>
+            </fieldset>
             <p className="writing-tools-hint">
               {t("템플릿의 {{title}}, {{date}}, {{time}}는 새 노트의 제목, 날짜, 시각으로 바뀝니다.")}
             </p>
