@@ -1,0 +1,55 @@
+import {chromium} from './browser-env.ts';import {libraryTool} from './library-tools.ts';
+import assert from 'node:assert/strict';
+const base=process.env.INKISM_URL||'http://127.0.0.1:48289';
+const rpc=async(op:string,args={})=>{const v=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
+const save=(note:object)=>rpc('save',{note:{content_format:'html',...note}});
+const a=await save({title:'Src A',content:'<p>Alpha measured 42 units.</p>'});
+const original=`<p>Old fact.</p><p><a href="note://${a.id}">Src A</a></p>`;
+const wikiNote=await save({title:'Topic',content:original});
+await save({title:'Src B',content:`<p><a href="note://${wikiNote.id}">Topic</a> Beta confirms it.</p>`});
+const locked=await save({title:'Hidden',content:`<p><a href="note://${wikiNote.id}">Topic</a> SECRETLOCKED</p>`});
+await rpc('vault_create',{password:'test-password-123'});await rpc('vault_lock_note',{id:locked.id,revision:locked.revision});
+for(let i=0;i<100&&(await rpc('wiki_sources',{note_id:wikiNote.id})).items.length<2;i++)await new Promise(r=>setTimeout(r,100));
+assert.equal((await rpc('wiki_sources',{note_id:wikiNote.id})).items.length,2,'two linked unlocked sources');
+await rpc('workspace_set',{ids:[wikiNote.id],active:wikiNote.id,locations:{}});
+const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
+try{
+ const p=await browser.newPage({viewport:{width:1500,height:1000}}),errors:string[]=[];p.on('pageerror',e=>errors.push(e.message));
+ await p.addInitScript(()=>{localStorage.setItem('inkism.lang','ko');localStorage.setItem('inkism.inspector','false');localStorage.setItem('inkism.ai.config',JSON.stringify({enabled:true,endpoint:'http://127.0.0.1:49999/chat',model:'test-model'}));});
+ const sent:string[]=[];
+ await p.route('http://127.0.0.1:49999/chat',async route=>{if(route.request().method()==='OPTIONS'){await route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'}});return;}sent.push(route.request().postData()??'');const body=`<p>Old fact.</p><p>New fact v${sent.length} [1].</p><p><a href="note://${a.id}">Src A</a></p>`;await route.fulfill({status:200,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify({choices:[{message:{content:'```html\n'+body+'\n```'}}]})});});
+ await p.goto(base);await p.locator('.ProseMirror').first().waitFor();
+ const dialog=p.getByRole('dialog',{name:'위키 갱신 제안',exact:true});
+ const open=async()=>{await libraryTool(p,'위키 갱신 제안');await dialog.waitFor();};
+ const propose=()=>dialog.getByRole('button',{name:'갱신안 만들기',exact:true}).click();
+ const approve=dialog.getByRole('button',{name:'제안 승인',exact:true});
+ const history=dialog.getByRole('region',{name:'위키 갱신 기록'});
+ await open();await propose();await approve.waitFor();
+ assert.equal(sent.length,1);const user=JSON.parse(sent[0]).messages[1].content as string;
+ assert.ok(user.includes('Alpha measured 42 units.')&&user.includes('Beta confirms it.')&&user.includes(original),'wiki body and both linked passages sent');
+ assert.ok(!user.includes('SECRETLOCKED')&&!user.includes('Hidden'),'locked source never in prompt');
+ const evidence=dialog.getByRole('list',{name:'근거 노트'});
+ assert.equal(await evidence.locator('li').count(),2);assert.match(await evidence.textContent()??'',/Src A.*버전 \d+/);
+ await dialog.locator('.diff-cell.is-add',{hasText:'New fact v1 [1].'}).waitFor();
+ assert.equal((await rpc('get',{id:wikiNote.id})).content,original,'proposal does not edit');
+ await approve.click();await dialog.getByText('제안을 반영했습니다.',{exact:true}).waitFor();
+ const applied=await rpc('get',{id:wikiNote.id});assert.ok(applied.content.includes('New fact v1 [1].')&&!applied.content.includes('```'),applied.content);
+ await p.locator('.ProseMirror',{hasText:'New fact v1'}).first().waitFor();
+ assert.ok((await rpc('history',{id:wikiNote.id})).length>=1||(await rpc('history',{id:wikiNote.id})).items?.length>=1,'history entry recorded');
+ await history.getByText(/반영됨/).waitFor();
+ await history.getByRole('button',{name:'반영 되돌리기',exact:true}).click();await dialog.getByText('반영을 되돌렸습니다.',{exact:true}).waitFor();
+ assert.equal((await rpc('get',{id:wikiNote.id})).content,original,'undo restores exact bytes');
+ // Same body and sources: the stored proposal returns without an AI call.
+ await propose();await approve.waitFor();assert.equal(sent.length,1,'no AI call for an identical proposal');
+ await approve.click();await dialog.getByText('제안을 반영했습니다.',{exact:true}).waitFor();
+ await propose();await dialog.getByText('새로 반영할 변경이 없습니다.',{exact:true}).waitFor();assert.equal(sent.length,1);
+ // A source edit marks the applied proposal stale and allows a new one.
+ const current=await rpc('get',{id:a.id});await rpc('save',{note:{id:a.id,content:'<p>Alpha measured 43 units.</p>',content_format:'html',revision:current.revision}});
+ await dialog.getByRole('button',{name:'닫기',exact:true}).click();await open();
+ await history.getByText('근거 변경됨',{exact:true}).first().waitFor();
+ await propose();await approve.waitFor();assert.equal(sent.length,2);
+ assert.ok((JSON.parse(sent[1]).messages[1].content as string).includes('43 units')&&!sent[1].includes('SECRETLOCKED'));
+ await dialog.locator('.diff-cell.is-add',{hasText:'New fact v2 [1].'}).waitFor();
+ assert.deepEqual(errors,[]);
+ console.log('PASS wiki update: evidence + diff, approve, history, exact undo, dedup without AI, stale sources, locked source excluded');
+}finally{await browser.close();}

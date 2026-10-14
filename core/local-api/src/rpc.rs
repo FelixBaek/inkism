@@ -32,8 +32,9 @@ const RENDERER_OPS: &[&str] = &[
     "trash_notebook",
     "restore_notebook",
     "trashed_notebooks",
-    "knowledge_get", "knowledge_set", "knowledge_list", "knowledge_settings_get", "knowledge_settings_set", "merge_notes", "merge_preview", "merge_apply", "merge_undo", "merge_changes",
-    "link_resolve", "graph_get", "daily_note", "template_create", "type_preset_apply", "page_create",
+    "knowledge_get", "knowledge_set", "knowledge_list", "knowledge_settings_get", "knowledge_settings_set", "merge_notes", "merge_preview", "merge_apply", "merge_undo", "merge_changes", "wiki_sources", "wiki_check", "wiki_propose_record", "wiki_apply", "wiki_reject", "wiki_undo", "wiki_changes",
+    "semantic_pending", "semantic_put", "semantic_search", "semantic_status", "semantic_reset",
+    "link_resolve", "graph_get", "relations", "daily_note", "template_create", "type_preset_apply", "page_create",
     "defaults_get",
     "defaults_set",
     "vault_status",
@@ -273,7 +274,7 @@ mod tests {
     fn extended_workspace_operations_reach_renderer_engine() {
         let engine = Arc::new(FakeEngine::default());
         let h = Handler { engine: Some(engine.clone()), ..Handler::default() };
-        for op in ["note_preview", "workspace_tools_get", "workspace_tools_set", "font_resources", "font_resource_set", "merge_notes", "merge_preview", "merge_apply", "merge_undo", "merge_changes", "remote_history_list", "remote_history_preview", "remote_history_restore", "sync_scope"] {
+        for op in ["note_preview", "workspace_tools_get", "workspace_tools_set", "font_resources", "font_resource_set", "merge_notes", "merge_preview", "merge_apply", "merge_undo", "merge_changes", "wiki_sources", "wiki_check", "wiki_propose_record", "wiki_apply", "wiki_reject", "wiki_undo", "wiki_changes", "remote_history_list", "remote_history_preview", "remote_history_restore", "sync_scope"] {
             let body = format!(r#"{{"op":"{op}"}}"#);
             let out = h.handle(&request("POST", "inkism.local", "/api/rpc", &body, &[("Content-Type", "application/json")]));
             assert_eq!(out.status, 200, "renderer rejected {op}");

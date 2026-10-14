@@ -4,6 +4,7 @@ import { prepareHTMLBlockIdentity } from "../lib/block-identity";
 import React, { useEffect, useRef, useState } from "react";
 import { api, rpc, hasRpcDiagnostic } from "../api";
 import { useStore } from "../store";
+import { NoteRelations } from "./NoteRelations";
 import { t } from "../i18n";
 import { knowledge, parseReference, wikiReferences, type NoteReference } from "../lib/knowledge";
 import { waitForAnchorEditor, navigateNoteAnchor, noteAnchors, requestResolvedAnchorRepair } from "../lib/note-anchor";
@@ -452,6 +453,7 @@ export function NoteConnections({ onClose, compact = false }: { onClose: () => v
           </button>
         </section>
       )}
+      <NoteRelations id={id} revision={s.note?.revision} onClose={onClose} />
       {error && <p role="alert">{error}</p>}
       <button className="btn" onClick={() => setAttempt((x) => x + 1)}>
         {t("참조 새로고침")}
