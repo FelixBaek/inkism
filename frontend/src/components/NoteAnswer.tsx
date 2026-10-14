@@ -27,6 +27,20 @@ function cachedLoader(loadText: (note: Summary, signal?: AbortSignal) => Promise
   };
 }
 
+/** Keyword + semantic passages, then one typed hop from the best sources so the model can chain facts (책 —저자→ 사람). */
+async function retrieve(asked: string, loadCandidates: (query: string, signal: AbortSignal) => Promise<Summary[]>, loadText: (note: Summary, signal?: AbortSignal) => Promise<string | SearchDocument>, signal: AbortSignal) {
+  const words = keywords(asked);
+  const semantic = await semanticHits(asked, signal);
+  if (!words.length && !semantic.length) throw new Error(t("질문에서 찾을 낱말을 고르지 못했습니다. 핵심 낱말을 넣어 주세요."));
+  const notes = words.length ? await loadCandidates(candidateQuery(words), signal) : [];
+  const load = cachedLoader(loadText);
+  const evidence = await gatherEvidence(notes, words, load, { signal, semantic });
+  const related = await relatedNotes(evidence, notes, relationLoaders, { signal });
+  if (!related.notes.length) return { evidence, edges: related.edges };
+  const more = await gatherEvidence([...related.notes, ...notes], words, load, { signal, semantic, related: new Set(related.notes.map(n => n.id)) });
+  return { evidence: more, edges: related.edges };
+}
+
 /** Answers a question from retrieved note passages; every citation opens its source. */
 export function NoteAnswer({ question, loadCandidates, loadText, onOpen }: Readonly<{ question: string; loadCandidates: (query: string, signal: AbortSignal) => Promise<Summary[]>; loadText: (note: Summary, signal?: AbortSignal) => Promise<string | SearchDocument>; onOpen?: (id: string, anchor?: string, hit?: SearchHit) => void }>) {
   const [state, setState] = useState<{ busy?: boolean; error?: string; answer?: string; evidence?: Evidence[]; asked?: string }>({});
@@ -41,18 +55,10 @@ export function NoteAnswer({ question, loadCandidates, loadText, onOpen }: Reado
     const current = () => active.current === controller;
     setState({ busy: true, asked });
     try {
-      const words = keywords(asked);
-      const semantic = await semanticHits(asked, controller.signal);
-      if (!words.length && !semantic.length) throw new Error(t("질문에서 찾을 낱말을 고르지 못했습니다. 핵심 낱말을 넣어 주세요."));
-      const notes = words.length ? await loadCandidates(candidateQuery(words), controller.signal) : [];
-      const load = cachedLoader(loadText);
-      let evidence = await gatherEvidence(notes, words, load, { signal: controller.signal, semantic });
-      // One typed hop from the best sources lets the model chain facts (책 —저자→ 사람).
-      const related = await relatedNotes(evidence, notes, relationLoaders, { signal: controller.signal });
-      if (related.notes.length) evidence = await gatherEvidence([...related.notes, ...notes], words, load, { signal: controller.signal, semantic, related: new Set(related.notes.map(n => n.id)) });
+      const { evidence, edges } = await retrieve(asked, loadCandidates, loadText, controller.signal);
       if (!current()) return;
       if (!evidence.length) { setState({ asked, evidence, error: t("근거가 될 노트를 찾지 못해 AI에 보내지 않았습니다.") }); return; }
-      const prompt = answerPrompt(asked, evidence, related.edges);
+      const prompt = answerPrompt(asked, evidence, edges);
       const answer = await completeAI(prompt.instruction, prompt.source, controller.signal);
       if (current()) setState({ asked, evidence, answer });
     } catch (e) {
