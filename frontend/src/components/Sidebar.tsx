@@ -1,5 +1,4 @@
 import { t } from "../i18n";
-import { WebReaderDialog } from "./WebReaderDialog";
 import { WebClipperDialog } from "./WebClipperDialog";
 import { SettingsDialog } from "./SettingsDialog";
 import React, { useEffect, useState } from "react";
@@ -241,7 +240,6 @@ export function Sidebar({
 
       <div className="side-footer">
         {toolItem(t("알림"), <Bell size={16} />, () => onPanel("reminders"), panel === "reminders")}
-        <WebReaderDialog />
         <WebClipperDialog />
         <SettingsDialog />
         <hr className="side-divider" />

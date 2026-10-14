@@ -112,11 +112,11 @@ pub fn run(session: Session) -> local_api::Result<Option<PathBuf>> {
     let result = (|| {
         let app = tauri::Builder::default()
             .manage(crate::ai_key::KeyStore::new(session.config_root.join("Inkism").join("ai-key.dpapi")))
-            .invoke_handler(tauri::generate_handler![crate::web_viewer::web_viewer, crate::ai_key::ai_key])
+            .invoke_handler(tauri::generate_handler![crate::ai_key::ai_key])
             .register_asynchronous_uri_scheme_protocol(SCHEME, {
                 let handler = handler.clone();
                 move |ctx, request, responder| {
-                    if !crate::web_viewer::allow_app_protocol(ctx.webview_label()) {
+                    if !crate::window_trust::allow_app_protocol(ctx.webview_label()) {
                         responder.respond(http::Response::builder().status(403).body(Vec::<u8>::new()).unwrap());
                         return;
                     }
@@ -134,7 +134,6 @@ pub fn run(session: Session) -> local_api::Result<Option<PathBuf>> {
                     let url = start_url().parse().expect("static URL");
                     let builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::CustomProtocol(url))
                         .title("inkism")
-                        .initialization_script("window.__inkismNativeWebViewer=true;")
                         .inner_size(1360.0, 900.0)
                         .min_inner_size(900.0, 600.0)
                         .decorations(false);
@@ -211,9 +210,6 @@ fn start_note_link_server(
 
 fn on_window_event(window: &tauri::Window, event: &WindowEvent, state: &CloseState, security: Option<&Controller>) {
     if window.label() != LABEL { return; }
-    if matches!(event, WindowEvent::Destroyed) {
-        if let Some(viewer) = window.app_handle().get_webview_window("web-viewer") { let _ = viewer.close(); }
-    }
     let WindowEvent::CloseRequested { api, .. } = event else { return };
     let decision = before_close(state.copying.load(Ordering::SeqCst), state.ready.load(Ordering::SeqCst), || {
         security::cancel_for_locked_close(security)

@@ -17,7 +17,6 @@ pub mod gate;
 mod attachments;
 mod backup;
 mod clipper;
-mod reader;
 mod export;
 mod markdown_export;
 mod fonts;
@@ -203,7 +202,6 @@ impl Handler {
             (_, "/api/export/pdf") => export::formatted(self, r, true),
             (_, "/api/reminders/settings") => reminders::settings(self, r),
             (_, p) if p.starts_with("/api/unsplash/") => unsplash::serve(self, r, deadline),
-            (_, "/api/reader") => reader::serve(r),
             (_, "/api/clipper") => clipper::serve(self, r),
             (_, "/api/agent") => agent::settings(self, r),
             (_, "/api/publications") => publications::serve(self, r),
