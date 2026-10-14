@@ -125,7 +125,7 @@ export function EditorPane({
               className="title-input"
               type="text"
               value={d.title}
-              placeholder={t("제목 없는 노트")}
+              placeholder={t("제목 없음")}
               aria-label={t("노트 제목")}
               readOnly={Boolean(d.readonly) || s.editorConverting}
               onChange={(e) => s.updateDraft({ title: e.target.value })}

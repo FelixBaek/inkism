@@ -469,7 +469,7 @@ export function NoteInspector({ open, onClose }: Readonly<{ open: boolean; onClo
         ) : (
           <div className="inspector-scroll">
             <p className="inspector-note-title" title={s.draft.title}>
-              {s.draft.title || t("제목 없는 노트")}
+              {s.draft.title || t("제목 없음")}
             </p>
             <section aria-labelledby="inspector-properties">
               <h3 id="inspector-properties">{t("속성")}</h3>

@@ -37,6 +37,11 @@ export const SparklesAi = customIcon([
 
 export {
   ArrowSquareOutIcon as ExternalLink,
+  ClipboardTextIcon as ClipboardText,
+  ClipboardIcon as Clipboard,
+  SelectionAllIcon as SelectAll,
+  BookOpenTextIcon as BookOpenText,
+  NotePencilIcon as NotePencil,
   SlidersHorizontalIcon as SlidersHorizontal,
   PencilSimpleSlashIcon as PencilOff,
   ExportIcon as ShareExport,

@@ -262,3 +262,8 @@ section.note-list {
   color: var(--text);
   font-size: var(--fs-caption);
 }
+/* 날짜 옆 폴더: 사이드바와 같은 폴더 아이콘·색을 이름 앞에 */
+.note-list .note-row-place svg {
+  margin-right: 3px;
+  vertical-align: -1px;
+}

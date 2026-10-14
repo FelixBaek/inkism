@@ -554,7 +554,7 @@ export function WritingTools() {
                   onMouseMove={() => setActive(i)}
                   onClick={() => void run(() => openNote(note.id))}
                 >
-                  {note.title || t("제목 없는 노트")}
+                  {note.title || t("제목 없음")}
                 </button>
               ))}
             </div>
@@ -578,7 +578,7 @@ export function WritingTools() {
                 <option value="">{t("빈 노트")}</option>
                 {templates.map((note) => (
                   <option key={note.id} value={note.id}>
-                    {note.title || t("제목 없는 노트")}
+                    {note.title || t("제목 없음")}
                   </option>
                 ))}
               </select>
@@ -594,13 +594,13 @@ export function WritingTools() {
             <div className="writing-tools-list">
               {templates.map((note) => (
                 <div key={note.id} className="writing-template-row">
-                  <span title={note.title}>{note.title || t("제목 없는 노트")}</span>
+                  <span title={note.title}>{note.title || t("제목 없음")}</span>
                   <span>
                     <button
                       type="button"
                       className="writing-link"
                       disabled={busy}
-                      aria-label={t("템플릿으로 새 노트") + ": " + (note.title || t("제목 없는 노트"))}
+                      aria-label={t("템플릿으로 새 노트") + ": " + (note.title || t("제목 없음"))}
                       onClick={() => createTemplate(note)}
                     >
                       {t("새 노트 만들기")}
@@ -681,7 +681,7 @@ export function WritingTools() {
                 <option value="">{t("노트 선택")}</option>
                 {notes.map((note) => (
                   <option key={note.id} value={note.id}>
-                    {note.title || t("제목 없는 노트")}
+                    {note.title || t("제목 없음")}
                   </option>
                 ))}
               </select>
@@ -699,7 +699,7 @@ export function WritingTools() {
                 <option value="">{t("노트 선택")}</option>
                 {notes.map((note) => (
                   <option key={note.id} value={note.id}>
-                    {note.title || t("제목 없는 노트")}
+                    {note.title || t("제목 없음")}
                   </option>
                 ))}
               </select>

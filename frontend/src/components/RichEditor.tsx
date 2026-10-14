@@ -25,6 +25,7 @@ import { SlashMenu } from "../extensions/slash-menu";
 import FindAndReplace, { searchDocument } from "@tiptap/extension-find-and-replace";
 import { FindReplace } from "./FindReplace";
 import { TermDefinitionPopover } from "./TermDefinitionPopover";
+import { EditorContextMenu } from "./EditorContextMenu";
 import { EditorToolbar, type HistoryControls } from "./EditorToolbar";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Placeholder } from "@tiptap/extensions";
@@ -630,6 +631,7 @@ export function RichEditor({
       )}
       {editable && editor && <FindReplace editor={editor} readOnly={readOnly} />}
       {editor && <TermDefinitionPopover editor={editor} readOnly={readOnly || !editable} />}
+      {editor && <EditorContextMenu editor={editor} readOnly={readOnly || !editable} />}
       <div className={(embedded ? "rich-window-content" : "editor-scroll") + (editable ? " block-gutter" : "")}>
         <EditorContent editor={editor} className="rich-editor" />
       </div>

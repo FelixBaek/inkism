@@ -305,8 +305,8 @@ export function NoteTabs() {
             aria-selected={tab.id === active}
             aria-controls="note-editor-panel"
             id={`note-tab-${tab.id}`}
-            title={tab.title || t("제목 없는 노트")}
-            aria-label={t("노트 탭: {title}", { title: tab.title || t("제목 없는 노트") })}
+            title={tab.title || t("제목 없음")}
+            aria-label={t("노트 탭: {title}", { title: tab.title || t("제목 없음") })}
             tabIndex={tab.id === (focusId ?? active ?? tabs[0].id) ? 0 : -1}
             ref={(button) => {
               if (button) buttons.current.set(tab.id, button);
@@ -333,12 +333,12 @@ export function NoteTabs() {
             }}
           >
             <FileText size={13} aria-hidden />
-            <span>{tab.title || t("제목 없는 노트")}</span>
+            <span>{tab.title || t("제목 없음")}</span>
           </button>
           <button
             type="button"
             className="note-tab-close"
-            aria-label={t("탭 닫기: {title}", { title: tab.title || t("제목 없는 노트") })}
+            aria-label={t("탭 닫기: {title}", { title: tab.title || t("제목 없음") })}
             title={t("탭 닫기 (탭에 초점을 두고 Delete)")}
             tabIndex={-1}
             disabled={closing}

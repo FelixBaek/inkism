@@ -530,7 +530,7 @@ function SplitPane({
             <input
               aria-label={t("분할 노트 제목")}
               value={note.title}
-              placeholder={t("제목 없는 노트")}
+              placeholder={t("제목 없음")}
               readOnly={Boolean(note.readonly)}
               onChange={(e) => editPatch({ title: e.target.value }, note.id)}
             />

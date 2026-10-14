@@ -34,7 +34,7 @@ import {
 } from "./TrashTools";
 import "./NoteList.css";
 import { t } from "../i18n";
-import { tagColor } from "./LibraryStyle";
+import { NotebookGlyph, tagColor } from "./LibraryStyle";
 
 function trashRowLabel(at: number | undefined, archived: boolean, retention: TrashDays) {
   return trashLabel(at, archived ? null : retention);
@@ -386,7 +386,8 @@ function NoteRow({
   const selected = s.selectedId === item.id;
   const trashMode = s.view.type === "trash";
   // 날짜 옆 자리: 태그 보기면 그 태그, 아니면 폴더 이름, 폴더가 없으면 첫 태그.
-  const notebookName = s.notebooks.find((n) => n.id === item.notebook_id)?.name;
+  const notebook = s.notebooks.find((n) => n.id === item.notebook_id);
+  const notebookName = notebook?.name;
   const tag = s.view.type === "tag" ? s.view.name : item.tags[0];
   const tagLabel = tag ? `# ${tag}` : "";
   const place = s.view.type !== "tag" && notebookName ? notebookName : tagLabel;
@@ -451,7 +452,12 @@ function NoteRow({
                   <span style={{ color: tagColor(s.tags, tag!) }}>#</span> {tag}
                 </>
               ) : (
-                place
+                place && (
+                  <span className="note-row-place">
+                    <NotebookGlyph nb={notebook} size={12} />
+                    {place}
+                  </span>
+                )
               )}
             </>
           )}
