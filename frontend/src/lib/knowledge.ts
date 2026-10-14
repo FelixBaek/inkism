@@ -19,12 +19,17 @@ export type SavedView = {
 export type KnowledgeSettings = { glossary?:import("./term-glossary").TermGlossaryEntry[]; style_presets?:StylePreset[]; property_definitions?:PropertyDefinition[]; block_styles?:BlockStyle[]; version: number; template_ids: string[]; daily_template_id: string | null; views: SavedView[] };
 export type GraphNode = { id: string; title: string; tags: string[]; aliases: string[] };
 export type GraphEdge = { source: string; target: string };
+export type RelationKind = 'link' | 'title_link' | 'relation' | 'parent';
+/** One typed edge from the engine `relations` op; `direction` is relative to `from`. */
+export type RelationEdge = { source: string; target: string; source_title: string; target_title: string; kind: RelationKind; property: string | null; direction: 'out' | 'in'; from: string; hop: 1 | 2; evidence: { label?: string; byte_offset?: number; byte_end?: number; property?: string } | null };
+export type RelationQuery = { id: string; depth?: 1 | 2; kinds?: ('link' | 'relation' | 'parent')[]; property?: string; direction?: 'out' | 'in' | 'both'; limit?: number };
 export type GraphData = { nodes: GraphNode[]; edges: GraphEdge[]; truncated: boolean };
 export const knowledge = {
   get: (id: string) => rpc<NoteKnowledge>('knowledge_get', { id }),
   set: (value: NoteKnowledge, revision: number) => rpc<NoteKnowledge>('knowledge_set', { ...value, revision }),
   list: () => rpc<{items: KnowledgeItem[]; truncated: boolean}>('knowledge_list'),
   graph: () => rpc<GraphData>('graph_get'),
+  relations: (query: RelationQuery, signal?: AbortSignal) => rpc<{ items: RelationEdge[]; truncated: boolean }>('relations', query, { signal }),
   resolve: (target: string) => rpc<{items: {id: string; title: string}[]; ambiguous: boolean;redirect_sources?:string[]}>('link_resolve', {target}),
   settings: () => rpc<KnowledgeSettings>('knowledge_settings_get'),
   saveSettings: (settings: KnowledgeSettings & {collection_update?:{operation:"save"|"apply"|"remove";definition:PropertyDefinition;notes:{id:string;revision:number;version:number}[];value?:NoteProperty["value"]}}) => rpc<KnowledgeSettings>('knowledge_settings_set', settings),

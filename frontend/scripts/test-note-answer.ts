@@ -3,7 +3,7 @@ import { build } from 'esbuild';
 const bundled = await build({ stdin: { contents: "export * from './lib/note-answer';", resolveDir: new URL('../src/', import.meta.url).pathname, loader: 'ts' }, bundle: true, write: false, format: 'cjs', platform: 'node', logLevel: 'error' });
 const module = { exports: {} };
 new Function('module', 'exports', bundled.outputFiles[0].text)(module, module.exports);
-const { keywords, candidateQuery, gatherEvidence, answerPrompt, answerParts } = module.exports as typeof import('../src/lib/note-answer');
+const { keywords, candidateQuery, gatherEvidence, answerPrompt, answerParts, relatedNotes, relationLines } = module.exports as typeof import('../src/lib/note-answer');
 
 assert.deepEqual(keywords('임베딩은 무엇이고 RAG에서 어떻게 쓰여?'), ['임베딩', 'RAG', '쓰여']);
 assert.deepEqual(keywords('what is AND or OR? title:x "q"'), ['title', 'q'].filter(w => w.length >= 2));
@@ -40,3 +40,28 @@ assert.ok(!prompt.source.includes('비밀') && !prompt.source.includes('휴지�
 const parts = answerParts('벡터 표현이다 [1]. 출처 없음 [9]. 끝[2]', evidence);
 assert.deepEqual(parts.map(p => 'cite' in p ? p.cite.n : p.text), ['벡터 표현이다 ', 1, '. 출처 없음 [9]. 끝', 2]);
 console.log('PASS note answer: keyword extraction, locked/trashed exclusion, bounded passages, budget, numbered prompt, citation parsing');
+
+// Typed relation hop: related notes join as candidates and the prompt names the edge between source numbers.
+{
+  const edge = (source: string, target: string, property: string | null, direction: 'out' | 'in', kind = 'relation') => ({ source, target, source_title: source === 'book' ? '책A' : '사람B', target_title: target === 'book' ? '책A' : '사람B', kind, property, direction, from: 'book', hop: 1, evidence: null }) as any;
+  const texts: Record<string, string> = { book: '장편 소설이다.', person: '부산에서 자랐다.', hidden: '비밀' };
+  const read = async (n: any) => texts[n.id];
+  const candidates = [note('book', 'Qz 책A')];
+  const first = await gatherEvidence(candidates, ['Qz'], read);
+  const asked: string[] = [];
+  const related = await relatedNotes(first, candidates, {
+    relations: async id => { asked.push(id); return [edge('book', 'person', '저자', 'out'), edge('book', 'hidden', '저자', 'out'), edge('book', 'person', null, 'out', 'link')]; },
+    summary: async id => id === 'hidden' ? note(id, 'H', { locked: true }) : note(id, '사람B'),
+  });
+  assert.deepEqual(asked, ['book']);
+  assert.deepEqual(related.notes.map(n => n.id), ['person'], 'locked related notes are dropped');
+  const all = await gatherEvidence([...related.notes, ...candidates], ['Qz'], read, { related: new Set(['person']) });
+  assert.deepEqual(all.map(e => e.note.id).sort(), ['book', 'person'], 'related note without keywords still yields a passage');
+  const n = (id: string) => all.find(e => e.note.id === id)!.n;
+  const lines = relationLines(all, related.edges);
+  assert.deepEqual(lines, [`[${n('book')}] 책A —저자→ [${n('person')}] 사람B`, `[${n('book')}] 책A —link→ [${n('person')}] 사람B`], 'edges to unsent notes are omitted');
+  const p = answerPrompt('Qz 저자는 어디 출신?', all, related.edges);
+  assert.ok(p.source.endsWith('\n\nRelations:\n' + lines.join('\n')) && p.instruction.includes('Relations block'));
+  assert.ok(!answerPrompt('q', all).source.includes('Relations'), 'no relation block without edges');
+  console.log('PASS note answer relations: related candidates, locked exclusion, numbered relation lines');
+}

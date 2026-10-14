@@ -2412,5 +2412,13 @@
   "복사됨": "Copied",
   "발급한 토큰": "Issued tokens",
   "아직 만든 토큰이 없습니다.": "No tokens yet.",
-  "{name} 토큰 회수": "Revoke token {name}"
+  "{name} 토큰 회수": "Revoke token {name}",
+  "관계 속성": "Relation property",
+  "나가는": "outgoing",
+  "들어오는": "incoming",
+  "나가는 관계 {relation}: {title} 열기": "Open outgoing {relation} relation: {title}",
+  "들어오는 관계 {relation}: {title} 열기": "Open incoming {relation} relation: {title}",
+  "모든 관계": "All relations",
+  "문서 계층": "Document hierarchy",
+  "연결된 관계가 없습니다.": "No relations yet."
 }
