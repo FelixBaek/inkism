@@ -26,7 +26,6 @@ import {
   NoteLink,
   Plus,
   Smile,
-  SparklesAi,
   SquareSigma,
   Strikethrough,
   SubscriptIcon,
@@ -790,7 +789,21 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             disabled={disabled}
             onClick={toggle("ai", 0)}
           >
-            <SparklesAi size={16} aria-hidden />
+            {/* 예전 도구줄 AI 버튼과 같은 반짝임: 줄에 마우스를 올리면 켜진다 */}
+            <span className="tb-ai-btn" aria-hidden>
+              <span className="tb-ai-halo" />
+              <span className="tb-ai-face" />
+              <span className="tb-ai-particles">
+                {Array.from({ length: 12 }, (_, i) => (
+                  <i key={i} />
+                ))}
+              </span>
+              <svg className="tb-ai-stars" width="16" height="16" viewBox="0 0 16 16">
+                <path d="M6 3.4C6.448 6.685 8.315 8.552 11.6 9 8.315 9.448 6.448 11.315 6 14.6 5.552 11.315 3.685 9.448.4 9 3.685 8.552 5.552 6.685 6 3.4Z" />
+                <path d="M12.2 1.5c.232 1.701 1.199 2.668 2.9 2.9-1.701.232-2.668 1.199-2.9 2.9-.232-1.701-1.199-2.668-2.9-2.9 1.701-.232 2.668-1.199 2.9-2.9Z" />
+                <path d="M12.2 9.7c.232 1.701 1.199 2.668 2.9 2.9-1.701.232-2.668 1.199-2.9 2.9-.232-1.701-1.199-2.668-2.9-2.9 1.701-.232 2.668-1.199 2.9-2.9Z" />
+              </svg>
+            </span>
             {t("AI로 편집하기")}
           </button>
         </div>
