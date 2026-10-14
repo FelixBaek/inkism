@@ -1,13 +1,14 @@
 /**
  * 블록 넣기 메뉴 (Figma 27:3903 + 하위 메뉴 27:3996 · 27:4053 · 27:4070 · 51:6764 · 51:6780).
  * 블록 손잡이의 [+] 팝오버와 "/" 메뉴가 같은 컴포넌트를 쓴다.
- * 키보드: ↑↓ 이동, → 하위 메뉴, ← / Esc 하위 메뉴 닫기, Enter 실행. 한글 조합 중 키는 무시.
+ * 마우스를 올리면 옆에 미리보기 카드, 누르면 하위 메뉴. 키보드: ↑↓ 이동, → 하위 메뉴, ← / Esc 하위 메뉴 닫기, Enter 실행. 한글 조합 중 키는 무시.
  */
 import React, { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/core";
 import { ChevronRight } from "../../icons";
 import { SUBMENUS, type BlockItem, type RunOptions } from "../../extensions/block-items";
 import { t } from "../../i18n";
+import { BlockPreview } from "./BlockPreview";
 import "./BlockMenu.css";
 
 export interface BlockMenuHandle {
@@ -43,7 +44,9 @@ export const BlockMenu = forwardRef<BlockMenuHandle, Props>(function BlockMenu(
   const [grid, setGrid] = useState({ rows: 0, cols: 0 });
   const list = useRef<HTMLDivElement>(null),
     panel = useRef<HTMLDivElement>(null),
-    wrap = useRef<HTMLDivElement>(null);
+    wrap = useRef<HTMLDivElement>(null),
+    preview = useRef<HTMLDivElement>(null);
+  const [previewPos, setPreviewPos] = useState<{ top: number; flip: boolean }>({ top: 0, flip: false });
   const [subPos, setSubPos] = useState<{ top: number; flip: boolean }>({ top: 0, flip: false });
 
   // 같은 항목 목록이면 다시 그려도(손잡이 hover, "/" onUpdate) 활성 항목·하위 메뉴를 유지한다.
@@ -70,6 +73,19 @@ export const BlockMenu = forwardRef<BlockMenuHandle, Props>(function BlockMenu(
     top = Math.max(-box.top + 8, Math.min(top, window.innerHeight - box.top - height - 8));
     setSubPos({ top, flip: box.right + width + 12 > window.innerWidth });
   }, [subIndex, itemsKey]);
+
+  // 미리보기 카드는 고른 항목 줄 높이에 맞춰 옆에 붙인다(하위 메뉴가 열리면 감춘다).
+  useLayoutEffect(() => {
+    if (sub || active < 0 || !list.current || !wrap.current || !preview.current) return;
+    const row = list.current.querySelector<HTMLElement>(`[data-index="${active}"]`);
+    if (!row) return;
+    const box = wrap.current.getBoundingClientRect(),
+      height = preview.current.offsetHeight,
+      width = preview.current.offsetWidth;
+    let top = list.current.offsetTop + row.offsetTop - list.current.scrollTop - 7;
+    top = Math.max(-box.top + 8, Math.min(top, window.innerHeight - box.top - height - 8));
+    setPreviewPos({ top, flip: box.right + width + 12 > window.innerWidth });
+  }, [active, sub, itemsKey]);
 
   const move = (delta: number) => {
     if (first < 0) return;
@@ -184,12 +200,13 @@ export const BlockMenu = forwardRef<BlockMenuHandle, Props>(function BlockMenu(
         title={enabled[index] ? undefined : t("준비 중")}
         tabIndex={-1}
         className={"block-menu__item" + (on ? " is-active" : "")}
+        // 마우스를 올리면 미리보기만 보이고, 하위 메뉴는 눌러야 열린다.
         onMouseMove={() => {
-          if (!enabled[index] || (index === active && (sub?.id === item.id || !item.submenu))) return;
+          if (!enabled[index] || index === active) return;
           setActive(index);
-          openSub(index, false);
+          setSub(null);
         }}
-        onClick={() => choose(index)}
+        onClick={() => (item.submenu ? openSub(index, false) : choose(index))}
       >
         <Icon size={16} className="block-menu__icon" style={{ color: item.color }} aria-hidden />
         <span className="block-menu__label">{item.label}</span>
@@ -220,6 +237,15 @@ export const BlockMenu = forwardRef<BlockMenuHandle, Props>(function BlockMenu(
       >
         {items.length ? rows : <div className="block-menu__empty">{t("결과 없음")}</div>}
       </div>
+      {!subItem && active >= 0 && enabled[active] && items[active] && (
+        <div
+          ref={preview}
+          className={"block-menu block-preview" + (previewPos.flip ? " is-flipped" : "")}
+          style={{ top: previewPos.top }}
+        >
+          <BlockPreview id={items[active].id} label={items[active].label} icon={items[active].icon} />
+        </div>
+      )}
       {subItem && (
         <div
           ref={panel}

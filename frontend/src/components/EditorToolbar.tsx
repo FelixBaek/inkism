@@ -1,5 +1,6 @@
 import {CsvTools} from "./CsvTools";
-import React, { lazy, Suspense, useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from "react";
+import React, { lazy, Suspense, useEffect, useReducer, useRef, useState, type ReactNode } from "react";
+import { BubbleMenu } from "@tiptap/react/menus";
 import type { ChainedCommands, Editor } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
 import {
@@ -8,13 +9,13 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
+  Check,
   ChevronDown,
+  ChevronRight,
   ClearFormatting,
   DirectionLtr,
   DirectionRtl,
-  Eye,
   Highlighter,
-  Image as ImageIcon,
   InlineCode,
   Italic,
   Link2,
@@ -23,9 +24,9 @@ import {
   Minus,
   MoreVertical,
   NoteLink,
-  Pin,
   Plus,
   Smile,
+  SparklesAi,
   SquareSigma,
   Strikethrough,
   SubscriptIcon,
@@ -36,14 +37,16 @@ import {
 } from "../icons";
 import { useStore } from "../store";
 import { requestMath } from "../extensions/math";
-import { registerAiNotice, requestAi, type AiAction, type AiResult } from "../lib/ai";
+import { AI_LABELS, registerAiNotice, requestAi, type AiAction, type AiResult } from "../lib/ai";
 import { AttachmentButton } from "./AttachmentButton";
 import { MathTools } from "./MathTools";
+import { canDefineTerm, openTermDefinition } from "./TermDefinitionPopover";
+import { FORMAT_MENU_OPTIONS, extractSelectionToNote, showFormatMenu } from "./SelectionToolbar";
+import { BlockPreview } from "./blocks/BlockPreview";
+import "./blocks/BlockMenu.css";
 import { IconButton } from "./IconButton";
 import { Popover } from "./toolbar/Popover";
-import { BlockInsertPanel } from "./toolbar/BlockInsertPanel";
-import { BLOCK_ITEMS } from "../extensions/block-items";
-import { PREVIEW_EVENT } from "./PreviewExport";
+import { BLOCK_ITEMS, TURN_INTO, blockKind, canConvertBlock, convertBlock } from "../extensions/block-items";
 import {
   AiMenu,
   AiResultView,
@@ -97,10 +100,9 @@ const ALIGNS = [
   ["right", t("오른쪽"), AlignRight],
   ["justify", t("양쪽"), AlignJustify],
 ] as const;
-const PIN_KEY = "inkism.toolbar.pinExtra";
 const DIR_TYPES = ["paragraph", "heading"];
 
-type PopName = "more" | "para" | "font" | "ol" | "ul" | "emoji" | "note" | "insert" | "ai" | "aiResult" | ColorKind;
+type PopName = "more" | "turn" | "para" | "font" | "ol" | "ul" | "emoji" | "note" | "ai" | "aiResult" | ColorKind;
 interface Pop {
   name: PopName;
   anchor: HTMLElement;
@@ -135,19 +137,17 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
   }, [s.showError]);
   const [, force] = useReducer((x: number) => x + 1, 0);
   const [stack, setStack] = useState<Pop[]>([]);
-  const [pinExtra, setPinExtra] = useState(() => toolbarStore.get<boolean>(PIN_KEY, false));
   const [palettePinned, setPalettePinned] = useState(false);
-  const [layout, setLayout] = useState(0);
+  const [extracting, setExtracting] = useState(false);
+  const [turnHover, setTurnHover] = useState<string | null>(null);
   const [lastColor, setLastColor] = useState(() => ({
     highlight: toolbarStore.get("inkism.colors.last.highlight", "#fff176"),
     color: toolbarStore.get("inkism.colors.last.color", "#f44336"),
   }));
   const [ai, setAi] = useState<{ result: AiResult; from: number; to: number } | null>(null);
   const row = useRef<HTMLDivElement>(null);
-  const aiGroup = useRef<HTMLDivElement>(null);
-  const pinnedRow = useRef<HTMLDivElement>(null);
   const aiButton = useRef<HTMLButtonElement>(null);
-  const needs = useRef<number[]>([]);
+  const caret = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     if (!editor) return;
@@ -165,37 +165,21 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
 
   const paraValue = editor?.isActive("heading") ? String(editor.getAttributes("heading").level) : "paragraph";
   const fontFamily = String(editor?.getAttributes("textStyle").fontFamily ?? "");
+  const $from = editor?.state.selection.$from;
+  const turnNode = $from && $from.depth ? $from.node(1) : null;
+  const turnPos = $from && turnNode && canConvertBlock(turnNode) ? $from.before(1) : null;
+  const kind = blockKind(turnNode);
   const fontName = [...registeredFonts, ...pluginFonts].find(font=>font.family.toLowerCase()===fontFamily.replace(/^["']|["']$/g,"").toLowerCase())?.label ?? fontNameOf(fontFamily);
-  // 배치 단계: 0 = 넓게 + 고정한 더보기를 같은 줄에, 1 = 넓게(고정한 더보기는 아랫줄), 2 = 좁게.
-  // 들어가지 않으면 한 단계 내리고, 각 단계의 실제 폭을 기억해 창이 넓어지면 되돌린다.
-  const step = Math.max(layout, pinExtra ? 0 : 1);
-  const compact = step === 2;
-  useLayoutEffect(() => {
-    const el = row.current;
-    if (!el) return;
-    const check = () => {
-      const last = aiGroup.current;
-      if (!last) return;
-      const width = el.clientWidth;
-      needs.current[step] = last.offsetLeft + last.offsetWidth + 12;
-      if (needs.current[step] > width && step < 2) setLayout(step + 1);
-      else if (step > (pinExtra ? 0 : 1) && width >= (needs.current[step - 1] ?? Infinity)) setLayout(step - 1);
-    };
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [editor, step, pinExtra, paraValue, fontName]);
-
-  // 블록 메뉴·"/" 메뉴의 "이모지" 항목이 보내는 요청: 툴바의 이모지 창을 연다(좁은 툴바면 줄 끝에 붙여 연다).
+  // 블록 메뉴·"/" 메뉴의 "이모지" 항목이 보내는 요청: 서식 메뉴는 글자를 골랐을 때만 뜨므로 커서 아래에 연다.
   useEffect(() => {
     const open = (event: Event) => {
       const target = (event as CustomEvent<{ editor?: Editor }>).detail?.editor;
       if (target && target !== editor) return;
-      const bar = row.current;
-      if (!bar) return;
-      const button = bar.querySelector<HTMLElement>(`[aria-label="${t("이모지")}"]`) ?? bar;
-      setStack([{ name: "emoji", anchor: button, under: pinnedRow.current ?? bar }]);
+      const mark = caret.current;
+      if (!mark || !editor) return;
+      const at = editor.view.coordsAtPos(editor.state.selection.from);
+      Object.assign(mark.style, { left: `${at.left}px`, top: `${at.top}px`, height: `${at.bottom - at.top}px` });
+      setStack([{ name: "emoji", anchor: mark, under: mark }]);
     };
     window.addEventListener("inkism-open-emoji-picker", open);
     return () => window.removeEventListener("inkism-open-emoji-picker", open);
@@ -206,7 +190,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
   const closeAt = (level: number) => setStack((st) => st.slice(0, level));
   const toggle = (name: PopName, level: number) => (event: React.MouseEvent<HTMLElement>) => {
     const anchor = event.currentTarget;
-    const under = level ? anchor.closest<HTMLElement>("[data-tb-popover]")! : (pinnedRow.current ?? row.current!);
+    const under = level ? anchor.closest<HTMLElement>("[data-tb-popover]")! : row.current!;
     setStack((st) =>
       st[level]?.name === name ? st.slice(0, level) : [...st.slice(0, level), { name, anchor, under }],
     );
@@ -333,15 +317,6 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
   const rtl = editor.isActive({ dir: "rtl" });
   const setDir = (dir: string | null) => (chain: ChainedCommands) =>
     DIR_TYPES.reduce((c, type) => c.updateAttributes(type, { dir }), chain);
-  const togglePin = () => {
-    setPinExtra((pin) => {
-      toolbarStore.set(PIN_KEY, !pin);
-      return !pin;
-    });
-    needs.current = [];
-    setLayout(0);
-    setStack([]);
-  };
   const insertNoteLink = (note: { id: string; title: string }) => {
     if (disabled) return;
     const href = `note://${note.id}`;
@@ -365,7 +340,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
     const target = aiTarget();
     setStack([]);
     const result = await requestAi(action, { selection: target.text, prompt }, s.showError);
-    if (!result || editor.isDestroyed || !aiButton.current || !row.current) return;
+    if (!result || editor.isDestroyed || !aiButton.current?.isConnected || !row.current) return;
     setAi({ result, from: target.from, to: target.to });
     setStack([{ name: "aiResult", anchor: aiButton.current, under: row.current }]);
   };
@@ -408,10 +383,6 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
       >
         <SquareSigma size={16} aria-hidden />
       </IconButton>
-      <Divider />
-      <IconButton label={pinExtra ? t("도구줄 고정 해제") : t("도구줄에 고정")} active={pinExtra} onClick={togglePin}>
-        <Pin size={16} aria-hidden />
-      </IconButton>
     </>
   );
   const fontSize = (
@@ -435,24 +406,6 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
       </IconButton>
     </Group>
   );
-  const linkTools = (level: number) => (
-    <>
-      <IconButton
-        label={t("링크")}
-        active={editor.isActive("link")}
-        disabled={disabled}
-        onClick={() => void linkAction(s, editor)}
-      >
-        <Link2 size={16} aria-hidden />
-      </IconButton>
-      {popButton("note", level, t("노트 연결"), <NoteLink size={16} aria-hidden />)}
-    </>
-  );
-  const imageItem = BLOCK_ITEMS.find((item) => item.id === "image");
-  const insertImage = () => {
-    if (disabled || !imageItem) return;
-    void Promise.resolve(imageItem.run(editor));
-  };
   const AlignIcon = align[2];
   const blockTools = (
     <Group label={t("정렬·글 방향")}>
@@ -485,7 +438,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
 
   /* ---------- 팝오버 ---------- */
   const renderPop = (pop: Pop, level: number) => {
-    const common = { anchor: pop.anchor, under: pop.under, bounds: row.current, onClose: () => closeAt(level) };
+    const common = { anchor: pop.anchor, under: pop.under, bounds: null, onClose: () => closeAt(level) };
     switch (pop.name) {
       case "more":
         return (
@@ -497,19 +450,60 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             role="toolbar"
             className="tb-more"
           >
-            {!pinExtra && <div className="tb-more-row">{extraTools(level + 1)}</div>}
-            {/* Figma 도구줄에 자리가 없는 도구: 글자 크기·정렬·글 방향·서식 지우기·이모지 */}
+            <div className="tb-more-row">{extraTools(level + 1)}</div>
             <div className="tb-more-row">
               {fontSize}
-              {compact && select("font", level + 1, t("글꼴"), fontName)}
-              <Divider />
-              {compact && linkTools(level + 1)}
+              {select("font", level + 1, t("글꼴"), fontName)}
+            </div>
+            <div className="tb-more-row">
+              {popButton("note", level + 1, t("노트 연결"), <NoteLink size={16} aria-hidden />)}
               {popButton("emoji", level + 1, t("이모지"), <Smile size={16} aria-hidden />)}
               <Divider />
               {blockTools}
-              <Divider />
-              {clearTool}
             </div>
+            <div className="tb-more-row">
+              <Group label={t("목록")}>
+                {split("ol", level + 1, t("번호 목록"), t("번호 목록 모양"), <ListOrdered size={16} aria-hidden />, editor.isActive("orderedList"), cmd((c) => c.toggleOrderedList()))}
+                {split("ul", level + 1, t("글머리 목록"), t("글머리 목록 모양"), <List size={16} aria-hidden />, editor.isActive("bulletList"), cmd((c) => c.toggleBulletList()))}
+              </Group>
+            </div>
+          </Popover>
+        );
+      case "turn":
+        return (
+          <Popover key={pop.name} {...common} side label={t("블록 종류 바꾸기")} role="listbox" className="tb-menu fm-turn-menu">
+            {TURN_INTO.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="option"
+                  aria-selected={kind.id === item.id}
+                  className={kind.id === item.id ? "is-active" : ""}
+                  onMouseEnter={() => setTurnHover(item.id)}
+                  onFocus={() => setTurnHover(item.id)}
+                  onClick={() => {
+                    if (!disabled && turnPos !== null) convertBlock(editor, turnPos, item.id);
+                    setStack([]);
+                  }}
+                >
+                  <Icon size={16} aria-hidden />
+                  <span>{item.label}</span>
+                  {kind.id === item.id && <Check size={14} className="fm-check" aria-hidden />}
+                </button>
+              );
+            })}
+            {(() => {
+              const shown = TURN_INTO.find((item) => item.id === turnHover);
+              return (
+                shown && (
+                  <div className="block-menu block-preview fm-turn-preview">
+                    <BlockPreview id={shown.id} label={shown.label} icon={shown.icon} />
+                  </div>
+                )
+              );
+            })()}
           </Popover>
         );
       case "highlight":
@@ -620,12 +614,6 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             </Suspense>
           </Popover>
         );
-      case "insert":
-        return (
-          <Popover key={pop.name} {...common} label={t("블록 삽입")} className="tb-pop-panel tb-insert-pop">
-            <BlockInsertPanel editor={editor} onClose={() => closeAt(level)} />
-          </Popover>
-        );
       case "note":
         return (
           <Popover key={pop.name} {...common} label={t("노트 연결")} className="tb-pop-panel">
@@ -691,104 +679,128 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
     [t("제목 열 전환"), "toggleHeaderColumn"],
     [t("표 삭제"), "deleteTable"],
   ] as const;
-  const inlineExtra = pinExtra && step === 0;
   const aiOpen = isOpen("ai") || isOpen("aiResult");
+  const extract = async () => {
+    if (extracting) return;
+    setExtracting(true);
+    try {
+      await extractSelectionToNote(s, editor);
+    } finally {
+      setExtracting(false);
+    }
+  };
 
   return (
     <>
-      <div
-        ref={row}
-        className={`editor-toolbar tb-row${compact ? " is-compact" : ""}`}
-        role="toolbar"
-        aria-label={t("서식 도구 모음")}
+      <BubbleMenu
+        className="format-bubble"
+        editor={editor}
+        pluginKey="inkism-format-menu"
+        options={FORMAT_MENU_OPTIONS}
+        shouldShow={showFormatMenu}
       >
-        {/* Figma 01 도구줄 순서: 본문 ▾ · B I U · 목록 · 연결·이미지·블록 삽입 · 미리보기 · 더보기 */}
-        <Group label={t("문단·글꼴")}>
-          {select("para", 0, t("문단 스타일"), PARAGRAPHS.find(([v]) => v === paraValue)?.[1] ?? t("제목 {level}",{level:paraValue}))}
-          {!compact && select("font", 0, t("글꼴"), fontName)}
-        </Group>
-        <Group label={t("글자 모양")}>
-          {markButton(t("굵게 (Ctrl+B)"), <Bold size={16} aria-hidden />, "bold", (c) => c.toggleBold())}
-          {markButton(t("기울임 (Ctrl+I)"), <Italic size={16} aria-hidden />, "italic", (c) => c.toggleItalic())}
-          {markButton(t("밑줄 (Ctrl+U)"), <UnderlineIcon size={16} aria-hidden />, "underline", (c) =>
-            c.toggleUnderline(),
-          )}
-        </Group>
-        {inlineExtra && (
-          <>
-            <Divider />
-            <Group label={t("서식 더보기")}>{extraTools(0)}</Group>
-          </>
-        )}
-        <Group label={t("목록")}>
-          {markButton(t("할 일 목록"), <TaskList size={16} aria-hidden />, "taskList", (c) => c.toggleTaskList())}
-          {split(
-            "ol",
-            0,
-            t("번호 목록"),
-            t("번호 목록 모양"),
-            <ListOrdered size={16} aria-hidden />,
-            editor.isActive("orderedList"),
-            cmd((c) => c.toggleOrderedList()),
-          )}
-          {split(
-            "ul",
-            0,
-            t("글머리 목록"),
-            t("글머리 목록 모양"),
-            <List size={16} aria-hidden />,
-            editor.isActive("bulletList"),
-            cmd((c) => c.toggleBulletList()),
-          )}
-        </Group>
-        <Group label={t("넣기")}>
-          {!compact && linkTools(0)}
-          <IconButton label={t("이미지")} disabled={disabled || !imageItem?.available(editor)} onClick={insertImage}>
-            <ImageIcon size={16} aria-hidden />
-          </IconButton>
-          {popButton("insert", 0, t("블록 삽입"), <Plus size={16} aria-hidden />)}
-          <IconButton label={t("미리보기")} onClick={() => window.dispatchEvent(new Event(PREVIEW_EVENT))}>
-            <Eye size={16} aria-hidden />
-          </IconButton>
-          {popButton("more", 0, t("서식 더보기"), <MoreVertical size={16} weight="bold" aria-hidden />)}
-        </Group>
-        <div className="tb-group" ref={aiGroup}>
+        <div
+          ref={row}
+          className="format-menu"
+          role="toolbar"
+          aria-label={t("서식 도구 모음")}
+          onMouseDown={(event) => {
+            if (!(event.target as HTMLElement).closest("input,select,textarea")) event.preventDefault();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && !stack.length) {
+              editor.commands.focus();
+              editor.commands.setTextSelection(editor.state.selection.to);
+            }
+          }}
+        >
+          <button
+            type="button"
+            className={`fm-turn${isOpen("turn") ? " is-open" : ""}`}
+            aria-label={t("블록 종류 바꾸기: {label}", { label: kind.label })}
+            aria-haspopup="listbox"
+            aria-expanded={isOpen("turn")}
+            disabled={disabled || turnPos === null}
+            onClick={toggle("turn", 0)}
+          >
+            <kind.icon size={16} aria-hidden />
+            <span>{kind.label}</span>
+            <ChevronRight size={12} aria-hidden />
+          </button>
+          <div className="fm-grid">
+            {popButton("color", 0, t("글자색·배경색"), <TextColor size={16} aria-hidden />)}
+            {markButton(t("굵게 (Ctrl+B)"), <Bold size={16} aria-hidden />, "bold", (c) => c.toggleBold())}
+            {markButton(t("기울임 (Ctrl+I)"), <Italic size={16} aria-hidden />, "italic", (c) => c.toggleItalic())}
+            {markButton(t("밑줄 (Ctrl+U)"), <UnderlineIcon size={16} aria-hidden />, "underline", (c) =>
+              c.toggleUnderline(),
+            )}
+            {clearTool}
+            <IconButton
+              label={t("링크")}
+              active={editor.isActive("link")}
+              disabled={disabled}
+              onClick={() => void linkAction(s, editor)}
+            >
+              <Link2 size={16} aria-hidden />
+            </IconButton>
+            {markButton(t("취소선"), <Strikethrough size={16} aria-hidden />, "strike", (c) => c.toggleStrike())}
+            {markButton(t("인라인 코드"), <InlineCode size={16} aria-hidden />, "code", (c) => c.toggleCode())}
+            <IconButton label={t("인라인 수식")} disabled={disabled} onClick={() => requestMath(editor, { kind: "inlineMath" })}>
+              <SquareSigma size={16} aria-hidden />
+            </IconButton>
+            {popButton("more", 0, t("서식 더보기"), <MoreVertical size={16} weight="bold" aria-hidden />)}
+          </div>
+          <hr className="fm-sep" />
+          <button
+            type="button"
+            className="fm-row"
+            disabled={disabled || !canDefineTerm(editor)}
+            title={t("용어 설명 (Ctrl/⌘+G)")}
+            onClick={() => openTermDefinition(editor)}
+          >
+            {t("용어 설명")}
+          </button>
+          <button
+            type="button"
+            className="fm-row"
+            disabled={disabled || extracting}
+            aria-label={t("선택 영역을 새 노트로 추출")}
+            onClick={() => void extract()}
+          >
+            {extracting ? t("추출 중…") : t("새 노트로 추출")}
+          </button>
+          <hr className="fm-sep" />
+          <div className="fm-section" aria-hidden>
+            AI
+          </div>
+          <div className="fm-ai-list">
+            {(["polish", "spelling", "shorter", "longer", "summarize"] as const).map((action) => (
+              <button key={action} type="button" className="fm-row" disabled={disabled} onClick={() => void runAi(action)}>
+                {AI_LABELS[action]}
+              </button>
+            ))}
+          </div>
           <button
             ref={aiButton}
             type="button"
-            className={`tb-ai-btn${aiOpen ? " is-open" : ""}`}
+            className={`fm-row fm-ai${aiOpen ? " is-open" : ""}`}
             aria-label={t("AI에게 요청")}
-            title={t("AI에게 요청")}
             aria-haspopup="dialog"
             aria-expanded={aiOpen}
             disabled={disabled}
             onClick={toggle("ai", 0)}
           >
-            <span className="tb-ai-halo" aria-hidden />
-            <span className="tb-ai-face" aria-hidden />
-            <span className="tb-ai-particles" aria-hidden>
-              {Array.from({ length: 12 }, (_, i) => (
-                <i key={i} />
-              ))}
-            </span>
-            <svg className="tb-ai-stars" width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-              <path d="M6 3.4C6.448 6.685 8.315 8.552 11.6 9 8.315 9.448 6.448 11.315 6 14.6 5.552 11.315 3.685 9.448.4 9 3.685 8.552 5.552 6.685 6 3.4Z" />
-              <path d="M12.2 1.5c.232 1.701 1.199 2.668 2.9 2.9-1.701.232-2.668 1.199-2.9 2.9-.232-1.701-1.199-2.668-2.9-2.9 1.701-.232 2.668-1.199 2.9-2.9Z" />
-              <path d="M12.2 9.7c.232 1.701 1.199 2.668 2.9 2.9-1.701.232-2.668 1.199-2.9 2.9-.232-1.701-1.199-2.668-2.9-2.9 1.701-.232 2.668-1.199 2.9-2.9Z" />
-            </svg>
+            <SparklesAi size={16} aria-hidden />
+            {t("AI로 편집하기")}
           </button>
         </div>
-        {/* 파일 붙여넣기·끌어넣기와 수식 편집 창은 여기서 계속 동작한다. 넣기 버튼은 블록 손잡이로 옮겨 감춘다. */}
-        <span className="tb-hidden-host">
-          <AttachmentButton editor={editor} />
-          <MathTools editor={editor} />
-        </span>
-      </div>
-      {pinExtra && !inlineExtra && (
-        <div ref={pinnedRow} className="tb-row-pinned" role="toolbar" aria-label={t("고정한 서식 도구")}>
-          {extraTools(0)}
-        </div>
-      )}
+      </BubbleMenu>
+      {/* 파일 붙여넣기·끌어넣기와 수식 편집 창은 늘 떠 있어야 한다. 넣기 버튼은 블록 손잡이 [+]에 있다. */}
+      <span className="tb-hidden-host" data-editor-tools="rich">
+        <AttachmentButton editor={editor} />
+        <MathTools editor={editor} />
+      </span>
+      <span ref={caret} className="fm-caret" aria-hidden />
       {stack.map((pop, level) => renderPop(pop, level))}
       {editor.isActive("callout") && (
         <fieldset

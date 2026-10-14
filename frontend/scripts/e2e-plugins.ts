@@ -11,6 +11,8 @@ const close=()=>page.getByRole('button',{name:'설정 닫기',exact:true}).click
 const upload=async(value:unknown)=>page.locator('.plugin-import-card input[type=file]').setInputFiles({name:'resources.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(value))});
 const card=(name:string)=>page.locator('.plugin-card').filter({has:page.locator('strong').filter({hasText:name})});
 const until=async(fn:()=>Promise<boolean>)=>{for(let i=0;i<150;i++){if(await fn())return;await page.waitForTimeout(50);}throw Error('condition timeout');};
+// The format menu floats only over a text selection (Ctrl+A after a click selects the block instead), so select the line's text.
+const openMore=async()=>{const more=page.getByRole('button',{name:'서식 더보기',exact:true});for(let n=0;n<10;n++){await page.locator('.tiptap p').first().click();await page.keyboard.press('End');await page.keyboard.press('Shift+Home');if(await more.waitFor({timeout:1000}).then(()=>true,()=>false))break;}await more.click();};// a plugin toggle can refresh the editor and drop the selection, so retry
 try{
  const original=await rpc('save',{note:{title:'Plugin verification '+Date.now(),content:'<p>패키지 검증</p>',content_format:'html'}});
  await rpc('workspace_set',{ids:[original.id],active:original.id,locations:{}});await page.goto(base);await page.locator('.tiptap').waitFor();
@@ -22,19 +24,19 @@ try{
  await card('검증 패키지').getByRole('checkbox').check();
  await upload({...manifest,id:'test.bad',name:'거부 패키지',entry:'code.js'});await page.getByRole('alert').filter({hasText:'실행 코드'}).waitFor();
  assert.equal(await card('거부 패키지').count(),0);assert.equal(await card('검증 패키지').count(),1);
- await close();await page.locator('.tiptap').click();await page.keyboard.press('Control+a');
- await page.getByRole('button',{name:/^글꼴:/}).click();await page.getByRole('option',{name:'패키지 Georgia',exact:true}).click();
+ await close();
+ await openMore();await page.getByRole('button',{name:/^글꼴:/}).click();await page.getByRole('option',{name:'패키지 Georgia',exact:true}).click();
  if(!await page.getByRole('button',{name:'글자색 고르기',exact:true}).count())await page.getByRole('button',{name:'서식 더보기',exact:true}).click();
  await page.getByRole('button',{name:'글자색 고르기',exact:true}).click();await page.getByRole('button',{name:'패키지 포인트',exact:true}).click();
  await until(async()=>{const n=await rpc('get',{id:original.id});return n.content.includes('Georgia')&&n.content.includes('rgb(19, 87, 155)');});
  const saved=await rpc('get',{id:original.id});
  await settings();await card('검증 패키지').getByRole('checkbox').uncheck();await close();
- await page.getByRole('button',{name:/^글꼴:/}).click();assert.equal(await page.getByRole('option',{name:'패키지 Georgia',exact:true}).count(),0);await page.keyboard.press('Escape');
+ await openMore();await page.getByRole('button',{name:/^글꼴:/}).click();assert.equal(await page.getByRole('option',{name:'패키지 Georgia',exact:true}).count(),0);await page.keyboard.press('Escape');
  assert.deepEqual(await rpc('get',{id:original.id}),saved,'disable modified note');
  await page.reload();await page.locator('.tiptap').waitFor();await settings();assert.equal(await page.locator('.plugin-card').first().getByRole('checkbox').isChecked(),false);assert.equal(await card('검증 패키지').getByRole('checkbox').isChecked(),false);
  await card('검증 패키지').getByRole('button',{name:'삭제',exact:true}).click();assert.equal(await card('검증 패키지').count(),0);assert.equal(await page.locator('.plugin-card').first().getByRole('checkbox').isChecked(),false,'delete reset builtin');
  await page.locator('.plugin-card').first().getByRole('checkbox').check();await close();
- await page.getByRole('button',{name:/^글꼴:/}).click();await page.getByRole('option',{name:'IBM Plex Sans KR',exact:true}).waitFor();
+ await openMore();await page.getByRole('button',{name:/^글꼴:/}).click();await page.getByRole('option',{name:'IBM Plex Sans KR',exact:true}).waitFor();
  const loaded=await page.evaluate(async()=>{await document.fonts.load('16px "Inkism Package Plex KR"');return document.fonts.check('16px "Inkism Package Plex KR"');});assert.equal(loaded,true);
  assert.deepEqual(await rpc('get',{id:original.id}),saved);assert.deepEqual(errors,[]);
  console.log('PASS plugin management: import/source identity, builtin/user toggles retained, invalid package refused, live font/color effects, original unchanged on disable/delete, reload, bundled font loading');

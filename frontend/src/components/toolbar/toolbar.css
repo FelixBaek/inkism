@@ -1022,3 +1022,123 @@
   height: 38px;
   font-size: var(--fs-small);
 }
+
+/* 글자를 고르면 뜨는 서식 메뉴. 고정 도구줄 대신 쓴다. */
+.format-bubble {
+  z-index: 40;
+}
+.format-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 216px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--canvas);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.format-menu--row {
+  flex-direction: row;
+  align-items: center;
+  width: auto;
+}
+.format-menu .icon-btn {
+  width: 32px;
+  height: 32px;
+}
+.fm-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+  justify-items: center;
+}
+.fm-turn,
+.fm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+.fm-turn span {
+  flex: 1;
+}
+.fm-turn:hover:not(:disabled),
+.fm-turn.is-open,
+.fm-row:hover:not(:disabled),
+.fm-row.is-open,
+.fm-turn:focus-visible,
+.fm-row:focus-visible {
+  background: var(--hover);
+}
+.fm-turn:disabled,
+.fm-row:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.fm-ai {
+  color: var(--green);
+}
+.fm-sep {
+  margin: 2px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.fm-caret {
+  position: fixed;
+  width: 0;
+  pointer-events: none;
+}
+.fm-turn-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fm-turn-menu button svg {
+  flex-shrink: 0;
+}
+@media (pointer: coarse) {
+  .format-menu .icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .format-menu {
+    width: 256px;
+  }
+}
+.fm-section {
+  padding: 4px 8px 2px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.fm-turn-menu {
+  min-width: 180px;
+  overflow: visible;
+}
+.fm-turn-menu button span {
+  flex: 1;
+}
+.fm-check {
+  color: var(--green);
+}
+.fm-turn-preview {
+  top: 0;
+}
+.fm-ai-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 104px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

@@ -5,6 +5,8 @@ import type { Editor } from "@tiptap/core";
 import { Bold, Italic, Strikethrough, InlineCode, List, ListOrdered, TaskList, Link2 } from "../icons";
 import { IconButton } from "./IconButton";
 import { AttachmentButton } from "./AttachmentButton";
+import { BubbleMenu } from "@tiptap/react/menus";
+import { FORMAT_MENU_OPTIONS, showFormatMenu } from "./SelectionToolbar";
 import { useStore } from "../store";
 import { t } from "../i18n";
 import "./toolbar/toolbar.css";
@@ -39,7 +41,15 @@ export function MarkdownToolbar({ editor, readOnly = false }: Readonly<{ editor:
     (href ? chain.setLink({ href }) : chain.unsetLink()).run();
   };
   return (
-    <><div className="editor-toolbar" role="toolbar" aria-label={t("Markdown 서식 도구")}>
+    <>
+    <BubbleMenu
+      className="format-bubble"
+      editor={editor}
+      pluginKey="inkism-markdown-format-menu"
+      options={FORMAT_MENU_OPTIONS}
+      shouldShow={showFormatMenu}
+    >
+    <div className="format-menu format-menu--row" role="toolbar" aria-label={t("Markdown 서식 도구")}>
       <select
         className="settings-select"
         aria-label={t("문단 종류")}
@@ -118,7 +128,10 @@ export function MarkdownToolbar({ editor, readOnly = false }: Readonly<{ editor:
         <Link2 size={16} />
       </IconButton>
       <button type="button" className="btn btn-small" disabled={disabled || !canDefineTerm(editor)} onMouseDown={event => event.preventDefault()} onClick={() => openTermDefinition(editor)}>{t("용어 설명")}</button>
-      <AttachmentButton editor={editor} markdownCompatible />
-    </div><CsvTools editor={editor}/></>
+    </div>
+    </BubbleMenu>
+    {/* 파일 붙여넣기·끌어넣기는 늘 동작해야 한다. 넣기 버튼은 블록 손잡이 [+]에 있다. */}
+    <span className="tb-hidden-host" data-editor-tools="markdown"><AttachmentButton editor={editor} markdownCompatible /></span>
+    <CsvTools editor={editor}/></>
   );
 }

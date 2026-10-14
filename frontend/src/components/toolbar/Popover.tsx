@@ -14,6 +14,8 @@ interface Props {
   keepOpen?: boolean;
   className?: string;
   role?: string;
+  /** 아래 대신 여는 버튼 옆에 붙인다(하위 메뉴처럼). 오른쪽 자리가 없으면 왼쪽. */
+  side?: boolean;
   children: ReactNode;
 }
 
@@ -27,6 +29,7 @@ export function Popover({
   keepOpen,
   className = "",
   role = "dialog",
+  side = false,
   children,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -42,8 +45,10 @@ export function Popover({
       const a = anchor.getBoundingClientRect(),
         u = under.getBoundingClientRect();
       const right = Math.min(bounds?.getBoundingClientRect().right ?? innerWidth, innerWidth) - 8;
-      const left = Math.max(8, Math.min(a.left - 4, right - el.offsetWidth));
-      const top = Math.max(8, Math.min(u.bottom + 6, innerHeight - el.offsetHeight - 8));
+      const left = side
+        ? a.right + 6 + el.offsetWidth <= right ? a.right + 6 : Math.max(8, a.left - 6 - el.offsetWidth)
+        : Math.max(8, Math.min(a.left - 4, right - el.offsetWidth));
+      const top = Math.max(8, Math.min(side ? a.top - 4 : u.bottom + 6, innerHeight - el.offsetHeight - 8));
       setPos((p) => (p?.left === left && p.top === top ? p : { left, top }));
     };
     place();
@@ -56,7 +61,7 @@ export function Popover({
       removeEventListener("resize", place);
       removeEventListener("scroll", place, true);
     };
-  }, [anchor, under, bounds]);
+  }, [anchor, under, bounds, side]);
 
   useEffect(() => {
     const el = ref.current!;

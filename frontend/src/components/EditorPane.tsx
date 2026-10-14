@@ -85,14 +85,12 @@ export function EditorPane({
             </button>
           </fieldset>
         </div>
-        {s.mode !== "text" && (
-          /* 원문 화면(Figma 29)의 도구줄: 서식 도구 대신 미리보기 */
-          <div className="editor-source-actions" role="group" aria-label={t("원문 편집 도구")}>
-            <IconButton label={t("미리보기")} onClick={() => window.dispatchEvent(new Event(PREVIEW_EVENT))}>
-              <Eye size={16} aria-hidden />
-            </IconButton>
-          </div>
-        )}
+        {/* 서식 도구는 글자를 고르면 뜨므로 미리보기는 모든 모드에서 여기 둔다 */}
+        <div className="editor-source-actions" role="group" aria-label={t("원문 편집 도구")}>
+          <IconButton label={t("미리보기")} onClick={() => window.dispatchEvent(new Event(PREVIEW_EVENT))}>
+            <Eye size={16} aria-hidden />
+          </IconButton>
+        </div>
         {/* Figma 01 도구줄 오른쪽: 목차 · 문서 설정 · 노트 정보 */}
         <div className="editor-doc-actions" role="group" aria-label={t("문서 동작")}>
           <IconButton label={t("목차")} onClick={() => window.dispatchEvent(new Event("inkism-open-outline"))}>
