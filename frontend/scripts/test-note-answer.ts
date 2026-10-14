@@ -39,4 +39,38 @@ assert.ok(!prompt.source.includes('비밀') && !prompt.source.includes('휴지�
 
 const parts = answerParts('벡터 표현이다 [1]. 출처 없음 [9]. 끝[2]', evidence);
 assert.deepEqual(parts.map(p => 'cite' in p ? p.cite.n : p.text), ['벡터 표현이다 ', 1, '. 출처 없음 [9]. 끝', 2]);
+// Hybrid retrieval with a deterministic fake embedder: concept counts, cosine over one chunk per note.
+const CONCEPTS = [['고양이', '냥이', '반려묘'], ['잠', '낮잠', '졸려', '자나'], ['자동차', '차량'], ['예산', '돈']];
+const embed = (text: string) => CONCEPTS.map(group => group.reduce((n, w) => n + text.split(w).length - 1, 0));
+const cosine = (a: number[], b: number[]) => { const dot = a.reduce((n, x, i) => n + x * b[i], 0), na = Math.hypot(...a), nb = Math.hypot(...b); return na && nb ? dot / (na * nb) : 0; };
+const corpus: Record<string, string> = {
+  pet: '머리말\n반려묘가 오후 내내 졸려 하며 소파에서 낮잠을 잔다.',
+  car: '자동차 보험과 차량 점검 예산',
+  kw: '고양이 사료 구매 목록',
+  secret: '냥이 낮잠 비밀 일기',
+};
+const semanticFor = (question: string, notes: any[]) => notes.map(n => ({ note: n, start: corpus[n.id].indexOf('\n') + 1, end: corpus[n.id].length, snippet: corpus[n.id].slice(corpus[n.id].indexOf('\n') + 1), score: cosine(embed(question), embed(corpus[n.id])) })).filter(h => h.score > 0).sort((a, b) => b.score - a.score);
+const loadCorpus = async (n: any) => { loaded.push(n.id); return corpus[n.id]; };
+const all = [note('pet', '오후'), note('car', '차'), note('kw', '목록'), note('secret', 'S', { locked: true })];
+const question = '고양이가 낮에 늘 자나요?';
+const hits = semanticFor(question, all);
+assert.equal(hits[0].note.id, 'secret', 'fake embedder ranks the locked note first');
+loaded.length = 0;
+const ftsOnly = await gatherEvidence([all[2]], keywords(question), loadCorpus);
+assert.deepEqual(ftsOnly.map(e => e.note.id), ['kw'], 'keywords alone miss the paraphrase');
+loaded.length = 0;
+const hybrid = await gatherEvidence([all[2]], keywords(question), loadCorpus, { semantic: hits });
+assert.ok(!loaded.includes('secret') && hybrid.every(e => e.note.id !== 'secret'), 'locked semantic hits are never read or sent');
+assert.deepEqual(hybrid.map(e => e.note.id), ['kw', 'pet'], 'RRF keeps the keyword hit and adds the semantic-only passage');
+const pet = hybrid[1];
+assert.equal(pet.text, corpus.pet.slice(corpus.pet.indexOf('\n') + 1));
+assert.equal(corpus.pet.slice(pet.hit.index).startsWith(pet.hit.matchedText!), true, 'citation points at the chunk start');
+assert.equal(pet.hit.index, corpus.pet.indexOf('반려묘'));
+// A semantic chunk overlapping a keyword window boosts it instead of duplicating it.
+const boosted = await gatherEvidence([all[2], all[1]], ['고양이', '자동차'], loadCorpus, { semantic: [{ note: all[1], start: 0, end: corpus.car.length, snippet: corpus.car, score: 0.9 }] });
+assert.deepEqual(boosted.map(e => e.note.id), ['car', 'kw'], 'fused rank puts the doubly matched passage first, once');
+// A chunk the loaded text no longer contains still counts, without a precise jump target.
+const drifted = await gatherEvidence([], [], loadCorpus, { semantic: [{ note: all[0], start: 3, end: 9, snippet: '없어진 문장', score: 0.5 }] });
+assert.equal(drifted[0].text, '없어진 문장'); assert.equal(drifted[0].hit.matchedText, '');
+console.log('PASS note answer hybrid: RRF fusion, semantic-only passages, overlap boost, locked hits excluded, precise chunk citations');
 console.log('PASS note answer: keyword extraction, locked/trashed exclusion, bounded passages, budget, numbered prompt, citation parsing');

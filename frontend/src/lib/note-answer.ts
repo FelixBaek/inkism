@@ -1,6 +1,7 @@
 import {sourcePosition,type SearchDocument} from './search-document-core';
 import type {SearchHit} from './global-search-core';
 import type {Summary} from '../types';
+import type {SemanticHit} from '../api';
 /** Answers from the user's notes: only passages this module retrieved are sent to the model. */
 export type Evidence={n:number;note:Summary;text:string;hit:SearchHit};
 export type AnswerPart={text:string;at:number}|{cite:Evidence};
@@ -59,13 +60,51 @@ function toEvidence(c:Candidate,n:number,passage:string):Evidence{
   sourceOffset:c.doc?sourcePosition(c.doc,c.first):undefined,sourceEnd:c.doc?sourcePosition(c.doc,c.first+matched.length,true):undefined,revision:c.doc?.revision,matchedText:matched,occurrence}};
 }
 
-/** Picks the best passages per note within a fixed character budget. */
-export async function gatherEvidence(notes:Summary[],words:string[],load:(note:Summary,signal?:AbortSignal)=>Promise<string|SearchDocument>,options:{signal?:AbortSignal;maxNotes?:number;maxPassages?:number;maxChars?:number;radius?:number}={}):Promise<Evidence[]>{
- const {signal,maxNotes=20,maxPassages=8,maxChars=12000,radius=300}=options;
+/** A semantic chunk as an evidence window. Engine offsets index its own plain text, so the chunk is
+ * re-found in the loaded document; if it cannot be, the passage is still usable but opens without a jump. */
+function semanticCandidate(hit:SemanticHit,body:string|SearchDocument):Candidate{
+ const doc=typeof body==='string'?undefined:body,text=typeof body==='string'?body:body.text,snippet=hit.snippet.trim();
+ let at=text.slice(hit.start,hit.end).trim()===snippet?text.indexOf(snippet,hit.start):-1;
+ const probe=snippet.slice(0,40);
+ if(at<0&&probe)at=text.indexOf(probe,Math.max(0,hit.start-2000));
+ if(at<0&&probe)at=text.indexOf(probe);
+ if(at<0)return {note:hit.note,text:snippet,start:0,end:snippet.length,first:0,word:'',score:hit.score};
+ const word=/^[^\n]{1,30}/.exec(text.slice(at))?.[0].trimEnd()??'';
+ return {note:hit.note,doc,text,start:at,end:Math.min(text.length,at+snippet.length),first:at,word,score:hit.score};
+}
+
+const overlaps=(a:Candidate,b:Candidate)=>a.note.id===b.note.id&&a.start<b.end&&b.start<a.end;
+
+/** Reciprocal Rank Fusion: each ranked list adds 1/(k+rank) to an item's score. */
+export const RRF_K=60;
+function fuse(keyword:Candidate[],semantic:Candidate[],k=RRF_K):Candidate[]{
+ const score=new Map<Candidate,number>();
+ keyword.forEach((c,i)=>score.set(c,1/(k+i+1)));
+ // Passage level: a semantic chunk overlapping a keyword window boosts that window (which keeps its exact match).
+ semantic.forEach((c,i)=>{const same=keyword.find(w=>overlaps(w,c))??c;score.set(same,(score.get(same)??0)+1/(k+i+1));});
+ return [...score.keys()].sort((a,b)=>score.get(b)!-score.get(a)!);
+}
+
+type GatherOptions={signal?:AbortSignal;maxNotes?:number;maxPassages?:number;maxChars?:number;radius?:number;semantic?:SemanticHit[]};
+const readable=(n:Summary)=>!n.trashed&&!('locked' in n&&n.locked);
+
+/** Keyword notes first, then notes only the semantic search found; each list is capped separately. */
+function notesToRead(notes:Summary[],semantic:SemanticHit[],maxNotes:number){
+ const out=notes.filter(readable).slice(0,maxNotes),seen=new Set(out.map(n=>n.id));
+ for(const hit of semantic.filter(h=>readable(h.note))){
+  if(seen.size>=maxNotes*2)break;
+  if(!seen.has(hit.note.id)){seen.add(hit.note.id);out.push(hit.note);}
+ }
+ return out;
+}
+
+/** Picks the best passages per note within a fixed character budget; with semantic hits, keyword and semantic passages are fused by RRF. */
+export async function gatherEvidence(notes:Summary[],words:string[],load:(note:Summary,signal?:AbortSignal)=>Promise<string|SearchDocument>,options:GatherOptions={}):Promise<Evidence[]>{
+ const {signal,maxNotes=20,maxPassages=8,maxChars=12000,radius=300,semantic=[]}=options;
  const lowerWords=words.map(w=>w.toLocaleLowerCase());
- const found:Candidate[]=[];
+ const found:Candidate[]=[],near:Candidate[]=[];
  // Sequential on purpose: notes are read one by one so cancelling stops further reads.
- for(const note of notes.filter(n=>!n.trashed&&!('locked' in n&&n.locked)).slice(0,maxNotes)){
+ for(const note of notesToRead(notes,semantic,maxNotes)){
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   let body:string|SearchDocument;
   try{body=await load(note,signal);} // NOSONAR: one read at a time so cancelling stops further reads
@@ -73,14 +112,21 @@ export async function gatherEvidence(notes:Summary[],words:string[],load:(note:S
    if(signal?.aborted)throw error;
    continue; // Notes that changed or locked meanwhile are skipped.
   }
-  found.push(...noteWindows(note,body,words,lowerWords,radius));
+  if(words.length)found.push(...noteWindows(note,body,words,lowerWords,radius));
+  for(const hit of semantic)if(hit.note.id===note.id)near.push(semanticCandidate(hit,body));
  }
- const picked:Evidence[]=[];let chars=0;
  found.sort((a,b)=>b.score-a.score);
- for(const c of found){
+ near.sort((a,b)=>b.score-a.score);
+ return pick(fuse(found,near),maxPassages,maxChars);
+}
+
+function pick(ranked:Candidate[],maxPassages:number,maxChars:number):Evidence[]{
+ const picked:Evidence[]=[],used:Candidate[]=[];let chars=0;
+ for(const c of ranked){
   const passage=c.text.slice(c.start,c.end).trim();
-  if(!passage||chars+passage.length>maxChars)continue;
+  if(!passage||chars+passage.length>maxChars||used.some(u=>overlaps(u,c)))continue;
   chars+=passage.length;
+  used.push(c);
   picked.push(toEvidence(c,picked.length+1,passage));
   if(picked.length===maxPassages)break;
  }

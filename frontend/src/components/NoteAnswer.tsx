@@ -4,6 +4,7 @@ import type { Summary } from "../types";
 import type { SearchDocument } from "../lib/search-document-core";
 import type { SearchHit } from "../lib/global-search-core";
 import { aiConfig, completeAI } from "../lib/ai-provider";
+import { semanticHits } from "../lib/semantic-index";
 import { answerParts, answerPrompt, candidateQuery, gatherEvidence, keywords, type Evidence } from "../lib/note-answer";
 
 /** Answers a question from retrieved note passages; every citation opens its source. */
@@ -21,9 +22,10 @@ export function NoteAnswer({ question, loadCandidates, loadText, onOpen }: Reado
     setState({ busy: true, asked });
     try {
       const words = keywords(asked);
-      if (!words.length) throw new Error(t("질문에서 찾을 낱말을 고르지 못했습니다. 핵심 낱말을 넣어 주세요."));
-      const notes = await loadCandidates(candidateQuery(words), controller.signal);
-      const evidence = await gatherEvidence(notes, words, loadText, { signal: controller.signal });
+      const semantic = await semanticHits(asked, controller.signal);
+      if (!words.length && !semantic.length) throw new Error(t("질문에서 찾을 낱말을 고르지 못했습니다. 핵심 낱말을 넣어 주세요."));
+      const notes = words.length ? await loadCandidates(candidateQuery(words), controller.signal) : [];
+      const evidence = await gatherEvidence(notes, words, loadText, { signal: controller.signal, semantic });
       if (!current()) return;
       if (!evidence.length) { setState({ asked, evidence, error: t("근거가 될 노트를 찾지 못해 AI에 보내지 않았습니다.") }); return; }
       const prompt = answerPrompt(asked, evidence);
