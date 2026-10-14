@@ -43,16 +43,16 @@ impl KeyStore {
     /// The key saved for `origin`; empty when none is, or it belongs to another server.
     pub fn load(&self, origin: &str) -> Result<Zeroizing<String>, String> {
         let (_, unprotect) = self.seal()?;
-        let raw = match read_bounded(&self.path) {
+        let plain = match read_bounded(&self.path) {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Zeroizing::default()),
-            other => other.map_err(|_| "saved key is unreadable")?,
+            Err(e) if e.kind() != io::ErrorKind::InvalidData => return Err("saved key is unreadable".into()),
+            raw => Zeroizing::new(raw.and_then(|raw| unprotect(&raw)).unwrap_or_default()),
         };
-        let plain = Zeroizing::new(unprotect(&raw).map_err(|_| "saved key is unreadable")?);
-        let text = std::str::from_utf8(&plain).map_err(|_| "saved key is unreadable")?;
-        match text.strip_prefix("v1\n").and_then(|rest| rest.split_once('\n')) {
+        match std::str::from_utf8(&plain).ok().and_then(|text| text.strip_prefix("v1\n")).and_then(|rest| rest.split_once('\n')) {
             Some((saved, key)) if saved == origin && printable(key, 4096) => Ok(Zeroizing::new(key.to_owned())),
             Some(_) => Ok(Zeroizing::default()),
-            None => Err("saved key is unreadable".into()),
+            // Corrupt, or sealed for another Windows user or machine: drop it so a new key can be saved.
+            None => self.clear().map(|_| Zeroizing::default()),
         }
     }
 
@@ -166,9 +166,13 @@ mod tests {
         assert!(!s.path.exists());
         fs::create_dir_all(s.path.parent().unwrap()).unwrap();
         fs::write(&s.path, flip(b"garbage").unwrap()).unwrap();
-        assert!(s.load("https://a.test").is_err(), "unreadable file fails closed");
+        assert_eq!(s.load("https://a.test").unwrap().as_str(), "", "unreadable file gives no key");
+        assert!(!s.path.exists(), "unreadable file is dropped so a new key can be saved");
         fs::write(&s.path, vec![0; LIMIT as usize + 1]).unwrap();
-        assert!(s.load("https://a.test").is_err(), "oversized file");
+        assert_eq!(s.load("https://a.test").unwrap().as_str(), "", "oversized file");
+        assert!(!s.path.exists());
+        s.save("https://a.test", "sk-new").unwrap();
+        assert_eq!(s.load("https://a.test").unwrap().as_str(), "sk-new", "store stays usable");
         let none = KeyStore { path: s.path.clone(), seal: None };
         assert!(none.load("https://a.test").is_err() && none.save("https://a.test", "sk").is_err(), "no secure store: memory only");
     }
