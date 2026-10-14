@@ -1031,6 +1031,7 @@
   width: 252px;
   max-height: calc(100vh - 16px);
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   padding: 6px;
   border: 1px solid var(--border);

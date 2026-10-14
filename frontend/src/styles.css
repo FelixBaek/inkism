@@ -1915,6 +1915,10 @@ kbd {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+/* 가로·세로 스크롤바가 만나는 모서리가 흰 네모로 보이지 않게 */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
 
 .mobile-header {
   display: none;
