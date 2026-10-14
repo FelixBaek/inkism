@@ -117,6 +117,25 @@ pub fn list(conn: &Connection, args: &Value) -> Result<Value> {
     Ok(json!({ "items": items, "next_cursor": next_cursor }))
 }
 
+/// List summaries for the given ids (missing ids are skipped).
+pub(crate) fn summaries(conn: &Connection, ids: &[&str]) -> Result<std::collections::HashMap<String, Value>> {
+    let mut stmt = conn.prepare(&format!("SELECT {SUMMARY_COLUMNS} FROM notes_meta m WHERE m.id=?1"))?;
+    let mut rows = Vec::new();
+    for id in ids {
+        if let Some(row) = stmt.query_row([id], summary_row).optional()? {
+            rows.push(row);
+        }
+    }
+    let mut memberships = crate::notebook_membership::load_many(conn, ids)?;
+    Ok(rows
+        .into_iter()
+        .map(|mut r| {
+            r.notebook_ids = memberships.remove(&r.id).unwrap_or_default();
+            (r.id.clone(), summary_json(&r))
+        })
+        .collect())
+}
+
 fn summary_json(r: &SummaryRow) -> Value {
     let tags: Vec<String> = serde_json::from_str(&r.tags_json).unwrap_or_default();
     json!({
