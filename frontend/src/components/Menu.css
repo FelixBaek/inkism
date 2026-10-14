@@ -30,10 +30,6 @@
   max-height: min(420px, 80vh);
   overflow-y: auto;
 }
-.menu-popup.menu-sub.flip {
-  left: auto;
-  right: calc(100% - 2px);
-}
 .context-menu {
   position: fixed;
   z-index: 60;

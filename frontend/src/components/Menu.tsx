@@ -32,6 +32,7 @@ function MenuList({
   onBack,
   onTab,
   label,
+  anchor,
 }: Readonly<{
   items: MenuItemSpec[];
   id?: string;
@@ -44,10 +45,12 @@ function MenuList({
   onBack?: () => void;
   onTab?: () => void;
   label?: string;
+  /** 하위 메뉴를 연 항목의 화면 위치. */
+  anchor?: DOMRect;
 }>) {
   const ref = useRef<HTMLDivElement>(null);
   const [sub, setSub] = useState<number | null>(null);
-  const [subTop, setSubTop] = useState(0);
+  const [subAnchor, setSubAnchor] = useState<DOMRect>();
   const [subFocus, setSubFocus] = useState(false);
   const enabled = () => Array.from(ref.current?.querySelectorAll<HTMLButtonElement>(ITEM) ?? []);
   useEffect(() => {
@@ -55,18 +58,14 @@ function MenuList({
     const list = enabled();
     (focus === "last" ? list.at(-1) : list[0])?.focus();
   }, []);
-  // 화면 밖으로 나가는 하위 메뉴는 반대쪽으로 펼치고 위로 올린다.
+  // 하위 메뉴는 화면 기준(fixed)으로 띄워 스크롤 영역(사이드바 등)에 잘리지 않게 하고,
+  // 화면 밖으로 나가면 반대쪽으로 펼치고 위로 올린다.
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || !onBack) return;
+    if (!el || !onBack || !anchor) return;
     const rect = el.getBoundingClientRect();
-    if (rect.right > innerWidth - 4) el.classList.add("flip");
-    const placed = el.getBoundingClientRect();
-    if (placed.left < 8) {
-      el.style.right = "auto";
-      el.style.left = `${el.offsetLeft + 8 - placed.left}px`;
-    }
-    if (rect.bottom > innerHeight - 4) el.style.top = `${el.offsetTop - (rect.bottom - innerHeight + 8)}px`;
+    if (rect.right > innerWidth - 4) el.style.left = `${Math.max(8, anchor.left - rect.width + 2)}px`;
+    if (rect.bottom > innerHeight - 4) el.style.top = `${Math.max(8, innerHeight - rect.height - 8)}px`;
   }, []);
   const openSub = (index: number, button: HTMLElement, focusSub: boolean) => {
     if (sub === index) {
@@ -76,7 +75,7 @@ function MenuList({
           ?.focus();
       return;
     }
-    setSubTop(button.offsetTop - 5);
+    setSubAnchor(button.getBoundingClientRect());
     setSubFocus(focusSub);
     setSub(index);
   };
@@ -157,7 +156,8 @@ function MenuList({
               items={item.items}
               label={item.label}
               className="menu-sub"
-              style={{ top: subTop }}
+              style={subAnchor && { position: "fixed", top: subAnchor.top - 5, left: subAnchor.right - 2 }}
+              anchor={subAnchor}
               focus={subFocus ? "first" : "none"}
               onDone={onDone}
               onBack={back}
