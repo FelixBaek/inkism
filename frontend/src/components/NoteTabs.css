@@ -92,3 +92,21 @@
 .note-tabs .note-tab.is-preview > [role="tab"] span {
   font-style: italic;
 }
+/* 끌어서 순서 바꾸기: 놓일 자리에 세로 표시선 */
+.note-tabs .note-tab {
+  position: relative;
+}
+.note-tabs .note-tab:is(.is-drop-before, .is-drop-after)::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: -5px;
+  width: 2px;
+  background: var(--accent-text);
+  pointer-events: none;
+}
+.note-tabs .note-tab.is-drop-after::before {
+  left: auto;
+  right: -5px;
+}

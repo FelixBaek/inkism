@@ -7,6 +7,8 @@ import { loadWorkspace, queueWorkspace, flushWorkspace, registerWorkspaceCapture
 import { t } from "../i18n";
 
 const OPEN_TAB_EVENT = "inkism-open-tab";
+/** 탭 끌기 데이터 형식: 값은 노트 id. 분할 편집기도 이 형식을 받는다. */
+export const TAB_DRAG_TYPE = "application/x-inkism-tab";
 /** Open a note in its own tab instead of replacing the preview tab (menu, Ctrl/middle click). */
 export function openInNewTab(s: { selectNote: (id: string) => Promise<void> }, id: string) {
   window.dispatchEvent(new CustomEvent(OPEN_TAB_EVENT, { detail: id }));
@@ -156,6 +158,17 @@ export function NoteTabs() {
   useEffect(() => {
     if (active) buttons.current.get(active)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [active, tabs.length]);
+  // 끌어서 순서 바꾸기: 끄는 탭 id와 놓일 자리(앞에 끼울 탭 순번, 끝이면 tabs.length).
+  const dragId = useRef<string | null>(null);
+  const [dropAt, setDropAt] = useState<number | null>(null);
+  const dropIndex = (strip: HTMLElement, x: number) => {
+    const items = [...strip.querySelectorAll<HTMLElement>(":scope > .note-tab")];
+    const at = items.findIndex((item) => {
+      const r = item.getBoundingClientRect();
+      return x < r.left + r.width / 2;
+    });
+    return at < 0 ? items.length : at;
+  };
   const latestTabs = useRef(tabs);
   latestTabs.current = tabs;
   useEffect(() => {
@@ -216,6 +229,31 @@ export function NoteTabs() {
       onWheel={(event) => {
         if (!event.deltaX) event.currentTarget.scrollLeft += event.deltaY;
       }}
+      onDragOver={(event) => {
+        if (!dragId.current || !event.dataTransfer.types.includes(TAB_DRAG_TYPE)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        setDropAt(dropIndex(event.currentTarget, event.clientX));
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropAt(null);
+      }}
+      onDrop={(event) => {
+        const id = dragId.current;
+        if (!id || !event.dataTransfer.types.includes(TAB_DRAG_TYPE)) return;
+        event.preventDefault();
+        const at = dropIndex(event.currentTarget, event.clientX);
+        setDropAt(null);
+        setTabs((current) => {
+          const from = current.findIndex((tab) => tab.id === id);
+          if (from < 0) return current;
+          const to = at > from ? at - 1 : at;
+          if (to === from) return current;
+          const next = current.filter((tab) => tab.id !== id);
+          next.splice(to, 0, current[from]);
+          return next;
+        });
+      }}
     >
       {workspaceError && (
         <button
@@ -233,9 +271,21 @@ export function NoteTabs() {
       )}
       {tabs.map((tab, index) => (
         <div
-          className={`note-tab${tab.id === active ? " is-selected" : ""}${tab.preview ? " is-preview" : ""}`}
+          className={`note-tab${tab.id === active ? " is-selected" : ""}${tab.preview ? " is-preview" : ""}${
+            dropAt === index ? " is-drop-before" : dropAt === tabs.length && index === tabs.length - 1 ? " is-drop-after" : ""
+          }`}
           key={tab.id}
           role="presentation"
+          draggable
+          onDragStart={(event) => {
+            dragId.current = tab.id;
+            event.dataTransfer.setData(TAB_DRAG_TYPE, tab.id);
+            event.dataTransfer.effectAllowed = "copyMove";
+          }}
+          onDragEnd={() => {
+            dragId.current = null;
+            setDropAt(null);
+          }}
           // 가운데 버튼 클릭으로 탭을 닫는다(자동 스크롤은 막는다).
           onMouseDown={(event) => {
             if (event.button === 1) event.preventDefault();
