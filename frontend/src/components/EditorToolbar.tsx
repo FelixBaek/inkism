@@ -166,6 +166,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
   const [ai, setAi] = useState<{ result: AiResult; from: number; to: number } | null>(null);
   // 실행 중인 AI 동작: 누른 줄은 "작업하는 중", 나머지 AI 줄은 결과가 올 때까지 잠근다(중복 요청 방지).
   const [aiBusy, setAiBusy] = useState<AiAction | null>(null);
+  const aiAbort = useRef<AbortController | null>(null);
   const row = useRef<HTMLDivElement>(null);
   const aiButton = useRef<HTMLButtonElement>(null);
   const caret = useRef<HTMLSpanElement>(null);
@@ -374,7 +375,11 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
     const target = aiTarget();
     setStack([]);
     setAiBusy(action);
-    const result = await requestAi(action, { selection: target.text, prompt }, s.showError).finally(() => setAiBusy(null));
+    const abort = (aiAbort.current = new AbortController());
+    const result = await requestAi(action, { selection: target.text, prompt }, s.showError, abort.signal).finally(() => {
+      if (aiAbort.current === abort) aiAbort.current = null;
+      setAiBusy(null);
+    });
     if (!result || editor.isDestroyed || !aiButton.current?.isConnected || !row.current) return;
     setAi({ result, from: target.from, to: target.to });
     setStack([{ name: "aiResult", anchor: aiButton.current, under: row.current }]);
@@ -845,20 +850,28 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             AI
           </div>
           <div className="fm-ai-list">
-            {(["polish", "spelling", "shorter", "longer", "summarize"] as const).map((action) => (
+            {(["polish", "spelling", "shorter", "longer", "summarize"] as const).map((action) =>
+              aiBusy === action ? (
+                <div key={action} className="fm-row is-busy" aria-live="polite">
+                  <Loader2 size={16} className="spin" aria-hidden />
+                  <span className="fm-busy-label">{t("AI가 작업하는 중…")}</span>
+                  <button type="button" className="fm-cancel" onClick={() => aiAbort.current?.abort()}>
+                    {t("취소")}
+                  </button>
+                </div>
+              ) : (
               <button
                 key={action}
                 type="button"
-                className={`fm-row${aiBusy === action ? " is-busy" : ""}`}
+                className="fm-row"
                 disabled={disabled || aiBusy !== null}
-                aria-busy={aiBusy === action}
                 onClick={() => void runAi(action)}
                 data-preview={action}
               >
-                {aiBusy === action && <Loader2 size={16} className="spin" aria-hidden />}
-                {aiBusy === action ? t("AI가 작업하는 중…") : AI_LABELS[action]}
+                {AI_LABELS[action]}
               </button>
-            ))}
+              ),
+            )}
           </div>
           <button
             ref={aiButton}

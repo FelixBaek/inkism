@@ -1176,10 +1176,31 @@
   cursor: default;
 }
 /* 실행 중인 AI 줄: 잠긴 다른 줄보다 또렷하게, 돌아가는 아이콘은 강조색 */
-.fm-row.is-busy:disabled {
-  opacity: 1;
+.fm-row.is-busy {
+  padding-inline-end: 4px;
   background: var(--hover);
   color: var(--muted);
+  cursor: default;
+}
+.fm-busy-label {
+  flex: 1;
+  min-width: 0;
+}
+.fm-row .fm-cancel {
+  flex: none;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.fm-row .fm-cancel:hover,
+.fm-row .fm-cancel:focus-visible {
+  background: var(--active);
+  color: var(--text);
 }
 .fm-row.is-busy svg {
   flex-shrink: 0;

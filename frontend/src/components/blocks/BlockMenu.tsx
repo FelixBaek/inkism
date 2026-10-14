@@ -6,7 +6,7 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/core";
 import { ChevronRight } from "../../icons";
-import { SUBMENUS, type BlockItem, type RunOptions } from "../../extensions/block-items";
+import { BLOCK_DESCRIPTIONS, SUBMENUS, type BlockItem, type RunOptions } from "../../extensions/block-items";
 import { t } from "../../i18n";
 import { BlockPreview } from "./BlockPreview";
 import "./BlockMenu.css";
@@ -21,6 +21,8 @@ interface Props {
   /** [+] 팝오버: 메뉴가 스스로 포커스를 받고 Esc로 닫힌다. */
   onClose?: () => void;
   style?: React.CSSProperties;
+  /** "/" 메뉴: 이름 아래 짧은 설명, 아이콘은 한 색(Figma Slash menu). */
+  described?: boolean;
 }
 /** 하위 메뉴는 항목 id로 기억한다 — "/" 메뉴는 입력마다 새 목록을 넘긴다.
  * 마우스 강조는 mouseenter가 아니라 mousemove로 바꾼다: 메뉴가 멈춰 있는 커서 아래에 열리면
@@ -34,7 +36,7 @@ const GRID_COLS = 10,
   GRID_ROWS = 6;
 
 export const BlockMenu = forwardRef<BlockMenuHandle, Props>(function BlockMenu(
-  { editor, items, onChoose, onClose, style },
+  { editor, items, onChoose, onClose, style, described },
   ref,
 ) {
   const enabled = items.map((item) => item.available(editor));
@@ -208,8 +210,20 @@ export const BlockMenu = forwardRef<BlockMenuHandle, Props>(function BlockMenu(
         }}
         onClick={() => (item.submenu ? openSub(index, false) : choose(index))}
       >
-        <Icon size={16} className="block-menu__icon" style={{ color: item.color }} aria-hidden />
-        <span className="block-menu__label">{item.label}</span>
+        <Icon
+          size={16}
+          className="block-menu__icon"
+          style={described ? undefined : { color: item.color }}
+          aria-hidden
+        />
+        {described && BLOCK_DESCRIPTIONS[item.id] ? (
+          <span className="block-menu__text">
+            <span className="block-menu__label">{item.label}</span>
+            <span className="block-menu__desc">{BLOCK_DESCRIPTIONS[item.id]}</span>
+          </span>
+        ) : (
+          <span className="block-menu__label">{item.label}</span>
+        )}
         {item.hint && <span className="block-menu__hint">{item.hint}</span>}
         {item.submenu && <ChevronRight size={12} className="block-menu__chevron" aria-hidden />}
       </button>,

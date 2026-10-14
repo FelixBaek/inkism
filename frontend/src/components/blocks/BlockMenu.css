@@ -495,3 +495,43 @@
 .bp-media svg {
   color: var(--muted);
 }
+
+/* "/" 메뉴 (Figma Editor popover/Slash menu): 우클릭 메뉴와 같은 둥근 판(10)·항목(6),
+ * 이름 아래 짧은 설명, 고른 줄은 배경만 바뀐다(강조색 글자 없음). */
+.slash-menu-root .block-menu {
+  border-radius: 10px;
+}
+.slash-menu-root .block-menu__section {
+  padding-top: 6px;
+}
+.slash-menu-root .block-menu__item {
+  height: auto;
+  min-height: 32px;
+  padding-block: 5px;
+  border-radius: 6px;
+}
+.slash-menu-root .block-menu__item + .block-menu__item {
+  margin-top: 2px;
+}
+.slash-menu-root .block-menu__item.is-active,
+.slash-menu-root .block-menu__item.is-active .block-menu__icon {
+  background: var(--active);
+  color: var(--text);
+}
+.slash-menu-root .block-menu__item.is-active .block-menu__icon {
+  background: none;
+}
+.block-menu__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+.block-menu__desc {
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--faint);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

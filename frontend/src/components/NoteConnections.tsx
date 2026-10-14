@@ -6,6 +6,7 @@ import { api, rpc, hasRpcDiagnostic } from "../api";
 import { useStore } from "../store";
 import { NoteRelations } from "./NoteRelations";
 import { t } from "../i18n";
+import { ChevronDown } from "../icons";
 import { knowledge, parseReference, wikiReferences, type NoteReference } from "../lib/knowledge";
 import { waitForAnchorEditor, navigateNoteAnchor, noteAnchors, requestResolvedAnchorRepair } from "../lib/note-anchor";
 import { markdownToHTML } from "../lib/markdown";
@@ -326,33 +327,39 @@ export function NoteConnections({ onClose, compact = false }: Readonly<{ onClose
       <fieldset className="plain-fieldset note-connections-form" disabled={busy || Boolean(s.draft?.readonly)}>
         <label>
           {t("연결할 노트")}
-          <select
-            value={target}
-            onChange={(e) => {
-              setTarget(e.target.value);
-              setAnchor("");
-            }}
-          >
-            <option value="">{t("노트 선택")}</option>
-            {suggestions
-              .filter((n) => n.id !== id)
-              .map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.title || t("제목 없음")}
-                </option>
-              ))}
-          </select>
+          <span className="note-connections-select">
+            <select
+              value={target}
+              onChange={(e) => {
+                setTarget(e.target.value);
+                setAnchor("");
+              }}
+            >
+              <option value="">{t("노트 선택")}</option>
+              {suggestions
+                .filter((n) => n.id !== id)
+                .map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.title || t("제목 없음")}
+                  </option>
+                ))}
+            </select>
+            <ChevronDown size={14} aria-hidden />
+          </span>
         </label>
         <label>
           {t("제목 또는 문단")}
-          <select aria-label={t("연결할 제목 또는 문단")} value={anchor} onChange={(e) => setAnchor(e.target.value)}>
-            <option value="">{t("노트 전체")}</option>
-            {anchors.map((a, i) => (
-              <option key={`${a}-${i}`} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
+          <span className="note-connections-select">
+            <select aria-label={t("연결할 제목 또는 문단")} value={anchor} onChange={(e) => setAnchor(e.target.value)}>
+              <option value="">{t("노트 전체")}</option>
+              {anchors.map((a, i) => (
+                <option key={`${a}-${i}`} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={14} aria-hidden />
+          </span>
         </label>
         <label>
           {t("링크 표시 이름")}

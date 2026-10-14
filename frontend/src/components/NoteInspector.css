@@ -522,6 +522,28 @@
   color: var(--text);
   font-size: var(--fs-caption);
 }
+/* 노트 링크 고르기: 기본 화살표 대신 다른 select와 같은 캐럿 */
+.note-connections-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.note-connections-form label .note-connections-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 30px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.note-connections-select svg {
+  position: absolute;
+  right: 9px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.note-connections-select option {
+  background: var(--raised);
+}
 .note-connections-form .btn[aria-pressed="true"] {
   background: var(--active);
   color: var(--accent-text);
