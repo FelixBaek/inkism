@@ -49,8 +49,39 @@ cp "${CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}" "$staging/ca-certificates.
 cp tools/deploy/sync-relay/Dockerfile "$staging/Dockerfile"
 cp tools/deploy/sync-relay/compose.yml "$staging/compose.yml"
 cp tools/deploy/sync-relay/compose.tailnet.yml "$staging/compose.tailnet.yml"
-cp tools/deploy/sync-relay/.env.example "$staging/.env.example"
-cp tools/deploy/sync-relay/.dockerignore "$staging/.dockerignore"
+# The env template and docker ignore list are written here, not kept as repository files.
+cat > "$staging/.env.example" <<'ENV'
+# Copy to .env next to compose.yml and fill in real values.
+# This example must never contain real tokens or keys. Never commit .env.
+
+# Image tag for the inkism-sync-relay image (required).
+INKISM_RELAY_VERSION=dev0
+
+# Relay auth token issued by the main operator.
+# Must be at least 32 characters (enforced by the relay).
+INKISM_RELAY_TOKEN=REPLACE_WITH_REAL_TOKEN
+
+# External Docker network shared with your reverse proxy (must already exist).
+# Defaults to inkism_proxy when unset.
+#INKISM_PROXY_NETWORK=inkism_proxy
+
+# Optional administrator-only Google recovery. Leave all three empty to disable.
+# Server operator can decrypt escrowed vault keys when this mode is enabled.
+# Pin the verified Google subject, not an email or renderer-supplied ID.
+# Keep the independent 32-byte Base64 master key outside Git and database backups.
+#INKISM_RECOVERY_GOOGLE_CLIENT_ID=
+#INKISM_RECOVERY_GOOGLE_SUBJECT=
+#INKISM_RECOVERY_MASTER_KEY=
+ENV
+cat > "$staging/.dockerignore" <<'IGNORE'
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+relay-data/
+*.jsonl
+IGNORE
 cp "$( [ -f .private/tools/deploy/sync-relay/README.md ] && echo .private/tools/deploy/sync-relay/README.md || echo README.md )" "$staging/README.md"
 mkdir -p "$staging/state"
 cp tools/deploy/sync-relay/state/.keep "$staging/state/.keep"

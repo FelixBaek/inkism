@@ -1,0 +1,10 @@
+# gitleaks: real secrets must never be in this repo. Only reviewed false positives are listed here.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "reviewed false positives"
+regexTarget = "line"
+regexes = [
+  '''per-key full serialization''',
+]
