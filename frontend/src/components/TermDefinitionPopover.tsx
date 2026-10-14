@@ -127,7 +127,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
     let unregister: (() => void) | undefined;
     const register = () => {
       unregister?.();
-      unregister = registerCommands([{id:"editor.term-definition",label:t("용어 설명"),shortcut:"mod+g",run:open,
+      unregister = registerCommands([{id:"editor.term-definition",label:t("뜻 달기"),shortcut:"mod+g",run:open,
         enabled:()=>!readOnly && !disabled && !editor.isDestroyed && !editor.view.composing && dom.contains(document.activeElement) && canDefineTerm(editor)}]);
     };
     register();

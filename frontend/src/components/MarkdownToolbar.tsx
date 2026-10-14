@@ -127,7 +127,7 @@ export function MarkdownToolbar({ editor, readOnly = false }: Readonly<{ editor:
       <IconButton label={t("링크")} disabled={disabled} onClick={() => void link()}>
         <Link2 size={16} />
       </IconButton>
-      <button type="button" className="btn btn-small" disabled={disabled || !canDefineTerm(editor)} onMouseDown={event => event.preventDefault()} onClick={() => openTermDefinition(editor)}>{t("용어 설명")}</button>
+      <button type="button" className="btn btn-small" disabled={disabled || !canDefineTerm(editor)} onMouseDown={event => event.preventDefault()} onClick={() => openTermDefinition(editor)}>{t("뜻 달기")}</button>
     </div>
     </BubbleMenu>
     {/* 파일 붙여넣기·끌어넣기는 늘 동작해야 한다. 넣기 버튼은 블록 손잡이 [+]에 있다. */}

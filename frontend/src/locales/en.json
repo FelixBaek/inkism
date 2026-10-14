@@ -928,7 +928,7 @@
   "새 노트 버튼이나 Ctrl+N으로 첫 노트를 만들어 보세요": "Create your first note with the New note button or Ctrl+N",
   "새 노트로 복구했습니다: {title}": "Recovered as a new note: {title}",
   "새 노트로 저장": "Save as new note",
-  "새 노트로 추출": "Extract as new note",
+  "새 노트로 분리": "Split into new note",
   "새 폴더": "New folder",
   "새 폴더 만들기": "New folder",
   "새 노트에 적용합니다. 기존 노트는 편집 화면의 MD/HTML 버튼으로 변환할 수 있습니다.": "Applies to new notes. Use the MD/HTML button in the editor to convert existing notes.",
@@ -987,7 +987,7 @@
   "선택 없음": "No selection",
   "선택 영역 추출": "Extract selection",
   "선택 영역은 100,000자 이하만 추출할 수 있습니다.": "Selections are limited to 100,000 characters.",
-  "선택 영역을 새 노트로 추출": "Extract selection as a new note",
+  "선택 영역을 새 노트로 분리": "Split selection into a new note",
   "선택 작업이 취소되었습니다. 원문을 유지합니다.": "Selection was canceled. The source is kept.",
   "선택 취소": "Cancel selection",
   "선택 항목 (쉼표로 구분)": "Options (comma-separated)",
@@ -1622,7 +1622,7 @@
   "추가 라이브러리 도구": "Additional library tools",
   "추가할 노트": "Note to add",
   "추가할 위키 페이지": "Wiki page to add",
-  "추출 중…": "Extracting…",
+  "분리 중…": "Splitting…",
   "축소": "Zoom out",
   "출처": "Source",
   "충돌한 노트는 건너뜁니다. 앱과 파일 내용을 비교한 뒤 새로 내보내 주세요.": "Conflicting notes are skipped. Compare the app and file contents, then export again.",
@@ -2066,7 +2066,7 @@
   "앱을 업데이트하면 보관 중인 변경을 적용합니다.": "Update the app to apply the held changes.",
   "{status} — 금고 열기": "{status} — open vault",
   "{status} — 업데이트 확인": "{status} — check for updates",
-  "용어 설명 (Ctrl/⌘+G)": "Term definition (Ctrl/⌘+G)",
+  "뜻 달기 (Ctrl/⌘+G)": "Add definition (Ctrl/⌘+G)",
   "용어 설명": "Term definition",
   "연결된 노트 열기": "Open linked note",
   "설명 수정": "Edit definition",
@@ -2477,5 +2477,6 @@
   "편집기 메뉴": "Editor menu",
   "CLI 기본 모델": "Default CLI model",
   "{cli}에 로그인된 계정으로 실행합니다. 주소와 API 키는 필요 없습니다.": "Runs with the account signed in to {cli}. No address or API key is needed.",
-  "이 컴퓨터의 CLI": "CLIs on this computer"
+  "이 컴퓨터의 CLI": "CLIs on this computer",
+  "뜻 달기": "Add definition"
 }

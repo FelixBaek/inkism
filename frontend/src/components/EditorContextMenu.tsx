@@ -70,8 +70,8 @@ export function EditorContextMenu({ editor, readOnly = false }: Readonly<{ edito
   ];
   if (editable && hasText) {
     items.push(
-      { label: t("용어 설명"), icon: <BookOpenText size={16} />, shortcut: MOD + "G", separatorBefore: true, disabled: !canDefineTerm(editor), onSelect: () => openTermDefinition(editor) },
-      { label: t("새 노트로 추출"), icon: <NotePencil size={16} />, onSelect: () => void extractSelectionToNote(store, editor) },
+      { label: t("뜻 달기"), icon: <BookOpenText size={16} />, shortcut: MOD + "G", separatorBefore: true, disabled: !canDefineTerm(editor), onSelect: () => openTermDefinition(editor) },
+      { label: t("새 노트로 분리"), icon: <NotePencil size={16} />, onSelect: () => void extractSelectionToNote(store, editor) },
     );
   }
   if (editable && editor.isActive("table")) {

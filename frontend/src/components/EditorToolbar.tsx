@@ -812,21 +812,21 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             type="button"
             className="fm-row"
             disabled={disabled || !canDefineTerm(editor)}
-            title={t("용어 설명 (Ctrl/⌘+G)")}
+            title={t("뜻 달기 (Ctrl/⌘+G)")}
             data-preview="term"
             onClick={() => openTermDefinition(editor)}
           >
-            {t("용어 설명")}
+            {t("뜻 달기")}
           </button>
           <button
             type="button"
             className="fm-row"
             disabled={disabled || extracting}
-            aria-label={t("선택 영역을 새 노트로 추출")}
+            aria-label={t("선택 영역을 새 노트로 분리")}
             data-preview="extract"
             onClick={() => void extract()}
           >
-            {extracting ? t("추출 중…") : t("새 노트로 추출")}
+            {extracting ? t("분리 중…") : t("새 노트로 분리")}
           </button>
           </div>
           <hr className="fm-sep" />
