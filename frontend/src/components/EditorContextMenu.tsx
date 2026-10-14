@@ -87,5 +87,5 @@ export function EditorContextMenu({ editor, readOnly = false }: Readonly<{ edito
       })),
     });
   }
-  return <ContextMenu x={at.x} y={at.y} items={items} label={t("편집기 메뉴")} onClose={() => setAt(null)} />;
+  return <ContextMenu x={at.x} y={at.y} items={items} label={t("편집기 메뉴")} className="menu-rounded" onClose={() => setAt(null)} />;
 }

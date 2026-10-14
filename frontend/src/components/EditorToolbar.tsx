@@ -9,6 +9,7 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
+  BookOpenText,
   Check,
   ChevronDown,
   ChevronRight,
@@ -20,8 +21,10 @@ import {
   Link2,
   List,
   ListOrdered,
+  Loader2,
   Minus,
   NoteLink,
+  NotePencil,
   Plus,
   Smile,
   SquareSigma,
@@ -120,7 +123,6 @@ interface Pop {
   under: HTMLElement;
 }
 
-const Divider = () => <span className="tb-divider" aria-hidden />;
 const Group = ({ children, label, preview }: { children: ReactNode; label?: string; preview?: string }) => (
   <fieldset className="tb-group plain-fieldset" aria-label={label} data-preview={preview}>
     {children}
@@ -162,6 +164,8 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
     color: toolbarStore.get("inkism.colors.last.color", "#f44336"),
   }));
   const [ai, setAi] = useState<{ result: AiResult; from: number; to: number } | null>(null);
+  // 실행 중인 AI 동작: 누른 줄은 "작업하는 중", 나머지 AI 줄은 결과가 올 때까지 잠근다(중복 요청 방지).
+  const [aiBusy, setAiBusy] = useState<AiAction | null>(null);
   const row = useRef<HTMLDivElement>(null);
   const aiButton = useRef<HTMLButtonElement>(null);
   const caret = useRef<HTMLSpanElement>(null);
@@ -366,9 +370,11 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
     return { from, to, empty, text: empty ? editor.getText() : editor.state.doc.textBetween(from, to, "\n") };
   };
   const runAi = async (action: AiAction, prompt?: string) => {
+    if (aiBusy) return;
     const target = aiTarget();
     setStack([]);
-    const result = await requestAi(action, { selection: target.text, prompt }, s.showError);
+    setAiBusy(action);
+    const result = await requestAi(action, { selection: target.text, prompt }, s.showError).finally(() => setAiBusy(null));
     if (!result || editor.isDestroyed || !aiButton.current?.isConnected || !row.current) return;
     setAi({ result, from: target.from, to: target.to });
     setStack([{ name: "aiResult", anchor: aiButton.current, under: row.current }]);
@@ -739,6 +745,12 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             <span>{kind.label}</span>
             <ChevronRight size={12} aria-hidden />
           </button>
+          <hr className="fm-sep" />
+          <div className="fm-tools">
+            {fontSize}
+            {select("font", 0, t("글꼴"), fontName)}
+          </div>
+          <hr className="fm-sep" />
           <div className="fm-grid">
             {markButton(t("굵게 (Ctrl+B)"), <Bold size={16} aria-hidden />, "bold", (c) => c.toggleBold())}
             {markButton(t("기울임 (Ctrl+I)"), <Italic size={16} aria-hidden />, "italic", (c) => c.toggleItalic())}
@@ -790,7 +802,8 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
               editor.isActive("highlight"),
               () => applyColor("highlight", editor.isActive("highlight") ? null : lastColor.highlight),
             )}
-            <Divider />
+          </div>
+          <div className="fm-tools">
             <Group label={t("목록")}>
               {split("ol", 0, t("번호 목록"), t("번호 목록 모양"), <ListOrdered size={16} aria-hidden />, editor.isActive("orderedList"), cmd((c) => c.toggleOrderedList()))}
               {split("ul", 0, t("글머리 목록"), t("글머리 목록 모양"), <List size={16} aria-hidden />, editor.isActive("bulletList"), cmd((c) => c.toggleBulletList()))}
@@ -802,10 +815,6 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
               </IconButton>
             </Group>
           </div>
-          <div className="fm-tools">
-            {fontSize}
-            {select("font", 0, t("글꼴"), fontName)}
-          </div>
           <hr className="fm-sep" />
           <div className="fm-pair">
           <button
@@ -816,6 +825,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             data-preview="term"
             onClick={() => openTermDefinition(editor)}
           >
+            <BookOpenText size={16} aria-hidden />
             {t("뜻 달기")}
           </button>
           <button
@@ -826,6 +836,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             data-preview="extract"
             onClick={() => void extract()}
           >
+            <NotePencil size={16} aria-hidden />
             {extracting ? t("분리 중…") : t("새 노트로 분리")}
           </button>
           </div>
@@ -835,8 +846,17 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
           </div>
           <div className="fm-ai-list">
             {(["polish", "spelling", "shorter", "longer", "summarize"] as const).map((action) => (
-              <button key={action} type="button" className="fm-row" disabled={disabled} onClick={() => void runAi(action)} data-preview={action}>
-                {AI_LABELS[action]}
+              <button
+                key={action}
+                type="button"
+                className={`fm-row${aiBusy === action ? " is-busy" : ""}`}
+                disabled={disabled || aiBusy !== null}
+                aria-busy={aiBusy === action}
+                onClick={() => void runAi(action)}
+                data-preview={action}
+              >
+                {aiBusy === action && <Loader2 size={16} className="spin" aria-hidden />}
+                {aiBusy === action ? t("AI가 작업하는 중…") : AI_LABELS[action]}
               </button>
             ))}
           </div>
@@ -847,7 +867,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             aria-label={t("AI에게 요청")}
             aria-haspopup="dialog"
             aria-expanded={aiOpen}
-            disabled={disabled}
+            disabled={disabled || aiBusy !== null}
             onClick={toggle("ai", 0)}
             data-preview="aiEdit"
           >

@@ -1116,9 +1116,16 @@
 }
 /* 용어 설명 · 새 노트로 추출을 한 줄에 */
 .fm-pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: 2px;
+}
+/* 아이콘이 붙어 두 칸을 똑같이 나누면 "새 노트로 분리"가 줄바꿈된다: 첫 칸은 글자만큼, 둘째 칸이 나머지 */
+.fm-pair .fm-row {
+  white-space: nowrap;
+  overflow: hidden;
+}
+.fm-pair .fm-row:last-child {
+  flex: 1;
 }
 .format-menu .tb-split,
 .format-menu .tb-select {
@@ -1167,6 +1174,20 @@
 .fm-row:disabled {
   opacity: 0.5;
   cursor: default;
+}
+/* 실행 중인 AI 줄: 잠긴 다른 줄보다 또렷하게, 돌아가는 아이콘은 강조색 */
+.fm-row.is-busy:disabled {
+  opacity: 1;
+  background: var(--hover);
+  color: var(--muted);
+}
+.fm-row.is-busy svg {
+  flex-shrink: 0;
+  color: var(--accent-text);
+}
+.fm-pair .fm-row svg {
+  flex-shrink: 0;
+  color: var(--muted);
 }
 .fm-ai {
   color: var(--green);

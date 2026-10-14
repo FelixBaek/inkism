@@ -268,12 +268,14 @@ export function ContextMenu({
   items,
   label,
   onClose,
+  className = "",
 }: Readonly<{
   x: number;
   y: number;
   items: MenuItemSpec[];
   label: string;
   onClose: () => void;
+  className?: string;
 }>) {
   const ref = useRef<HTMLDivElement>(null);
   const opener = useRef<Element | null>(null);
@@ -318,7 +320,7 @@ export function ContextMenu({
     };
   }, []);
   return (
-    <div ref={ref} className="context-menu" style={pos} onContextMenu={(e) => e.preventDefault()}>
+    <div ref={ref} className={`context-menu ${className}`} style={pos} onContextMenu={(e) => e.preventDefault()}>
       <MenuList items={items} label={label} onDone={() => close()} onTab={() => close()} />
     </div>
   );
