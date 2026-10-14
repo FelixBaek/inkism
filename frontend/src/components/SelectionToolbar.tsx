@@ -54,6 +54,9 @@ export async function extractSelectionToNote(store: ReturnType<typeof useStore>,
     const serializer = (await import("@tiptap/pm/model")).DOMSerializer.fromSchema(editor.schema);
     const holder = document.createElement("div");
     holder.appendChild(serializer.serializeFragment(editor.state.doc.slice(from, to).content));
+    // 한 문단 안에서 고르면 글만 나온다. 문단으로 감싸야 새 노트가 서식 편집 가능한 문서로 열린다.
+    if ([...holder.childNodes].some((n) => !(n instanceof HTMLElement) || !/^(P|H[1-6]|UL|OL|BLOCKQUOTE|PRE|TABLE|HR|DIV|DETAILS|FIGURE|ASIDE)$/.test(n.tagName)))
+      holder.innerHTML = `<p>${holder.innerHTML}</p>`;
     const created = await api.save({
       id: crypto.randomUUID(),
       title: text.replace(/\s+/g, " ").slice(0, 48),
