@@ -164,18 +164,26 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
     target.glossaryId=entry.id; setSelectedGlossaryId(entry.id);
     return entry.id;
   };
+  /** The note to link: the chosen one, or (when expanding) a note created once per target. */
+  const linkedNote = async (target: Target) => {
+    if (!expand) return noteId || undefined;
+    if (target.createdNoteId) return target.createdNoteId;
+    target.promotionId ??= crypto.randomUUID();
+    const created=await promoteNote(target.promotionId,target.term,definition.trim());
+    target.createdNoteId=created.id; setNoteId(created.id); store.refreshList();
+    return created.id;
+  };
+  const settle = (target: Target) => {
+    if (active.current!==target) return;
+    setBusy(false);
+    if (editor.isDestroyed || editor.state.doc!==target.doc) setError(t("문서가 변경되어 본문 설명을 저장하지 않았습니다. 생성한 노트와 용어집 항목은 유지됩니다."));
+  };
   const save = async () => {
     if (!target || !valid(target) || !definition.trim() || definition.length>2000 || busy) return;
     mutating.current=true; setSaving(true); setBusy(true); setError("");
     try {
-      let linked = noteId || undefined;
+      const linked = await linkedNote(target);
       let glossaryId = selectedGlossaryId || undefined;
-      if (expand && target.createdNoteId) linked=target.createdNoteId;
-      else if (expand) {
-        target.promotionId ??= crypto.randomUUID();
-        const created=await promoteNote(target.promotionId,target.term,definition.trim());
-        target.createdNoteId=created.id; linked=created.id; setNoteId(created.id); store.refreshList();
-      }
       if (!valid(target)) return;
       if (glossary || (expand && glossaryId)) glossaryId=await saveGlossary(target,glossaryId,linked);
       if (!valid(target)) return;
@@ -183,7 +191,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
       if(!applied)throw new Error(t("설명을 본문에 적용하지 못했습니다. 선택 영역을 다시 확인하세요."));
       mutating.current=false; close();
     } catch(e) {if(active.current===target)setError(e instanceof Error?e.message:String(e));}
-    finally {mutating.current=false;setSaving(false);if(active.current===target){setBusy(false);if(editor.isDestroyed || editor.state.doc!==target.doc)setError(t("문서가 변경되어 본문 설명을 저장하지 않았습니다. 생성한 노트와 용어집 항목은 유지됩니다."));}}
+    finally {mutating.current=false;setSaving(false);settle(target);}
   };
   const remove = () => { if(!target || !valid(target)){return;} editor.chain().focus().setTextSelection({from:target.from,to:target.to}).unsetMark("termDefinition").run();close(); };
   if (!target) return null;
