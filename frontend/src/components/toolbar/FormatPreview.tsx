@@ -64,6 +64,25 @@ const PREVIEWS: Record<string, { before: ReactNode; after: ReactNode; text: stri
     ),
     text: t("글머리 목록으로 바꿉니다. ▾로 글머리 모양을 고릅니다."),
   },
+  task: {
+    before: bars([70, 50]),
+    after: (
+      <span className="fp-bars fp-list">
+        <span><em>☑</em><i className="bp-line" style={{ width: "70%" }} /></span>
+        <span><em>☐</em><i className="bp-line" style={{ width: "50%" }} /></span>
+      </span>
+    ),
+    text: t("체크할 수 있는 할 일 목록으로 바꿉니다."),
+  },
+  details: {
+    before: bars([70, 50]),
+    after: (
+      <span className="fp-bars fp-list">
+        <span><em>▸</em><i className="bp-line" style={{ width: "70%" }} /></span>
+      </span>
+    ),
+    text: t("눌러서 펼치고 접는 블록으로 감쌉니다."),
+  },
   note: { before: word(""), after: word("fp-link"), text: t("다른 노트를 골라 링크로 잇습니다.") },
   emoji: { before: word(""), after: word("", "Ink 🙂"), text: t("커서 자리에 이모지를 넣습니다.") },
   term: { before: word(""), after: word("fp-term"), text: t("단어에 설명을 달아 올리면 보이게 합니다.") },

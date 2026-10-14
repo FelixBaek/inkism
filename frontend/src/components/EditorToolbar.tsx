@@ -12,6 +12,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronsUpDown,
   ClearFormatting,
   Highlighter,
   InlineCode,
@@ -412,6 +413,14 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
       </IconButton>
     </Group>
   );
+  // 접기 블록은 블록 바꾸기와 같은 길로 감싸고 푼다(setDetails는 글을 접힌 빈 제목 아래로 숨긴다).
+  const toggleDetails = () => {
+    if (disabled) return;
+    const { $from } = editor.state.selection;
+    for (let d = $from.depth; d > 0; d--)
+      if ($from.node(d).type.name === "details") return void convertBlock(editor, $from.before(d), "paragraph");
+    if ($from.depth > 0) convertBlock(editor, $from.before(1), "details");
+  };
   // 링크가 섞여 있으면 링크까지 지울지 묻는다. 링크가 없으면 바로 지운다.
   const clearFormatting = async () => {
     if (disabled) return;
@@ -785,6 +794,12 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             <Group label={t("목록")}>
               {split("ol", 0, t("번호 목록"), t("번호 목록 모양"), <ListOrdered size={16} aria-hidden />, editor.isActive("orderedList"), cmd((c) => c.toggleOrderedList()))}
               {split("ul", 0, t("글머리 목록"), t("글머리 목록 모양"), <List size={16} aria-hidden />, editor.isActive("bulletList"), cmd((c) => c.toggleBulletList()))}
+              <IconButton label={t("할 일 목록")} active={editor.isActive("taskList")} disabled={disabled} onClick={cmd((c) => c.toggleTaskList())} data-preview="task">
+                <TaskList size={16} aria-hidden />
+              </IconButton>
+              <IconButton label={t("접기 블록")} active={editor.isActive("details")} disabled={disabled} onClick={toggleDetails} data-preview="details">
+                <ChevronsUpDown size={16} aria-hidden />
+              </IconButton>
             </Group>
           </div>
           <div className="fm-tools">
