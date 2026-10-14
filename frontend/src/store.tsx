@@ -58,6 +58,8 @@ export interface DialogConfirmOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  /** 세 번째 버튼(취소와 확인 사이). 누르면 choose()가 "extra"를 돌려준다. */
+  extraLabel?: string;
 }
 export interface DialogPromptOptions extends DialogConfirmOptions {
   label: string;
@@ -76,7 +78,7 @@ export interface DialogPromptOptions extends DialogConfirmOptions {
 }
 export type PromptResult = { value: string; color: string; cover?: NotebookCover | null; description?: string };
 export type DialogState =
-  | { kind: "confirm"; options: DialogConfirmOptions; resolve: (v: boolean) => void }
+  | { kind: "confirm"; options: DialogConfirmOptions; resolve: (v: boolean | "extra") => void }
   | {
       kind: "prompt";
       options: DialogPromptOptions;
@@ -197,6 +199,8 @@ export interface StoreValue {
   // 대화상자
   dialog: DialogState | null;
   confirm: (o: DialogConfirmOptions) => Promise<boolean>;
+  /** 버튼 셋 확인 창: 확인 = true, extraLabel 버튼 = "extra", 취소 = null. */
+  choose: (o: DialogConfirmOptions & { extraLabel: string }) => Promise<true | "extra" | null>;
   prompt: (o: DialogPromptOptions) => Promise<PromptResult | null>;
   showError: (title: string, message: string) => Promise<void>;
   showImported: (count: number) => void;
@@ -531,7 +535,14 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
   const confirm = useCallback((o: DialogConfirmOptions) => {
     return new Promise<boolean>((resolve) => {
       dialogResolve.current = resolve as (v: unknown) => void;
-      setDialog({ kind: "confirm", options: o, resolve });
+      setDialog({ kind: "confirm", options: o, resolve: resolve as (v: boolean | "extra") => void });
+    });
+  }, []);
+
+  const choose = useCallback((o: DialogConfirmOptions & { extraLabel: string }) => {
+    return new Promise<true | "extra" | null>((resolve) => {
+      dialogResolve.current = resolve as (v: unknown) => void;
+      setDialog({ kind: "confirm", options: o, resolve: resolve as (v: boolean | "extra") => void });
     });
   }, []);
 
@@ -2330,6 +2341,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     importing,
     dialog,
     confirm,
+    choose,
     prompt,
     showError,
     showImported,

@@ -425,11 +425,36 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
       </IconButton>
     </Group>
   );
+  // 링크가 섞여 있으면 링크까지 지울지 묻는다. 링크가 없으면 바로 지운다.
+  const clearFormatting = async () => {
+    if (disabled) return;
+    const { from, to } = editor.state.selection;
+    const link = editor.schema.marks.link;
+    let keepLink = false;
+    if (link && editor.state.doc.rangeHasMark(from, to, link)) {
+      const choice = await s.choose({
+        title: t("링크도 지울까요?"),
+        message: t("고른 글에 링크가 있습니다. 서식만 지우거나 링크까지 함께 지울 수 있습니다."),
+        confirmLabel: t("스타일만"),
+        extraLabel: t("링크 포함"),
+      });
+      if (!choice || editor.isDestroyed) return;
+      keepLink = choice === true;
+    }
+    const chain = editor.chain().focus().setTextSelection({ from, to });
+    if (keepLink)
+      Object.keys(editor.schema.marks)
+        .filter((name) => name !== "link")
+        .forEach((name) => chain.unsetMark(name));
+    else chain.unsetAllMarks();
+    setDir(null)(chain.unsetTextAlign()).run();
+    force();
+  };
   const clearTool = (
     <IconButton
       label={t("서식 지우기 (글자만 남김)")}
       disabled={disabled}
-      onClick={cmd((c) => setDir(null)(c.unsetAllMarks().unsetTextAlign()))}
+      onClick={() => void clearFormatting()}
     >
       <ClearFormatting size={16} aria-hidden />
     </IconButton>

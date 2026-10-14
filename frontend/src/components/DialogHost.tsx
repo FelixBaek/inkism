@@ -99,6 +99,18 @@ export function DialogHost() {
                 <button type="button" className="btn" onClick={() => store.closeDialog()}>
                   {d.options.cancelLabel ?? t("취소")}
                 </button>
+                {d.options.extraLabel && (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      d.resolve("extra");
+                      store.closeDialog();
+                    }}
+                  >
+                    {d.options.extraLabel}
+                  </button>
+                )}
                 <button
                   type="button"
                   className={`btn ${d.options.danger ? "btn-danger" : "btn-primary"}`}
