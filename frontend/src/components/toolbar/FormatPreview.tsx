@@ -17,7 +17,8 @@ const bars = (widths: number[]) => (
 const word = (className: string, text: ReactNode = W) => <span className={`fp-word ${className}`}>{text}</span>;
 
 const PREVIEWS: Record<string, { before: ReactNode; after: ReactNode; text: string }> = {
-  color: { before: word(""), after: word("fp-color"), text: t("글자색이나 배경색을 칠합니다.") },
+  color: { before: word(""), after: word("fp-ink"), text: t("글자에 색을 칠합니다. ▾로 색을 고릅니다.") },
+  highlight: { before: word(""), after: word("fp-mark"), text: t("형광펜처럼 글자 뒤에 배경색을 칠합니다. ▾로 색을 고릅니다.") },
   bold: { before: word(""), after: word("fp-bold"), text: t("글자를 굵게 합니다.") },
   italic: { before: word(""), after: word("fp-italic"), text: t("글자를 기울입니다.") },
   underline: { before: word(""), after: word("fp-underline"), text: t("글자 아래에 밑줄을 긋습니다.") },
@@ -34,11 +35,42 @@ const PREVIEWS: Record<string, { before: ReactNode; after: ReactNode; text: stri
     after: word("fp-math", "x²"),
     text: t("문장 안에 수식(LaTeX)을 넣습니다."),
   },
-  more: {
-    before: word(""),
-    after: word("", <>H<sub>2</sub>O x<sup>2</sup></>),
-    text: t("첨자·형광펜·글꼴·목록 같은 서식을 더 엽니다."),
+  subscript: { before: word("", "H2O"), after: word("", <>H<sub>2</sub>O</>), text: t("글자를 아래 첨자로 작게 내립니다.") },
+  superscript: { before: word("", "x2"), after: word("", <>x<sup>2</sup></>), text: t("글자를 위 첨자로 작게 올립니다.") },
+  fontSize: { before: word("fp-small"), after: word("fp-large"), text: t("−·+로 글자 크기를 한 단계씩 바꿉니다.") },
+  font: { before: word(""), after: word("fp-serif"), text: t("글꼴을 고딕·명조·고정폭 등으로 바꿉니다.") },
+  align: {
+    before: bars([60, 40]),
+    after: <span className="fp-bars fp-center">{bars([60, 40])}</span>,
+    text: t("누를 때마다 왼쪽→가운데→오른쪽→양쪽으로 정렬을 바꿉니다."),
   },
+  dir: {
+    before: bars([60, 40]),
+    after: <span className="fp-bars fp-rtl">{bars([60, 40])}</span>,
+    text: t("문단을 오른쪽에서 왼쪽으로 쓰는 방향으로 바꿉니다."),
+  },
+  ol: {
+    before: bars([70, 50]),
+    after: (
+      <span className="fp-bars fp-list">
+        <span><em>1.</em><i className="bp-line" style={{ width: "70%" }} /></span>
+        <span><em>2.</em><i className="bp-line" style={{ width: "50%" }} /></span>
+      </span>
+    ),
+    text: t("번호 목록으로 바꿉니다. ▾로 번호 모양을 고릅니다."),
+  },
+  ul: {
+    before: bars([70, 50]),
+    after: (
+      <span className="fp-bars fp-list">
+        <span><em>•</em><i className="bp-line" style={{ width: "70%" }} /></span>
+        <span><em>•</em><i className="bp-line" style={{ width: "50%" }} /></span>
+      </span>
+    ),
+    text: t("글머리 목록으로 바꿉니다. ▾로 글머리 모양을 고릅니다."),
+  },
+  note: { before: word(""), after: word("fp-link"), text: t("다른 노트를 골라 링크로 잇습니다.") },
+  emoji: { before: word(""), after: word("", "Ink 🙂"), text: t("커서 자리에 이모지를 넣습니다.") },
   term: { before: word(""), after: word("fp-term"), text: t("단어에 설명을 달아 올리면 보이게 합니다.") },
   extract: {
     before: word("fp-selected"),

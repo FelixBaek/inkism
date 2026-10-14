@@ -2510,5 +2510,19 @@
   "핵심만 짧게 요약합니다.": "Summarize just the key points.",
   "원하는 바를 적어 AI에게 고쳐 달라고 합니다.": "Describe what you want and let AI rewrite it.",
   "여기에 놓아 분할로 열기": "Drop here to open in split",
-  "{key}+클릭으로 열기": "{key}+click to open"
+  "{key}+클릭으로 열기": "{key}+click to open",
+  "형광펜·배경색": "Highlight / background",
+  "형광펜·배경색 고르기": "Choose highlight / background color",
+  "글자에 색을 칠합니다. ▾로 색을 고릅니다.": "Colors the text. Use ▾ to choose a color.",
+  "형광펜처럼 글자 뒤에 배경색을 칠합니다. ▾로 색을 고릅니다.": "Paints a background behind the text like a highlighter. Use ▾ to choose a color.",
+  "글자를 아래 첨자로 작게 내립니다.": "Lowers text as a small subscript.",
+  "글자를 위 첨자로 작게 올립니다.": "Raises text as a small superscript.",
+  "−·+로 글자 크기를 한 단계씩 바꿉니다.": "Use − and + to change the text size one step at a time.",
+  "글꼴을 고딕·명조·고정폭 등으로 바꿉니다.": "Switches the font, such as sans, serif or monospace.",
+  "누를 때마다 왼쪽→가운데→오른쪽→양쪽으로 정렬을 바꿉니다.": "Each click cycles alignment: left → center → right → justify.",
+  "문단을 오른쪽에서 왼쪽으로 쓰는 방향으로 바꿉니다.": "Switches the paragraph to right-to-left direction.",
+  "번호 목록으로 바꿉니다. ▾로 번호 모양을 고릅니다.": "Turns it into a numbered list. Use ▾ to choose the number style.",
+  "글머리 목록으로 바꿉니다. ▾로 글머리 모양을 고릅니다.": "Turns it into a bulleted list. Use ▾ to choose the bullet style.",
+  "다른 노트를 골라 링크로 잇습니다.": "Pick another note and link to it.",
+  "커서 자리에 이모지를 넣습니다.": "Inserts an emoji at the cursor."
 }

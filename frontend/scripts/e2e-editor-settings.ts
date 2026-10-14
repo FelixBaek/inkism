@@ -16,7 +16,7 @@ const close=()=>page.getByRole('button',{name:'설정 닫기',exact:true}).click
 const until=async(fn:()=>Promise<boolean>)=>{for(let i=0;i<200;i++){if(await fn())return;await page.waitForTimeout(50);}throw new Error('condition timeout');};
 const find=async(title:string)=>(await rpc('list',{view:'all',limit:100})).items.find((n:any)=>n.title===title);
 // The format menu floats only over a text selection (Ctrl+A after a click selects the block instead), so select the line's text.
-const openMore=async()=>{const more=page.getByRole('button',{name:'서식 더보기',exact:true});for(let n=0;n<10;n++){await page.locator('.tiptap p').first().click();await page.keyboard.press('End');await page.keyboard.press('Shift+Home');if(await more.waitFor({timeout:1000}).then(()=>true,()=>false))break;}await more.click();};// a plugin toggle can refresh the editor and drop the selection, so retry
+const openMenu=async()=>{const more=page.getByRole('button',{name:'글자색 고르기',exact:true});for(let n=0;n<10;n++){await page.locator('.tiptap p').first().click();await page.keyboard.press('End');await page.keyboard.press('Shift+Home');if(await more.waitFor({timeout:1000}).then(()=>true,()=>false))break;}};// a plugin toggle can refresh the editor and drop the selection, so retry
 try {
  const existing=await rpc('save',{note:{title:'기존 HTML 보존',content:'<p><span style="color: rgb(1, 2, 3);">원본</span></p>',content_format:'html'}});
  await rpc('workspace_set',{ids:[existing.id],active:existing.id,locations:{}});await page.goto(base);await page.getByLabel('노트 제목',{exact:true}).waitFor();
@@ -69,8 +69,8 @@ try {
  assert.deepEqual(await rpc('get',{id:note.id}),converted,'failed conversion changed canonical data');
  await page.getByRole('button',{name:'확인',exact:true}).click();await page.unroute('**/api/rpc');
  
- await openMore();await page.getByRole('button',{name:/^글꼴:/}).click();await page.getByRole('option',{name:'Comic Sans MS',exact:true}).click();
- if(!await page.getByRole('button',{name:'글자색 고르기',exact:true}).count())await page.getByRole('button',{name:'서식 더보기',exact:true}).click();
+ await openMenu();await page.getByRole('button',{name:/^글꼴:/}).click();await page.getByRole('option',{name:'Comic Sans MS',exact:true}).click();
+ if(!await page.getByRole('button',{name:'글자색 고르기',exact:true}).count())await openMenu();
  await page.getByRole('button',{name:'글자색 고르기',exact:true}).click();await page.getByRole('button',{name:'사용자 포인트',exact:true}).click();
  await until(async()=>{const n=await rpc('get',{id:note.id});return n.content.includes('Comic Sans MS')&&n.content.includes('rgb(18, 52, 86)');});
  const styled=await rpc('get',{id:note.id});

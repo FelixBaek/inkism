@@ -123,7 +123,7 @@ export function ColorPalette({ kind, current, pinned, onPick, onPin, onClose }: 
     input.addEventListener("change", change);
     return () => input.removeEventListener("change", change);
   }, [key]);
-  const title = kind === "highlight" ? t("배경색") : t("글자색");
+  const title = kind === "highlight" ? t("형광펜·배경색") : t("글자색");
   const swatches: [string, string][] = [...new Map([
     ...(kind === "highlight" ? HIGHLIGHT_COLORS : TEXT_COLORS),
     ...custom.map((c): [string, string] => [t("직접 고른 색 {color}", { color: c }), c]),

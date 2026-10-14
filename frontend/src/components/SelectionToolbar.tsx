@@ -6,7 +6,26 @@ import type { useStore } from "../store";
 import { openInNewTab } from "./NoteTabs";
 
 // 떠 있는 서식 메뉴 설정. 렌더마다 새로 만들면 BubbleMenu가 매번 트랜잭션을 보내 다시 그리기가 끝없이 돈다.
-export const FORMAT_MENU_OPTIONS = { placement: "top-start", offset: 8, flip: true, shift: { padding: 8 } } as const;
+export const FORMAT_MENU_HIDDEN = "inkism-format-menu-hidden";
+export const FORMAT_MENU_OPTIONS = {
+  placement: "top-start",
+  offset: 8,
+  flip: true,
+  shift: { padding: 8 },
+  // 위·아래 어느 쪽에도 다 들어가지 않으면 자리가 넓은 쪽(flip)에 두고, 그 높이만큼만 보이며 메뉴 안에서 스크롤한다.
+  // 고른 글은 가리지 않는다. 평소엔 높이 제한이 없어 다 보인다.
+  size: {
+    padding: 8,
+    apply: ({ availableHeight, elements }: { availableHeight: number; elements: { floating: HTMLElement } }) => {
+      const menu = elements.floating.querySelector<HTMLElement>(".format-menu");
+      if (menu) menu.style.maxHeight = `${Math.max(160, Math.floor(availableHeight))}px`;
+    },
+  },
+  // 새로 뜰 때는 지난 높이 제한을 풀어 flip이 메뉴 전체 높이로 자리를 고르게 한다.
+  onShow: () => document.querySelectorAll<HTMLElement>(".format-menu").forEach((menu) => (menu.style.maxHeight = "")),
+  // 메뉴가 숨으면 메뉴에서 연 팝오버(색·목록·블록 바꾸기 등)도 닫게 알린다.
+  onHide: () => document.dispatchEvent(new Event(FORMAT_MENU_HIDDEN)),
+} as const;
 /** 글자를 고를 때만. 블록 통째 선택(이미지·동영상·3D 등)에는 서식 메뉴를 띄우지 않는다. */
 export const showFormatMenu = ({ editor, state }: { editor: Editor; state: EditorState }) =>
   editor.isEditable &&

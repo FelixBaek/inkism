@@ -22,7 +22,6 @@ import {
   List,
   ListOrdered,
   Minus,
-  MoreVertical,
   NoteLink,
   Plus,
   Smile,
@@ -40,7 +39,7 @@ import { AI_LABELS, registerAiNotice, requestAi, type AiAction, type AiResult } 
 import { AttachmentButton } from "./AttachmentButton";
 import { MathTools } from "./MathTools";
 import { canDefineTerm, openTermDefinition } from "./TermDefinitionPopover";
-import { FORMAT_MENU_OPTIONS, extractSelectionToNote, showFormatMenu } from "./SelectionToolbar";
+import { FORMAT_MENU_HIDDEN, FORMAT_MENU_OPTIONS, extractSelectionToNote, showFormatMenu } from "./SelectionToolbar";
 import { BlockPreview } from "./blocks/BlockPreview";
 import "./blocks/BlockMenu.css";
 import { IconButton } from "./IconButton";
@@ -102,7 +101,7 @@ const ALIGNS = [
 ] as const;
 const DIR_TYPES = ["paragraph", "heading"];
 
-type PopName = "more" | "turn" | "para" | "font" | "ol" | "ul" | "emoji" | "note" | "ai" | "aiResult" | ColorKind;
+type PopName = "turn" | "para" | "font" | "ol" | "ul" | "emoji" | "note" | "ai" | "aiResult" | ColorKind;
 interface Pop {
   name: PopName;
   anchor: HTMLElement;
@@ -110,8 +109,8 @@ interface Pop {
 }
 
 const Divider = () => <span className="tb-divider" aria-hidden />;
-const Group = ({ children, label }: { children: ReactNode; label?: string }) => (
-  <fieldset className="tb-group plain-fieldset" aria-label={label}>
+const Group = ({ children, label, preview }: { children: ReactNode; label?: string; preview?: string }) => (
+  <fieldset className="tb-group plain-fieldset" aria-label={label} data-preview={preview}>
     {children}
   </fieldset>
 );
@@ -190,6 +189,17 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
     window.addEventListener("inkism-open-emoji-picker", open);
     return () => window.removeEventListener("inkism-open-emoji-picker", open);
   }, [editor]);
+  // 서식 메뉴가 숨으면(선택 해제·다른 곳 클릭) 메뉴에서 연 팝오버도 함께 닫는다. 커서에서 연 이모지 창은 둔다.
+  // 키보드로 연 팝오버로 포커스가 옮겨 가며 메뉴가 숨는 경우는 그 팝오버를 쓰는 중이므로 남긴다.
+  useEffect(() => {
+    const hidden = () => {
+      if (row.current?.isConnected || document.activeElement?.closest("[data-tb-popover]")) return;
+      setTip(null);
+      setStack((st) => (st[0]?.anchor === caret.current ? st : []));
+    };
+    document.addEventListener(FORMAT_MENU_HIDDEN, hidden);
+    return () => document.removeEventListener(FORMAT_MENU_HIDDEN, hidden);
+  }, []);
   if (!editor) return null;
   const disabled = readOnly || !editor.isEditable;
   const isOpen = (name: PopName) => stack.some((p) => p.name === name);
@@ -238,7 +248,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
     active: boolean,
     main: () => void,
   ) => (
-    <span className={`tb-split${isOpen(name) ? " is-open" : ""}`}>
+    <span className={`tb-split${isOpen(name) ? " is-open" : ""}`} data-preview={name} data-preview-label={label}>
       <button
         type="button"
         className={`tb-split-main${active ? " is-active" : ""}`}
@@ -274,6 +284,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
       aria-expanded={isOpen(name)}
       disabled={disabled}
       onClick={toggle(name, level)}
+      data-preview={name}
     >
       <span>{value}</span>
       <ChevronDown size={12} aria-hidden />
@@ -357,43 +368,8 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
   };
 
   /* ---------- 도구 묶음 ---------- */
-  const extraTools = (level: number) => (
-    <>
-      {markButton(t("취소선"), <Strikethrough size={16} aria-hidden />, "strike", (c) => c.toggleStrike())}
-      {markButton(t("인라인 코드"), <InlineCode size={16} aria-hidden />, "code", (c) => c.toggleCode())}
-      {markButton(t("아래 첨자"), <SubscriptIcon size={16} aria-hidden />, "subscript", (c) => c.toggleSubscript())}
-      {markButton(t("위 첨자"), <SuperscriptIcon size={16} aria-hidden />, "superscript", (c) => c.toggleSuperscript())}
-      <Divider />
-      {split(
-        "highlight",
-        level,
-        t("형광펜"),
-        t("배경색 고르기"),
-        <Highlighter size={16} aria-hidden />,
-        editor.isActive("highlight"),
-        () => applyColor("highlight", editor.isActive("highlight") ? null : lastColor.highlight),
-      )}
-      {split(
-        "color",
-        level,
-        t("글자색"),
-        t("글자색 고르기"),
-        <TextColor size={16} aria-hidden />,
-        Boolean(colorOf("color")),
-        () => applyColor("color", colorOf("color") ? null : lastColor.color),
-      )}
-      <IconButton
-        label={t("인라인 수식")}
-        disabled={disabled}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => requestMath(editor, { kind: "inlineMath" })}
-      >
-        <SquareSigma size={16} aria-hidden />
-      </IconButton>
-    </>
-  );
   const fontSize = (
-    <Group label={t("글자 크기")}>
+    <Group label={t("글자 크기")} preview="fontSize">
       <IconButton
         label={t("글자 작게")}
         disabled={disabled || sizeNow <= FONT_SIZES[0]}
@@ -417,6 +393,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
   const blockTools = (
     <Group label={t("정렬·글 방향")}>
       <IconButton
+        data-preview="align"
         label={t("정렬: {current} (누르면 {next})", { current: align[1], next: nextAlign[1] })}
         disabled={disabled}
         onClick={cmd((c) => (nextAlign[0] === "left" ? c.unsetTextAlign() : c.setTextAlign(nextAlign[0])))}
@@ -427,6 +404,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
         label={rtl ? t("글 방향: 끝에서 시작 (오른쪽→왼쪽)") : t("글 방향: 앞에서 시작 (왼쪽→오른쪽)")}
         active={rtl}
         disabled={disabled}
+        data-preview="dir"
         onClick={cmd(setDir(rtl ? null : "rtl"))}
       >
         {rtl ? <DirectionRtl size={16} aria-hidden /> : <DirectionLtr size={16} aria-hidden />}
@@ -471,37 +449,9 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
 
   /* ---------- 팝오버 ---------- */
   const renderPop = (pop: Pop, level: number) => {
-    const common = { anchor: pop.anchor, under: pop.under, bounds: null, onClose: () => closeAt(level) };
+    // 서식 메뉴에서 연 팝오버는 메뉴 옆에 둔다(메뉴·고른 글을 가리지 않게). 커서에서 연 이모지는 커서 아래.
+    const common = { anchor: pop.anchor, under: pop.under, bounds: null, side: pop.under === row.current, onClose: () => closeAt(level) };
     switch (pop.name) {
-      case "more":
-        return (
-          <Popover
-            key={pop.name}
-            {...common}
-            keepOpen={palettePinned && (isOpen("highlight") || isOpen("color"))}
-            label={t("서식 더보기")}
-            role="toolbar"
-            className="tb-more"
-          >
-            <div className="tb-more-row">{extraTools(level + 1)}</div>
-            <div className="tb-more-row">
-              {fontSize}
-              {select("font", level + 1, t("글꼴"), fontName)}
-            </div>
-            <div className="tb-more-row">
-              {popButton("note", level + 1, t("노트 연결"), <NoteLink size={16} aria-hidden />)}
-              {popButton("emoji", level + 1, t("이모지"), <Smile size={16} aria-hidden />)}
-              <Divider />
-              {blockTools}
-            </div>
-            <div className="tb-more-row">
-              <Group label={t("목록")}>
-                {split("ol", level + 1, t("번호 목록"), t("번호 목록 모양"), <ListOrdered size={16} aria-hidden />, editor.isActive("orderedList"), cmd((c) => c.toggleOrderedList()))}
-                {split("ul", level + 1, t("글머리 목록"), t("글머리 목록 모양"), <List size={16} aria-hidden />, editor.isActive("bulletList"), cmd((c) => c.toggleBulletList()))}
-              </Group>
-            </div>
-          </Popover>
-        );
       case "turn":
         return (
           <Popover key={pop.name} {...common} side label={t("블록 종류 바꾸기")} role="listbox" className="tb-menu fm-turn-menu">
@@ -546,9 +496,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             key={pop.name}
             {...common}
             keepOpen={palettePinned}
-            // 서식 메뉴의 색 버튼에서 열면 메뉴 옆에 둔다(메뉴·고른 글을 가리지 않게).
-            side={level === 0}
-            label={pop.name === "highlight" ? t("배경색") : t("글자색")}
+            label={pop.name === "highlight" ? t("형광펜·배경색") : t("글자색")}
             className="tb-pop-panel"
           >
             <ColorPalette
@@ -750,7 +698,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             const show = () =>
               setTip({
                 id: item.dataset.preview!,
-                label: item.getAttribute("aria-label") ?? item.textContent!.trim(),
+                label: item.dataset.previewLabel ?? item.getAttribute("aria-label") ?? item.textContent!.trim(),
                 item,
               });
             // 처음엔 잠깐 머물러야 뜨고, 카드가 떠 있는 동안은 옮기는 대로 바로 바뀐다.
@@ -782,13 +730,18 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             <ChevronRight size={12} aria-hidden />
           </button>
           <div className="fm-grid">
-            {popButton("color", 0, t("글자색·배경색"), <TextColor size={16} aria-hidden />)}
             {markButton(t("굵게 (Ctrl+B)"), <Bold size={16} aria-hidden />, "bold", (c) => c.toggleBold())}
             {markButton(t("기울임 (Ctrl+I)"), <Italic size={16} aria-hidden />, "italic", (c) => c.toggleItalic())}
             {markButton(t("밑줄 (Ctrl+U)"), <UnderlineIcon size={16} aria-hidden />, "underline", (c) =>
               c.toggleUnderline(),
             )}
-            {clearTool}
+            {markButton(t("취소선"), <Strikethrough size={16} aria-hidden />, "strike", (c) => c.toggleStrike())}
+            {markButton(t("인라인 코드"), <InlineCode size={16} aria-hidden />, "code", (c) => c.toggleCode())}
+            {markButton(t("아래 첨자"), <SubscriptIcon size={16} aria-hidden />, "subscript", (c) => c.toggleSubscript())}
+            {markButton(t("위 첨자"), <SuperscriptIcon size={16} aria-hidden />, "superscript", (c) => c.toggleSuperscript())}
+            <IconButton label={t("인라인 수식")} disabled={disabled} onClick={() => requestMath(editor, { kind: "inlineMath" })} data-preview="inlineMath">
+              <SquareSigma size={16} aria-hidden />
+            </IconButton>
             <IconButton
               label={t("링크")}
               active={editor.isActive("link")}
@@ -798,14 +751,43 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             >
               <Link2 size={16} aria-hidden />
             </IconButton>
-            {markButton(t("취소선"), <Strikethrough size={16} aria-hidden />, "strike", (c) => c.toggleStrike())}
-            {markButton(t("인라인 코드"), <InlineCode size={16} aria-hidden />, "code", (c) => c.toggleCode())}
-            <IconButton label={t("인라인 수식")} disabled={disabled} onClick={() => requestMath(editor, { kind: "inlineMath" })} data-preview="inlineMath">
-              <SquareSigma size={16} aria-hidden />
-            </IconButton>
-            {popButton("more", 0, t("서식 더보기"), <MoreVertical size={16} weight="bold" aria-hidden />)}
+            {popButton("note", 0, t("노트 연결"), <NoteLink size={16} aria-hidden />)}
+            {popButton("emoji", 0, t("이모지"), <Smile size={16} aria-hidden />)}
+            {blockTools}
+            {clearTool}
           </div>
           <hr className="fm-sep" />
+          <div className="fm-tools">
+            {split(
+              "color",
+              0,
+              t("글자색"),
+              t("글자색 고르기"),
+              <TextColor size={16} aria-hidden />,
+              Boolean(colorOf("color")),
+              () => applyColor("color", colorOf("color") ? null : lastColor.color),
+            )}
+            {split(
+              "highlight",
+              0,
+              t("형광펜·배경색"),
+              t("형광펜·배경색 고르기"),
+              <Highlighter size={16} aria-hidden />,
+              editor.isActive("highlight"),
+              () => applyColor("highlight", editor.isActive("highlight") ? null : lastColor.highlight),
+            )}
+            <Divider />
+            <Group label={t("목록")}>
+              {split("ol", 0, t("번호 목록"), t("번호 목록 모양"), <ListOrdered size={16} aria-hidden />, editor.isActive("orderedList"), cmd((c) => c.toggleOrderedList()))}
+              {split("ul", 0, t("글머리 목록"), t("글머리 목록 모양"), <List size={16} aria-hidden />, editor.isActive("bulletList"), cmd((c) => c.toggleBulletList()))}
+            </Group>
+          </div>
+          <div className="fm-tools">
+            {fontSize}
+            {select("font", 0, t("글꼴"), fontName)}
+          </div>
+          <hr className="fm-sep" />
+          <div className="fm-pair">
           <button
             type="button"
             className="fm-row"
@@ -826,6 +808,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
           >
             {extracting ? t("추출 중…") : t("새 노트로 추출")}
           </button>
+          </div>
           <hr className="fm-sep" />
           <div className="fm-section" aria-hidden>
             AI

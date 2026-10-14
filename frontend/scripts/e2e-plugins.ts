@@ -12,7 +12,7 @@ const upload=async(value:unknown)=>page.locator('.plugin-import-card input[type=
 const card=(name:string)=>page.locator('.plugin-card').filter({has:page.locator('strong').filter({hasText:name})});
 const until=async(fn:()=>Promise<boolean>)=>{for(let i=0;i<150;i++){if(await fn())return;await page.waitForTimeout(50);}throw Error('condition timeout');};
 // The format menu floats only over a text selection (Ctrl+A after a click selects the block instead), so select the line's text.
-const openMore=async()=>{const more=page.getByRole('button',{name:'서식 더보기',exact:true});for(let n=0;n<10;n++){await page.locator('.tiptap p').first().click();await page.keyboard.press('End');await page.keyboard.press('Shift+Home');if(await more.waitFor({timeout:1000}).then(()=>true,()=>false))break;}await more.click();};// a plugin toggle can refresh the editor and drop the selection, so retry
+const openMore=async()=>{const more=page.getByRole('button',{name:'글자색 고르기',exact:true});for(let n=0;n<10;n++){await page.locator('.tiptap p').first().click();await page.keyboard.press('End');await page.keyboard.press('Shift+Home');if(await more.waitFor({timeout:1000}).then(()=>true,()=>false))break;}};// a plugin toggle can refresh the editor and drop the selection, so retry
 try{
  const original=await rpc('save',{note:{title:'Plugin verification '+Date.now(),content:'<p>패키지 검증</p>',content_format:'html'}});
  await rpc('workspace_set',{ids:[original.id],active:original.id,locations:{}});await page.goto(base);await page.locator('.tiptap').waitFor();
@@ -26,7 +26,7 @@ try{
  assert.equal(await card('거부 패키지').count(),0);assert.equal(await card('검증 패키지').count(),1);
  await close();
  await openMore();await page.getByRole('button',{name:/^글꼴:/}).click();await page.getByRole('option',{name:'패키지 Georgia',exact:true}).click();
- if(!await page.getByRole('button',{name:'글자색 고르기',exact:true}).count())await page.getByRole('button',{name:'서식 더보기',exact:true}).click();
+ if(!await page.getByRole('button',{name:'글자색 고르기',exact:true}).count())await openMore();
  await page.getByRole('button',{name:'글자색 고르기',exact:true}).click();await page.getByRole('button',{name:'패키지 포인트',exact:true}).click();
  await until(async()=>{const n=await rpc('get',{id:original.id});return n.content.includes('Georgia')&&n.content.includes('rgb(19, 87, 155)');});
  const saved=await rpc('get',{id:original.id});
