@@ -59,6 +59,14 @@ async function propose(id: string): Promise<{ proposal?: WikiProposal; message?:
 
 function ProposalView({ proposal, busy, onApprove, onReject }: Readonly<{ proposal: WikiProposal; busy: boolean; onApprove: () => void; onReject: () => void }>) {
   const diff = diffLines(toLines(proposal.before ?? "", proposal.content_format), toLines(proposal.after ?? "", proposal.content_format));
+  // Rows can repeat, so each key counts earlier identical rows.
+  const seen = new Map<string, number>();
+  const rowKeys = ("tooLarge" in diff ? [] : diff.rows).map(r => {
+    const base = `${r.kind}:${r.left ?? ""}|${r.right ?? ""}`;
+    const n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    return `${base}#${n}`;
+  });
   return (
     <section className="wiki-proposal" aria-label={t("위키 갱신 제안 내용")}>
       <h3>{t("AI가 쓴 제안 · 근거 {count}개", { count: proposal.sources.length })}</h3>
@@ -75,7 +83,7 @@ function ProposalView({ proposal, busy, onApprove, onReject }: Readonly<{ propos
         ) : (
           <div className="history-diff-rows">
             {diff.rows.map((r, i) => (
-              <div key={i} className="diff-row">
+              <div key={rowKeys[i]} className="diff-row">
                 <DiffCell text={r.left} kind={r.kind === "same" ? "same" : "del"} />
                 <DiffCell text={r.right} kind={r.kind === "same" ? "same" : "add"} />
               </div>

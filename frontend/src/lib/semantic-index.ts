@@ -18,7 +18,7 @@ async function indexBatch(model:string,signal:AbortSignal):Promise<number>{
  for(const note of items){
   if(signal.aborted)return 0;
   const vectors=note.chunks.length?await embedTexts(note.chunks.map(c=>c.text),signal):[]; // NOSONAR: one note at a time keeps cancelling prompt
-  try{await api.semanticPut(note.id,note.revision,model,vectors);}
+  try{await api.semanticPut(note.id,note.revision,model,vectors);} // NOSONAR: stored right after its own embedding
   catch(e){if(!(e instanceof RpcError&&(e.isConflict||e.code==='not_found')))throw e;}
  }
  return items.length;

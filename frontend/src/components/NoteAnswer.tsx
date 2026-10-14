@@ -14,6 +14,19 @@ const relationLoaders = {
   summary: async (id: string) => (await api.documentInfo(id)).summary,
 };
 
+/** Reads each note body once per question, even when relation expansion revisits it. */
+function cachedLoader(loadText: (note: Summary, signal?: AbortSignal) => Promise<string | SearchDocument>) {
+  const texts = new Map<string, Promise<string | SearchDocument>>();
+  return (note: Summary, signal?: AbortSignal) => {
+    let text = texts.get(note.id);
+    if (!text) {
+      text = loadText(note, signal);
+      texts.set(note.id, text);
+    }
+    return text;
+  };
+}
+
 /** Answers a question from retrieved note passages; every citation opens its source. */
 export function NoteAnswer({ question, loadCandidates, loadText, onOpen }: Readonly<{ question: string; loadCandidates: (query: string, signal: AbortSignal) => Promise<Summary[]>; loadText: (note: Summary, signal?: AbortSignal) => Promise<string | SearchDocument>; onOpen?: (id: string, anchor?: string, hit?: SearchHit) => void }>) {
   const [state, setState] = useState<{ busy?: boolean; error?: string; answer?: string; evidence?: Evidence[]; asked?: string }>({});
@@ -32,15 +45,7 @@ export function NoteAnswer({ question, loadCandidates, loadText, onOpen }: Reado
       const semantic = await semanticHits(asked, controller.signal);
       if (!words.length && !semantic.length) throw new Error(t("질문에서 찾을 낱말을 고르지 못했습니다. 핵심 낱말을 넣어 주세요."));
       const notes = words.length ? await loadCandidates(candidateQuery(words), controller.signal) : [];
-      const texts = new Map<string, Promise<string | SearchDocument>>();
-      const load = (note: Summary, signal?: AbortSignal) => {
-        let text = texts.get(note.id);
-        if (!text) {
-          text = loadText(note, signal);
-          texts.set(note.id, text);
-        }
-        return text;
-      };
+      const load = cachedLoader(loadText);
       let evidence = await gatherEvidence(notes, words, load, { signal: controller.signal, semantic });
       // One typed hop from the best sources lets the model chain facts (책 —저자→ 사람).
       const related = await relatedNotes(evidence, notes, relationLoaders, { signal: controller.signal });
