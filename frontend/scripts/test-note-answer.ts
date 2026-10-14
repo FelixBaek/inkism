@@ -87,15 +87,61 @@ console.log('PASS note answer: keyword extraction, locked/trashed exclusion, bou
     relations: async id => { asked.push(id); return [edge('book', 'person', '저자', 'out'), edge('book', 'hidden', '저자', 'out'), edge('book', 'person', null, 'out', 'link')]; },
     summary: async id => id === 'hidden' ? note(id, 'H', { locked: true }) : note(id, '사람B'),
   });
-  assert.deepEqual(asked, ['book']);
+  assert.deepEqual(asked, ['book', 'person'], 'second hop expands the related note');
   assert.deepEqual(related.notes.map(n => n.id), ['person'], 'locked related notes are dropped');
-  const all = await gatherEvidence([...related.notes, ...candidates], ['Qz'], read, { related: new Set(['person']) });
+  const all = await gatherEvidence([...related.notes, ...candidates], ['Qz'], read, { related: related.hops });
   assert.deepEqual(all.map(e => e.note.id).sort(), ['book', 'person'], 'related note without keywords still yields a passage');
   const n = (id: string) => all.find(e => e.note.id === id)!.n;
   const lines = relationLines(all, related.edges);
-  assert.deepEqual(lines, [`[${n('book')}] 책A —저자→ [${n('person')}] 사람B`, `[${n('book')}] 책A —link→ [${n('person')}] 사람B`], 'edges to unsent notes are omitted');
+  assert.deepEqual(lines, [`[${n('book')}] 책A —저자→ [${n('person')}] 사람B (hop 1)`, `[${n('book')}] 책A —link→ [${n('person')}] 사람B (hop 1)`], 'edges to unsent notes are omitted');
   const p = answerPrompt('Qz 저자는 어디 출신?', all, related.edges);
   assert.ok(p.source.endsWith('\n\nRelations:\n' + lines.join('\n')) && p.instruction.includes('Relations block'));
   assert.ok(!answerPrompt('q', all).source.includes('Relations'), 'no relation block without edges');
   console.log('PASS note answer relations: related candidates, locked exclusion, numbered relation lines');
+}
+
+// Multi-hop: breadth-first chains with hop depth, cycles, budgets, cancellation.
+{
+  const title: Record<string, string> = { book: '책A', person: '사람B', company: '회사C', city: '도시D' };
+  const edge = (source: string, target: string, property: string, direction: 'out' | 'in') => ({ source, target, source_title: title[source] ?? source, target_title: title[target] ?? target, kind: 'relation', property, direction, from: direction === 'out' ? source : target, hop: 1, evidence: null }) as any;
+  // book —저자→ person —소속→ company —위치→ city, plus person —대표작→ book closing a cycle.
+  const graph: Record<string, any[]> = {
+    book: [edge('book', 'person', '저자', 'out'), edge('person', 'book', '대표작', 'in')],
+    person: [edge('person', 'company', '소속', 'out'), edge('book', 'person', '저자', 'in'), edge('person', 'book', '대표작', 'out')],
+    company: [edge('company', 'city', '위치', 'out'), edge('person', 'company', '소속', 'in')],
+    city: [edge('company', 'city', '위치', 'in')],
+  };
+  const texts: Record<string, string> = { book: 'Qz 장편 소설이다.', person: '부산에서 자랐다.', company: '판교에 본사가 있다.', city: '경기도 도시.' };
+  const read = async (n: any) => texts[n.id];
+  const candidates = [note('book', 'Qz 책A')];
+  const first = await gatherEvidence(candidates, ['Qz'], read);
+  const calls: string[] = [];
+  const loaders = { relations: async (id: string) => { calls.push(id); return graph[id] ?? []; }, summary: async (id: string) => note(id, title[id]) };
+  const two = await relatedNotes(first, candidates, loaders);
+  assert.deepEqual(two.notes.map(n => n.id), ['person', 'company'], 'default depth reaches the second hop only');
+  assert.deepEqual([...two.hops], [['person', 1], ['company', 2]]);
+  assert.deepEqual(calls, ['book', 'person'], 'cycle back to the book is not expanded again');
+  assert.equal(two.edges.length, 3, 'each edge kept once although seen from both ends');
+  const all = await gatherEvidence([...two.notes, ...candidates], ['Qz'], read, { related: two.hops });
+  const n = (id: string) => all.find(e => e.note.id === id)!.n;
+  assert.ok(n('company') > n('person'), 'deeper hop ranks below the first hop');
+  const p = answerPrompt('Qz 저자의 회사는 어디?', all, two.edges);
+  assert.ok(p.source.includes(`[${n('book')}] 책A —저자→ [${n('person')}] 사람B (hop 1)\n`) && p.source.endsWith(`[${n('person')}] 사람B —소속→ [${n('company')}] 회사C (hop 2)`), 'chain shown with hop depth');
+  calls.length = 0;
+  const three = await relatedNotes(first, candidates, loaders, { maxHops: 9 });
+  assert.deepEqual(three.hops.get('city'), 3, 'hard cap of three hops');
+  assert.deepEqual(calls, ['book', 'person', 'company']);
+  // Budgets: a star of 30 neighbours stops at the note cap; a long chain stops at the call cap.
+  const star = { relations: async () => Array.from({ length: 30 }, (_, i) => edge('book', `s${i}`, 'x', 'out')), summary: async (id: string) => note(id, id) };
+  assert.equal((await relatedNotes(first, candidates, star)).notes.length, 12, 'related note budget');
+  calls.length = 0;
+  const chain = { relations: async (id: string) => { calls.push(id); return Array.from({ length: 12 }, (_, i) => edge(id, `${id}.${i}`, 'x', 'out')); }, summary: async (id: string) => note(id, id) };
+  await relatedNotes(first, candidates, chain, { maxNotes: 50, maxCalls: 5 });
+  assert.equal(calls.length, 5, 'relation call budget');
+  // Cancelling during the first hop stops every later read.
+  const controller = new AbortController(), seen: string[] = [];
+  const abortable = { relations: async (id: string) => { seen.push('rel:' + id); controller.abort(); return graph[id]; }, summary: async (id: string) => { seen.push('sum:' + id); return note(id, id); } };
+  await assert.rejects(relatedNotes(first, candidates, abortable, { signal: controller.signal }), { name: 'AbortError' });
+  assert.deepEqual(seen, ['rel:book'], 'no reads after abort');
+  console.log('PASS note answer multi-hop: 2-hop chain with hop depth, cycle, 3-hop cap, note and call budgets, abort');
 }

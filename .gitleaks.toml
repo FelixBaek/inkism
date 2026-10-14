@@ -4,6 +4,10 @@ useDefault = true
 
 [allowlist]
 description = "reviewed false positives"
+paths = [
+  # generated lockfiles list package names such as inkism-windows-secrets
+  '''(^|/)Cargo\.lock$''',
+]
 regexTarget = "line"
 regexes = [
   '''per-key full serialization''',

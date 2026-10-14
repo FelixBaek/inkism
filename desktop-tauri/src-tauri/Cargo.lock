@@ -2111,6 +2111,7 @@ dependencies = [
  "inkism-native-host",
  "inkism-pdf-export",
  "inkism-reminders",
+ "inkism-windows-secrets",
  "objc2-foundation",
  "rfd",
  "serde",
@@ -2122,6 +2123,7 @@ dependencies = [
  "time",
  "url",
  "windows-sys 0.61.2",
+ "zeroize",
 ]
 
 [[package]]

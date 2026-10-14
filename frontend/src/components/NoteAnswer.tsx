@@ -27,7 +27,7 @@ function cachedLoader(loadText: (note: Summary, signal?: AbortSignal) => Promise
   };
 }
 
-/** Keyword + semantic passages, then one typed hop from the best sources so the model can chain facts (책 —저자→ 사람). */
+/** Keyword + semantic passages, then breadth-first typed hops (up to 2) from the best sources so the model can chain facts (책 —저자→ 사람 —소속→ 회사). */
 async function retrieve(asked: string, loadCandidates: (query: string, signal: AbortSignal) => Promise<Summary[]>, loadText: (note: Summary, signal?: AbortSignal) => Promise<string | SearchDocument>, signal: AbortSignal) {
   const words = keywords(asked);
   const semantic = await semanticHits(asked, signal);
@@ -37,7 +37,8 @@ async function retrieve(asked: string, loadCandidates: (query: string, signal: A
   const evidence = await gatherEvidence(notes, words, load, { signal, semantic });
   const related = await relatedNotes(evidence, notes, relationLoaders, { signal });
   if (!related.notes.length) return { evidence, edges: related.edges };
-  const more = await gatherEvidence([...related.notes, ...notes], words, load, { signal, semantic, related: new Set(related.notes.map(n => n.id)) });
+  // Related notes are read on top of the keyword notes, not instead of them.
+  const more = await gatherEvidence([...related.notes, ...notes], words, load, { signal, semantic, maxNotes: 20 + related.notes.length, related: related.hops });
   return { evidence: more, edges: related.edges };
 }
 

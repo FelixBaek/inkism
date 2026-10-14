@@ -90,7 +90,7 @@ try {
   const keyOf = Object.fromEntries(Object.entries(ids).map(([k, v]) => [v, k]));
   await call('wait_index');
   for (let batch = await call('semantic_pending', {model: embedModel, limit: 16}); batch.items.length; batch = await call('semantic_pending', {model: embedModel, limit: 16})) {
-    for (const note of batch.items) await call('semantic_put', {note_id: note.id, revision: note.revision, model: embedModel, vectors: await embed(note.chunks.map((c: {text: string}) => c.text))});
+    for (const note of batch.items) await call('semantic_put', {note_id: note.id, revision: note.revision, model: embedModel, offset: note.offset, vectors: await embed(note.chunks.map((c: {text: string}) => c.text))});
   }
   const load = async (n: {id: string}) => (await call('get', {id: n.id})).content as string;
   const K = [1, 3, 5];

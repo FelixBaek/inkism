@@ -12,13 +12,13 @@ export function onSemanticIndex(f:(s:SemanticIndexState)=>void){listeners.add(f)
 export const kickSemanticIndex=()=>window.dispatchEvent(new Event(KICK));
 export function stopSemanticIndex(){active?.abort();active=null;}
 
-/** One small batch; returns how many notes it handled. A note edited meanwhile is simply offered again. */
+/** One small batch, one page of chunks per note; returns how many notes it handled. A note edited meanwhile is simply offered again from its first page. */
 async function indexBatch(model:string,signal:AbortSignal):Promise<number>{
  const {items}=await api.semanticPending(model,4);
  for(const note of items){
   if(signal.aborted)return 0;
   const vectors=note.chunks.length?await embedTexts(note.chunks.map(c=>c.text),signal):[]; // NOSONAR: one note at a time keeps cancelling prompt
-  try{await api.semanticPut(note.id,note.revision,model,vectors);} // NOSONAR: stored right after its own embedding
+  try{await api.semanticPut(note.id,note.revision,model,note.offset,vectors);} // NOSONAR: stored right after its own embedding
   catch(e){if(!(e instanceof RpcError&&(e.isConflict||e.code==='not_found')))throw e;}
  }
  return items.length;

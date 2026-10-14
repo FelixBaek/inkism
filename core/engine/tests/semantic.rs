@@ -38,6 +38,9 @@ fn index_search_and_revision_race() {
     ok(put(&e, &b["id"], &b["revision"], json!([[0.0, 1.0]])));
     assert!(pending(&e).is_empty());
     assert_eq!(ok(e.execute(json!({"op":"semantic_status","model":"m"}))), json!({"indexed":2,"pending":0}));
+    // Rows from builds without a completion marker (one page, under 64 chunks) still count as indexed.
+    e.connection().execute("DELETE FROM semantic_chunks WHERE ordinal=-1", []).unwrap();
+    assert_eq!(ok(e.execute(json!({"op":"semantic_status","model":"m"}))), json!({"indexed":2,"pending":0}));
     let hits = search(&e, json!([0.9, 0.1]));
     assert_eq!(hits[0]["note"]["id"], a["id"]);
     assert_eq!(hits[0]["snippet"], "고양이는 낮잠을 많이 잔다");
@@ -86,7 +89,7 @@ fn lock_trash_delete_purge_and_exclude() {
     for n in &notes {
         ok(put(&e, &n["id"], &n["revision"], json!([[1.0, 0.0]])));
     }
-    assert_eq!(rows(&e), 3);
+    assert_eq!(rows(&e), 6, "one vector and one completion marker each");
     let id = |i: usize| notes[i]["id"].as_str().unwrap().to_string();
     e.connection().execute("UPDATE notes_meta SET locked=1 WHERE id=?1", [id(0)]).unwrap();
     ok(e.execute(json!({"op":"patch","id":id(1),"revision":notes[1]["revision"],"changes":{"trashed":true}})));

@@ -7,6 +7,8 @@ const bookTitle=`${word} 소설`;
 const person=await rpc('save',{note:{title:'사람 Kim',content:'<p>부산에서 자랐다.</p>',content_format:'html'}});
 const secret=await rpc('save',{note:{title:'잠긴 공저자',content:'<p>금고 속 비밀 경력</p>',content_format:'html'}});
 const book=await rpc('save',{note:{title:bookTitle,content:'<p>장편 소설이다.</p>',content_format:'html'}});
+const company=await rpc('save',{note:{title:'회사 Orbit',content:'<p>본사는 판교에 있다.</p>',content_format:'html'}});
+await rpc('knowledge_set',{id:person.id,revision:person.revision,version:0,aliases:[],properties:[{name:'소속',type:'relation',value:[company.id]}]});
 await rpc('knowledge_set',{id:book.id,revision:book.revision,version:0,aliases:[],properties:[{name:'저자',type:'relation',value:[person.id,secret.id]}]});
 await rpc('vault_create',{password:'relation-password'});
 await rpc('vault_lock_note',{id:secret.id,revision:(await rpc('get',{id:secret.id})).revision});
@@ -42,6 +44,16 @@ try{
  assert.match(user,new RegExp(String.raw`Relations:\n\[\d\] ${bookTitle} —저자→ \[\d\] 사람 Kim`));
  assert.ok(!user.includes('금고 속 비밀')&&!user.includes('잠긴 공저자'),'locked related note is never sent');
  assert.equal(await p.locator('.note-answer-text .note-answer-cite').count(),2,'both sources are citable');
+ // Two hops: book —저자→ person —소속→ company; only the company note holds the answer and no question word matches it.
+ await p.getByLabel('전역 검색어',{exact:true}).fill(`${word} 저자의 직장은 어디야?`);
+ await p.getByRole('button',{name:'내 노트에 묻기',exact:true}).click();
+ await p.waitForFunction(()=>document.querySelector('.note-answer-text')?.getAttribute('aria-label')?.includes('직장'));
+ assert.equal(sent.length,2);
+ const chain=JSON.parse(sent[1]).messages[1].content as string;
+ assert.ok(chain.includes('본사는 판교에 있다'),'second-hop note passage is sent');
+ assert.match(chain,new RegExp(String.raw`\[\d\] ${bookTitle} —저자→ \[\d\] 사람 Kim \(hop 1\)`));
+ assert.match(chain,/\[\d\] 사람 Kim —소속→ \[\d\] 회사 Orbit \(hop 2\)/);
+ assert.ok(!chain.includes('금고 속 비밀'),'locked note stays out on deeper hops');
  assert.deepEqual(errors,[]);
- console.log('PASS typed relations: outgoing/incoming typed edge UI, property filter, locked exclusion, relation hop in AI prompt with numbered relation line');
+ console.log('PASS typed relations: outgoing/incoming typed edge UI, property filter, locked exclusion, relation hop in AI prompt with numbered relation line, 2-hop chain with hop depth');
 }finally{await browser.close();}

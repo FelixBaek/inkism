@@ -11,7 +11,7 @@ fn public_url(raw: &str) -> Result<tauri::Url, String> {
     Ok(url)
 }
 pub fn allow_app_protocol(label: &str) -> bool { label == "main" }
-fn trusted(window: &WebviewWindow) -> bool {
+pub(crate) fn trusted(window: &WebviewWindow) -> bool {
     allow_app_protocol(window.label()) && window.url().ok().is_some_and(|url| {
         if cfg!(windows) { url.scheme() == "http" && url.host_str() == Some("wails.localhost") && url.port().is_none() }
         else { url.scheme() == "wails" && url.host_str() == Some("localhost") && url.port().is_none() }
