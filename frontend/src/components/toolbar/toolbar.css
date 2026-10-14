@@ -832,56 +832,56 @@
   filter: drop-shadow(0 0 2.7px var(--c));
   clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
 }
-.fm-ai:hover:not(:disabled) .tb-ai-btn,
+.fm-ai:hover:not(:disabled),
 .tb-ai-btn:hover:not(:disabled),
 .tb-ai-btn:focus-visible,
-.fm-ai.is-open .tb-ai-btn,
+.fm-ai.is-open,
 .tb-ai-btn.is-open {
   color: #fff;
 }
-.fm-ai:hover:not(:disabled) .tb-ai-btn .tb-ai-halo,
+.fm-ai:hover:not(:disabled) .tb-ai-halo,
 .tb-ai-btn:hover:not(:disabled) .tb-ai-halo,
-.fm-ai.is-open .tb-ai-btn .tb-ai-halo,
+.fm-ai.is-open .tb-ai-halo,
 .tb-ai-btn.is-open .tb-ai-halo {
   opacity: 0.85;
 }
-.fm-ai.is-open .tb-ai-btn:not(:hover) .tb-ai-halo,
+.fm-ai.is-open:not(:hover) .tb-ai-halo,
 .tb-ai-btn.is-open:not(:hover) .tb-ai-halo {
   filter: blur(7px);
 }
-.fm-ai:hover:not(:disabled) .tb-ai-btn .tb-ai-face,
+.fm-ai:hover:not(:disabled) .tb-ai-face,
 .tb-ai-btn:hover:not(:disabled) .tb-ai-face,
 .tb-ai-btn:focus-visible .tb-ai-face,
-.fm-ai.is-open .tb-ai-btn .tb-ai-face,
+.fm-ai.is-open .tb-ai-face,
 .tb-ai-btn.is-open .tb-ai-face {
   opacity: 1;
 }
-.fm-ai.is-open .tb-ai-btn:not(:hover) .tb-ai-face,
+.fm-ai.is-open:not(:hover) .tb-ai-face,
 .tb-ai-btn.is-open:not(:hover) .tb-ai-face {
   box-shadow:
     inset 0 0 6px rgba(124, 140, 255, 0.35),
     0 0 6px rgba(111, 124, 255, 0.75);
 }
-.fm-ai:hover:not(:disabled) .tb-ai-btn .tb-ai-particles,
+.fm-ai:hover:not(:disabled) .tb-ai-particles,
 .tb-ai-btn:hover:not(:disabled) .tb-ai-particles {
   opacity: 1;
 }
-.fm-ai:hover:not(:disabled) .tb-ai-btn .tb-ai-stars,
+.fm-ai:hover:not(:disabled) .tb-ai-stars,
 .tb-ai-btn:hover:not(:disabled) .tb-ai-stars,
 .tb-ai-btn:focus-visible .tb-ai-stars,
-.fm-ai.is-open .tb-ai-btn .tb-ai-stars,
+.fm-ai.is-open .tb-ai-stars,
 .tb-ai-btn.is-open .tb-ai-stars {
   filter: drop-shadow(0 0 3px rgba(169, 180, 255, 0.95));
 }
-.fm-ai:hover:not(:disabled) .tb-ai-btn .tb-ai-stars path:nth-child(n + 2),
+.fm-ai:hover:not(:disabled) .tb-ai-stars path:nth-child(n + 2),
 .tb-ai-btn:hover:not(:disabled) .tb-ai-stars path:nth-child(n + 2) {
   animation: tb-twinkle-star 2s ease-in-out infinite;
 }
-.fm-ai:hover:not(:disabled) .tb-ai-btn .tb-ai-stars path:nth-child(3),
+.fm-ai:hover:not(:disabled) .tb-ai-stars path:nth-child(3),
 .tb-ai-btn:hover:not(:disabled) .tb-ai-stars path:nth-child(3) {
   animation-delay: -1s;
 }
-.fm-ai:hover:not(:disabled) .tb-ai-btn .tb-ai-particles i,
+.fm-ai:hover:not(:disabled) .tb-ai-particles i,
 .tb-ai-btn:hover:not(:disabled) .tb-ai-particles i {
   animation: tb-twinkle 2s ease-in-out infinite;
 }
@@ -907,9 +907,9 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .fm-ai:hover:not(:disabled) .tb-ai-btn .tb-ai-particles i,
+  .fm-ai:hover:not(:disabled) .tb-ai-particles i,
   .tb-ai-btn:hover:not(:disabled) .tb-ai-particles i,
-  .fm-ai:hover:not(:disabled) .tb-ai-btn .tb-ai-stars path,
+  .fm-ai:hover:not(:disabled) .tb-ai-stars path,
   .tb-ai-btn:hover:not(:disabled) .tb-ai-stars path {
     animation: none;
   }
@@ -1105,12 +1105,32 @@
 .fm-ai {
   color: var(--green);
 }
-/* 반짝임 아이콘은 28px 틀 그대로 두고, 줄 높이는 늘리지 않는다 */
-.fm-ai .tb-ai-btn {
-  margin: -6px -6px -6px -6px;
-  color: inherit;
-  flex-shrink: 0;
+/* 반짝임은 줄 전체에: 빛·테두리는 줄 크기, 반짝이는 60×60 좌표를 줄 너비 비율로 편다 */
+.fm-ai {
+  position: relative;
+  isolation: isolate;
 }
+.fm-ai .tb-ai-halo { border-radius: 8px; }
+.fm-ai .tb-ai-face { border-radius: 6px; }
+.fm-ai .tb-ai-particles { inset: -8px; }
+.fm-ai .tb-ai-stars,
+.fm-ai-label {
+  position: relative;
+  z-index: 2;
+}
+.fm-ai:hover:not(:disabled) .tb-ai-halo { opacity: 0.55; }
+.fm-ai .tb-ai-particles i:nth-child(1) { left: 5.0%; top: 11.7%; }
+.fm-ai .tb-ai-particles i:nth-child(2) { left: 35.0%; top: 5.0%; }
+.fm-ai .tb-ai-particles i:nth-child(3) { left: 65.0%; top: 6.7%; }
+.fm-ai .tb-ai-particles i:nth-child(4) { left: 81.7%; top: 26.7%; }
+.fm-ai .tb-ai-particles i:nth-child(5) { left: 91.7%; top: 53.3%; }
+.fm-ai .tb-ai-particles i:nth-child(6) { left: 86.7%; top: 75.0%; }
+.fm-ai .tb-ai-particles i:nth-child(7) { left: 70.0%; top: 86.7%; }
+.fm-ai .tb-ai-particles i:nth-child(8) { left: 48.3%; top: 93.3%; }
+.fm-ai .tb-ai-particles i:nth-child(9) { left: 18.3%; top: 83.3%; }
+.fm-ai .tb-ai-particles i:nth-child(10) { left: 0.0%; top: 56.7%; }
+.fm-ai .tb-ai-particles i:nth-child(11) { left: 8.3%; top: 40.0%; }
+.fm-ai .tb-ai-particles i:nth-child(12) { left: 56.7%; top: 1.7%; }
 .fm-sep {
   margin: 2px 0;
   border: 0;

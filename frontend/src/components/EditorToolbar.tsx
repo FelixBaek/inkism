@@ -789,11 +789,10 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             disabled={disabled}
             onClick={toggle("ai", 0)}
           >
-            {/* 예전 도구줄 AI 버튼과 같은 반짝임: 줄에 마우스를 올리면 켜진다 */}
-            <span className="tb-ai-btn" aria-hidden>
-              <span className="tb-ai-halo" />
-              <span className="tb-ai-face" />
-              <span className="tb-ai-particles">
+            {/* 예전 도구줄 AI 버튼과 같은 반짝임을 줄 전체에: 마우스를 올리면 켜진다 */}
+            <span className="tb-ai-halo" aria-hidden />
+            <span className="tb-ai-face" aria-hidden />
+            <span className="tb-ai-particles" aria-hidden>
                 {Array.from({ length: 12 }, (_, i) => (
                   <i key={i} />
                 ))}
@@ -803,8 +802,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
                 <path d="M12.2 1.5c.232 1.701 1.199 2.668 2.9 2.9-1.701.232-2.668 1.199-2.9 2.9-.232-1.701-1.199-2.668-2.9-2.9 1.701-.232 2.668-1.199 2.9-2.9Z" />
                 <path d="M12.2 9.7c.232 1.701 1.199 2.668 2.9 2.9-1.701.232-2.668 1.199-2.9 2.9-.232-1.701-1.199-2.668-2.9-2.9 1.701-.232 2.668-1.199 2.9-2.9Z" />
               </svg>
-            </span>
-            {t("AI로 편집하기")}
+            <span className="fm-ai-label">{t("AI로 편집하기")}</span>
           </button>
         </div>
       </BubbleMenu>
