@@ -55,6 +55,7 @@ pub mod protocol;
 
 pub mod writing_ops;
 pub mod merge_changes;
+pub mod wiki_changes;
 
 pub mod resources;
 

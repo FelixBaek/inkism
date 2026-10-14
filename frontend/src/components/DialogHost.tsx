@@ -449,7 +449,7 @@ function HistoryPanel({ noteId, initialId }: Readonly<{ noteId: string; initialI
 }
 
 /** 추가는 success-subtle + "+", 삭제는 danger-subtle + "−" + 취소선. 색만으로 구분하지 않는다. */
-function DiffCell({ text, kind }: Readonly<{ text: string | null; kind: "same" | "add" | "del" }>) {
+export function DiffCell({ text, kind }: Readonly<{ text: string | null; kind: "same" | "add" | "del" }>) {
   if (text === null) return <div className="diff-cell is-empty" aria-hidden />;
   if (kind === "same") return <div className="diff-cell">{text}</div>;
   return (
