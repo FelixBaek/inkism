@@ -52,3 +52,18 @@ export async function readBacklinkLocation(id:string,target:string,names:string[
   }after=result.next??undefined;
  }while(after!==undefined&&!signal.aborted);
 }
+
+type LocationOpener={selectNote:(id:string)=>Promise<void>;readDraft:()=>{id:string;revision:number;content:string;text:string}|null};
+/** Opens `id` at a located link; `active` stops when the caller moved on meanwhile. */
+export async function openBacklinkLocation(s:LocationOpener,id:string,location:BacklinkLocation,active:()=>boolean=()=>true){
+ const [{api},{t},{waitForAnchorEditor,navigateNoteAnchor}]=await Promise.all([import('../api'),import('../i18n'),import('./note-anchor')]);
+ const note=location.anchor.byteOffset===undefined?await api.get(id,{max_body_bytes:2*1024*1024}):await api.documentInfo(id,location.revision).then(info=>({...info.summary,content:'',text:''}));
+ if(!active())return;
+ if(('locked'in note&&note.locked)||note.trashed||note.revision!==location.revision)throw new Error(t('문서가 변경되었습니다. 다시 시도해 주세요.'));
+ await s.selectNote(id);
+ await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+ if(location.anchor.byteOffset!==undefined)await waitForAnchorEditor();
+ const draft=s.readDraft();
+ const located=note.content_format==='markdown'&&draft?.id===id&&draft.revision===note.revision?{...note,content:draft.content,text:draft.text}:note;
+ await navigateNoteAnchor(located,location.anchor);
+}

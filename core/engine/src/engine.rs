@@ -187,6 +187,7 @@ impl Engine {
             "knowledge_settings_set" => crate::knowledge::config_set(conn, &req)?,
             "link_resolve" => crate::knowledge::resolve(conn, &req)?,
             "graph_get" => crate::knowledge::graph(&self.query_conn)?,
+            "relations" => crate::relations::relations(&self.query_conn, &req)?,
             "workspace_tools_get" => crate::workspace_tools::get(conn)?,
             "workspace_tools_set" => {let v=crate::workspace_tools::set(conn,&req)?;self.wakeup.notify();v},
             "font_resources" => crate::resources::list(conn)?,

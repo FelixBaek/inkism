@@ -25,6 +25,7 @@ pub mod ids;
 pub mod indexer;
 pub mod limits;
 pub mod links;
+pub mod relations;
 pub mod knowledge;
 mod redirect_backup;
 pub mod model;
