@@ -13,8 +13,6 @@ import {
   ChevronDown,
   ChevronRight,
   ClearFormatting,
-  DirectionLtr,
-  DirectionRtl,
   Highlighter,
   InlineCode,
   Italic,
@@ -332,7 +330,6 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
   };
   const align = ALIGNS.find(([value]) => value !== "left" && editor.isActive({ textAlign: value })) ?? ALIGNS[0];
   const nextAlign = ALIGNS[(ALIGNS.indexOf(align) + 1) % ALIGNS.length];
-  const rtl = editor.isActive({ dir: "rtl" });
   const setDir = (dir: string | null) => (chain: ChainedCommands) =>
     DIR_TYPES.reduce((c, type) => c.updateAttributes(type, { dir }), chain);
   const insertNoteLink = (note: { id: string; title: string }) => {
@@ -391,7 +388,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
   );
   const AlignIcon = align[2];
   const blockTools = (
-    <Group label={t("정렬·글 방향")}>
+    <Group label={t("정렬")}>
       <IconButton
         data-preview="align"
         label={t("정렬: {current} (누르면 {next})", { current: align[1], next: nextAlign[1] })}
@@ -399,15 +396,6 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
         onClick={cmd((c) => (nextAlign[0] === "left" ? c.unsetTextAlign() : c.setTextAlign(nextAlign[0])))}
       >
         <AlignIcon size={16} aria-hidden />
-      </IconButton>
-      <IconButton
-        label={rtl ? t("글 방향: 끝에서 시작 (오른쪽→왼쪽)") : t("글 방향: 앞에서 시작 (왼쪽→오른쪽)")}
-        active={rtl}
-        disabled={disabled}
-        data-preview="dir"
-        onClick={cmd(setDir(rtl ? null : "rtl"))}
-      >
-        {rtl ? <DirectionRtl size={16} aria-hidden /> : <DirectionLtr size={16} aria-hidden />}
       </IconButton>
     </Group>
   );

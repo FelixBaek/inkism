@@ -44,11 +44,6 @@ const PREVIEWS: Record<string, { before: ReactNode; after: ReactNode; text: stri
     after: <span className="fp-bars fp-center">{bars([60, 40])}</span>,
     text: t("누를 때마다 왼쪽→가운데→오른쪽→양쪽으로 정렬을 바꿉니다."),
   },
-  dir: {
-    before: bars([60, 40]),
-    after: <span className="fp-bars fp-rtl">{bars([60, 40])}</span>,
-    text: t("문단을 오른쪽에서 왼쪽으로 쓰는 방향으로 바꿉니다."),
-  },
   ol: {
     before: bars([70, 50]),
     after: (

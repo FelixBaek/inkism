@@ -1334,7 +1334,6 @@
 .fp-large { font-size: 26px; }
 .fp-serif { font-family: "Noto Serif KR", "Nanum Myeongjo", serif; }
 .fp-center .fp-bars { align-items: center; }
-.fp-rtl .fp-bars { align-items: flex-end; }
 .fp-list > span {
   display: flex;
   align-items: center;
