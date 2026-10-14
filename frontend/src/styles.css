@@ -1518,7 +1518,7 @@ textarea.text-field {
   margin: 12px 0 5px;
 }
 /* 체크박스(각진 16px)·라디오(원형 16px). 본문 할 일 상자는 편집기 쪽 규칙을 따른다. */
-input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *, .inspector-toggle *),
+input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *, .inspector-toggle *, .document-switch *),
 input[type="radio"] {
   appearance: none;
   flex: none;
@@ -1534,11 +1534,11 @@ input[type="radio"] {
 input[type="radio"] {
   border-radius: 50%;
 }
-input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *, .inspector-toggle *):checked {
+input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *, .inspector-toggle *, .document-switch *):checked {
   background: var(--green);
   border-color: var(--green);
 }
-input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *, .inspector-toggle *):checked::after {
+input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *, .inspector-toggle *, .document-switch *):checked::after {
   content: "";
   position: absolute;
   left: 4px;
@@ -1553,7 +1553,7 @@ input[type="radio"]:checked {
   border-color: var(--green);
   background: radial-gradient(circle, var(--on-accent) 0 3px, var(--green) 3.5px);
 }
-input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *, .inspector-toggle *):disabled,
+input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *, .inspector-toggle *, .document-switch *):disabled,
 input[type="radio"]:disabled {
   opacity: 0.45;
   cursor: default;
