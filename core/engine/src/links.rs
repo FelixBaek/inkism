@@ -137,6 +137,14 @@ fn extract_html(content: &str) -> Vec<Link> {
             text.push_str(value);
         }
         if let Some(el) = node.value().as_element() {
+            if el.name() == "span"
+                && el.attr("data-term-id").is_some_and(crate::ids::valid_id)
+                && el.attr("data-term-definition").is_some_and(|definition| !definition.trim().is_empty())
+            {
+                if let Some(id) = el.attr("data-term-note-id").filter(|id| crate::ids::valid_id(id)) {
+                    out.push(Link::ById(id.to_owned()));
+                }
+            }
             if el.name() == "a" {
                 if let Some(href) = el.attr("href").filter(|href| href.starts_with("note://")) {
                     out.extend(extract(href));
@@ -272,4 +280,131 @@ pub fn markdown_locations(content: &str) -> Vec<(String,usize,usize,String)> {
   }
  }
  out
+}
+
+/// End of a tag starting at `i`: the next `>` outside quotes, or None if unterminated.
+fn tag_end(b: &[u8], mut i: usize) -> Option<usize> {
+    let mut quote = 0;
+    while i < b.len() {
+        let c = b[i];
+        if quote != 0 {
+            if c == quote { quote = 0; }
+        } else if c == b'\'' || c == b'"' {
+            quote = c;
+        } else if c == b'>' {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
+fn skip_space(b: &[u8], mut i: usize, end: usize) -> usize {
+    while i < end && b[i].is_ascii_whitespace() { i += 1; }
+    i
+}
+
+/// Rewrites `data-term-note-id` values among the attributes in `content[i..end]`.
+fn remap_span_attributes(content: &str, mut i: usize, end: usize, ids: &std::collections::HashMap<&str, String>, out: &mut String, copied: &mut usize) {
+    let b = content.as_bytes();
+    while i < end {
+        while i < end && (b[i].is_ascii_whitespace() || b[i] == b'/') { i += 1; }
+        let key = i;
+        while i < end && !b[i].is_ascii_whitespace() && ![b'=', b'>', b'/'].contains(&b[i]) { i += 1; }
+        let name = &content[key..i];
+        i = skip_space(b, i, end);
+        if b.get(i) != Some(&b'=') {
+            if i == key { i += 1; }
+            continue;
+        }
+        i = skip_space(b, i + 1, end);
+        let quote = matches!(b.get(i), Some(b'\'' | b'"')).then(|| { i += 1; b[i - 1] });
+        let value = i;
+        while i < end && quote.map_or(!b[i].is_ascii_whitespace(), |q| b[i] != q) { i += 1; }
+        if let Some(replacement) = name.eq_ignore_ascii_case("data-term-note-id").then(|| ids.get(&content[value..i])).flatten() {
+            out.push_str(&content[*copied..value]);
+            out.push_str(replacement);
+            *copied = i;
+        }
+        if quote.is_some() && i < end { i += 1; }
+    }
+}
+
+/// Rewrite only a span's reference attribute, keeping all other source bytes.
+/// Comments, quoted attribute examples and raw/code elements are not references.
+pub fn remap_term_note_ids(content: &str, ids: &std::collections::HashMap<&str, String>) -> String {
+    const RAW: [&str; 7] = ["script", "style", "textarea", "title", "pre", "code", "template"];
+    let b = content.as_bytes();
+    let (mut i, mut copied, mut out) = (0, 0, String::new());
+    let mut hidden: Option<String> = None;
+    while i < b.len() {
+        if b[i] != b'<' { i += 1; continue; }
+        if b[i..].starts_with(b"<!--") {
+            i = content[i + 4..].find("-->").map_or(b.len(), |n| i + 4 + n + 3);
+            continue;
+        }
+        let begin = i;
+        let closing = b.get(i + 1) == Some(&b'/');
+        let start = begin + 1 + usize::from(closing);
+        i = start;
+        while i < b.len() && b[i].is_ascii_alphanumeric() { i += 1; }
+        if start == i { continue; }
+        let tag = content[start..i].to_ascii_lowercase();
+        let Some(end) = tag_end(b, i) else { break };
+        match &hidden {
+            Some(name) => { if closing && &tag == name { hidden = None; } }
+            None if !closing && RAW.contains(&tag.as_str()) => hidden = Some(tag),
+            None if !closing && tag == "span" => remap_span_attributes(content, i, end, ids, &mut out, &mut copied),
+            None => {}
+        }
+        i = (end + 1).max(begin + 1);
+    }
+    out.push_str(&content[copied..]);
+    out
+}
+
+#[cfg(test)]
+mod term_remap_tests {
+    #[test]
+    fn only_actual_span_reference_attributes_change() {
+        let ids = std::collections::HashMap::from([("old", "new".to_owned())]);
+        let source = "<!-- <span data-term-note-id='old'> --><p data-term-note-id='old'><span title=\"data-term-note-id='old'\" data-term-note-id='old'>x</span></p><script>\"<span data-term-note-id='old'>\"</script><code><span data-term-note-id='old'>sample</span></code>";
+        let expected = source.replacen("title=\"data-term-note-id='old'\" data-term-note-id='old'", "title=\"data-term-note-id='old'\" data-term-note-id='new'", 1);
+        assert_eq!(super::remap_term_note_ids(source, &ids), expected);
+        let md = "`<span data-term-note-id='old'>`\n\n<span data-term-note-id='old'>term</span>\n\n```html\n<span data-term-note-id='old'>\n```";
+        assert_eq!(super::remap_term_references(md, "markdown", &ids), md.replacen("<span data-term-note-id='old'>term", "<span data-term-note-id='new'>term", 1));
+        assert_eq!(super::remap_term_references(md, "text", &ids), md);
+    }
+}
+
+pub fn remap_term_references(content: &str, format: &str, ids: &std::collections::HashMap<&str, String>) -> String {
+    if format == "html" { return remap_term_note_ids(content, ids); }
+    if format != "markdown" { return content.to_owned(); }
+    let mut out = String::new(); let mut copied = 0;
+    for (event, range) in pulldown_cmark::Parser::new_ext(content, pulldown_cmark::Options::all()).into_offset_iter() {
+        if matches!(event, pulldown_cmark::Event::Html(_) | pulldown_cmark::Event::InlineHtml(_)) {
+            out.push_str(&content[copied..range.start]);
+            out.push_str(&remap_term_note_ids(&content[range.clone()], ids)); copied=range.end;
+        }
+    }
+    out.push_str(&content[copied..]); out
+}
+
+#[cfg(test)]
+mod term_link_tests {
+    #[test]
+    fn annotation_note_links_are_indexed_without_code_or_attribute_false_positives() {
+        let annotation = "<span data-term-id='occurrence-1' data-term-definition='Meaning' data-term-note-id='target'>Term</span>";
+        let expected = vec![super::Link::ById("target".to_owned())];
+        assert_eq!(super::extract_format(annotation, "html"), expected);
+        assert_eq!(super::extract_format(annotation, "markdown"), expected);
+        for format in ["html", "markdown"] {
+            for hidden in [format!("<code>{annotation}</code>"), format!("<pre>{annotation}</pre>"), format!("<script>{annotation}</script>"), format!("<!-- {annotation} -->"), annotation.replace("data-term-note-id='target'", "data-term-note-id='bad/id'"), annotation.replace("data-term-id='occurrence-1'", "title='occurrence-1'")] {
+                assert!(super::extract_format(&hidden, format).is_empty(), "{format}: {hidden}");
+            }
+        }
+        assert!(super::extract_format(&format!("`{annotation}`"), "markdown").is_empty());
+        assert!(super::extract_format(&format!("```html\n{annotation}\n```"), "markdown").is_empty());
+        assert!(super::extract_format(annotation, "text").is_empty());
+    }
 }

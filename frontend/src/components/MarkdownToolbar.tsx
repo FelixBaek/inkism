@@ -1,3 +1,4 @@
+import { openTermDefinition, canDefineTerm } from "./TermDefinitionPopover";
 import {CsvTools} from "./CsvTools";
 import React, { useEffect, useReducer, useRef } from "react";
 import type { Editor } from "@tiptap/core";
@@ -116,6 +117,7 @@ export function MarkdownToolbar({ editor, readOnly = false }: Readonly<{ editor:
       <IconButton label={t("링크")} disabled={disabled} onClick={() => void link()}>
         <Link2 size={16} />
       </IconButton>
+      <button type="button" className="btn btn-small" disabled={disabled || !canDefineTerm(editor)} onMouseDown={event => event.preventDefault()} onClick={() => openTermDefinition(editor)}>{t("용어 설명")}</button>
       <AttachmentButton editor={editor} markdownCompatible />
     </div><CsvTools editor={editor}/></>
   );
