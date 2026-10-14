@@ -353,13 +353,7 @@ impl Worker {
     /// (Re)index one live note unless its stored signature is unchanged.
     fn write_note(&self, note_id: &str, row: &NoteRow) -> crate::error::Result<()> {
         let (seq, title, content, stored_text, trashed, revision, format) = row;
-        let text = if format == "text" {
-            Cow::Borrowed(content.as_str())
-        } else if format == "html" && stored_text != content {
-            Cow::Borrowed(stored_text.as_str())
-        } else {
-            Cow::Owned(crate::source_format::search_text(format, content)?)
-        };
+        let text = search_text(format, content, stored_text)?;
         let body_hash: [u8; 32] = if format == "html" {
             crate::blocks::rebuild(&self.search, note_id, *revision, content)?
         } else {
@@ -592,4 +586,15 @@ mod batch_tests {
         assert_eq!(pending_count(&w.main).unwrap(), 0);
         assert!(indexed(&w, "resume"));
     }
+}
+
+/// Plain text that search (and the semantic index) reads for one note body.
+pub(crate) fn search_text<'a>(format: &str, content: &'a str, stored_text: &'a str) -> crate::error::Result<Cow<'a, str>> {
+    Ok(if format == "text" {
+        Cow::Borrowed(content)
+    } else if format == "html" && stored_text != content {
+        Cow::Borrowed(stored_text)
+    } else {
+        Cow::Owned(crate::source_format::search_text(format, content)?)
+    })
 }

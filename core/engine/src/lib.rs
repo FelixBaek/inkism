@@ -41,6 +41,7 @@ pub mod plaintext;
 pub mod schema;
 mod search;
 pub mod segments;
+pub mod semantic;
 pub mod settings;
 pub mod source_format;
 pub mod storage;
