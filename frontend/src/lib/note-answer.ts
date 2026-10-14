@@ -48,7 +48,12 @@ function noteWindows(note:Summary,body:string|SearchDocument,words:string[],lowe
 function toEvidence(c:Candidate,n:number,passage:string):Evidence{
  const matched=c.text.slice(c.first,c.first+c.word.length);
  let occurrence=0,at=0;
- while(matched&&at<c.first){const next=c.text.indexOf(matched,at);if(next<0||next>=c.first)break;occurrence++;at=next+matched.length;}
+ while(matched&&at<c.first){
+  const next=c.text.indexOf(matched,at);
+  if(next<0||next>=c.first)break;
+  occurrence++;
+  at=next+matched.length;
+ }
  const line=c.text.slice(0,c.first).split('\n').length;
  return {n,note:c.note,text:passage,hit:{note:c.note,index:c.first,line,snippet:passage.slice(0,240),matchStart:0,matchLength:0,
   sourceOffset:c.doc?sourcePosition(c.doc,c.first):undefined,sourceEnd:c.doc?sourcePosition(c.doc,c.first+matched.length,true):undefined,revision:c.doc?.revision,matchedText:matched,occurrence}};
@@ -63,8 +68,11 @@ export async function gatherEvidence(notes:Summary[],words:string[],load:(note:S
  for(const note of notes.filter(n=>!n.trashed&&!('locked' in n&&n.locked)).slice(0,maxNotes)){
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   let body:string|SearchDocument;
-  try{body=await load(note,signal);}
-  catch(error){if(signal?.aborted)throw error;continue;} // Notes that changed or locked meanwhile are skipped.
+  try{body=await load(note,signal);} // NOSONAR: one read at a time so cancelling stops further reads
+  catch(error){
+   if(signal?.aborted)throw error;
+   continue; // Notes that changed or locked meanwhile are skipped.
+  }
   found.push(...noteWindows(note,body,words,lowerWords,radius));
  }
  const picked:Evidence[]=[];let chars=0;
