@@ -39,6 +39,9 @@ assert.ok(!prompt.source.includes('비밀') && !prompt.source.includes('휴지�
 
 const parts = answerParts('벡터 표현이다 [1]. 출처 없음 [9]. 끝[2]', evidence);
 assert.deepEqual(parts.map(p => 'cite' in p ? p.cite.n : p.text), ['벡터 표현이다 ', 1, '. 출처 없음 [9]. 끝', 2]);
+const listed = answerParts('둘 다 [1, 2]. 붙여 [2,1]. 섞임 [1, 9].', evidence);
+assert.deepEqual(listed.map(p => 'cite' in p ? p.cite.n : p.text), ['둘 다 ', 1, 2, '. 붙여 ', 2, 1, '. 섞임 [1, 9].'], 'citation lists split; a list with an invented number stays text');
+assert.match(prompt.instruction, /placed after the names and facts it supports/);
 // Hybrid retrieval with a deterministic fake embedder: concept counts, cosine over one chunk per note.
 const CONCEPTS = [['고양이', '냥이', '반려묘'], ['잠', '낮잠', '졸려', '자나'], ['자동차', '차량'], ['예산', '돈']];
 const embed = (text: string) => CONCEPTS.map(group => group.reduce((n, w) => n + text.split(w).length - 1, 0));

@@ -8,7 +8,7 @@ import { diffLines, toLines } from "../lib/version-diff";
 import { sanitizeRichHtml } from "../lib/sanitize";
 import { htmlBlocks, plainTextOf, errorText } from "../lib/text";
 import { formatDateTime } from "../lib/date";
-import { cleanOutput, wiki, wikiPassages, wikiPrompt, type WikiChange, type WikiProposal, type WikiSource } from "../lib/wiki-update";
+import { WIKI_TIMEOUT, cleanOutput, wiki, wikiPassages, wikiPrompt, type WikiChange, type WikiProposal, type WikiSource } from "../lib/wiki-update";
 import { DiffCell } from "./DialogHost";
 
 function statusLabel(status: WikiProposal["status"]) {
@@ -50,7 +50,7 @@ async function propose(id: string): Promise<{ proposal?: WikiProposal; message?:
   if (existing) return { proposal: existing };
   const prompt = wikiPrompt(note, wikiPassages(check.sources, texts));
   const html = (note.content_format ?? "html") === "html";
-  const output = cleanOutput(await completeAI(prompt.instruction, prompt.source), note.content);
+  const output = cleanOutput(await completeAI(prompt.instruction, prompt.source, undefined, WIKI_TIMEOUT), note.content);
   const after = html ? sanitizeRichHtml(output) : output;
   if (after.trim() === note.content.trim()) return { message: t("AI 결과가 지금 본문과 같아 바꿀 것이 없습니다.") };
   const proposal = await wiki.record({ note_id: id, revision: note.revision, sources: check.sources, model, after, after_text: html ? htmlBlocks(after).join("\n") : undefined });
