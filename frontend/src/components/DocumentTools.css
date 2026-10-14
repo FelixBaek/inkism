@@ -27,8 +27,8 @@
 .document-children [data-shadow],.knowledge-card[data-shadow] {box-shadow:0 4px 12px #0002}
 .document-children [data-tone=paper],.knowledge-card[data-tone=paper],.editor-pane[data-document-tone=paper] .editor-scroll {background:var(--canvas)}
 .document-children [data-tone=soft],.knowledge-card[data-tone=soft],.editor-pane[data-document-tone=soft] .editor-scroll {background:var(--raised)}
-.editor-pane[data-document-width=wide] .rich-editor {max-width:1240px!important}
-.editor-pane[data-document-width=full] .rich-editor {max-width:none!important}
+.editor-pane[data-document-width=wide] .rich-editor {max-width:1240px}
+.editor-pane[data-document-width=full] .rich-editor {max-width:none}
 .editor-pane[data-document-spacing=compact] .tiptap-prose p {margin-block:.25em}
 .editor-pane[data-document-spacing=relaxed] .tiptap-prose p {margin-block:1.25em}
 .knowledge-board {display:flex;gap:16px;overflow:auto;padding:8px 0}.knowledge-body .knowledge-board>.knowledge-group {flex:0 0 260px;margin:0;border:0;padding:0}
