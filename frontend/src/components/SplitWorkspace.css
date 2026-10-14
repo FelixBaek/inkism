@@ -1,4 +1,5 @@
 .split-workspace {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -253,4 +254,26 @@
   display: flex;
   justify-content: flex-end;
   padding: 4px 8px 0;
+}
+/* 탭을 끌어 편집기 오른쪽 절반에 올리면 분할로 열릴 자리를 보여 준다 */
+.split-drop-zone {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--accent-text);
+  background: color-mix(in srgb, var(--accent-text) 10%, transparent);
+  color: var(--accent-text);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  pointer-events: none;
+}
+.split-tabs.is-drop-target {
+  outline: 2px dashed var(--accent-text);
+  outline-offset: -2px;
 }

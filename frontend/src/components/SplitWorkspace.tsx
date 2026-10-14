@@ -20,6 +20,7 @@ import { DraftJournal } from "../lib/draft-journal";
 import { deriveSplices } from "../lib/splice-client";
 import "./SplitWorkspace.css";
 import { t } from "../i18n";
+import { TAB_DRAG_TYPE } from "./NoteTabs";
 type SourceNote = Note & { content_format?: "text" | "html" | "markdown"; readonlyRevision?: number };
 type Tab = { id: string; title: string };
 /** Updates the tab's title in place, or appends it. */
@@ -312,7 +313,34 @@ export function SplitWorkspace({
     }
   };
   const openRef=useRef(open);openRef.current=open;
-  useEffect(()=>{const show=()=>{if(s.note)void s.flushNow().then(ok=>{if(ok)void openRef.current(s.note!.id);});};window.addEventListener('inkism-open-split',show);return()=>window.removeEventListener('inkism-open-split',show);},[s.note?.id]);
+  // detail이 있으면 그 노트(끌어 놓은 탭)를, 없으면 지금 노트를 분할로 연다.
+  useEffect(()=>{const show=(event:Event)=>{const id=(event as CustomEvent<string|undefined>).detail??s.note?.id;if(id)void s.flushNow().then(ok=>{if(ok)void openRef.current(id);});};window.addEventListener('inkism-open-split',show);return()=>window.removeEventListener('inkism-open-split',show);},[s.note?.id]);
+  // 탭을 편집기 오른쪽 절반에 끌어 놓으면 분할로 연다(분할 창은 오른쪽 하나만 있다).
+  const [dropZone, setDropZone] = useState(false);
+  const [stripDrop, setStripDrop] = useState(false);
+  useEffect(() => {
+    const end = () => {
+      setDropZone(false);
+      setStripDrop(false);
+    };
+    window.addEventListener("dragend", end);
+    window.addEventListener("drop", end);
+    return () => {
+      window.removeEventListener("dragend", end);
+      window.removeEventListener("drop", end);
+    };
+  }, []);
+  const tabDrag = (event: React.DragEvent) =>
+    event.dataTransfer.types.includes(TAB_DRAG_TYPE) &&
+    !(event.target instanceof Element && event.target.closest(".split-tabs"));
+  const inRightHalf = (event: React.DragEvent) => {
+    const r = event.currentTarget.getBoundingClientRect();
+    return event.clientX >= r.left + r.width / 2;
+  };
+  const openDropped = (event: React.DragEvent) => {
+    const id = event.dataTransfer.getData(TAB_DRAG_TYPE);
+    if (id) window.dispatchEvent(new CustomEvent("inkism-open-split", { detail: id }));
+  };
   const closeTab = async (id: string) => {
     const index = tabsRef.current.findIndex((t) => t.id === id),
       remaining = tabsRef.current.filter((t) => t.id !== id);
@@ -386,7 +414,34 @@ export function SplitWorkspace({
     setSplitMode(mode);
   };
   return (
-    <div className={"split-workspace" + (note ? " is-split" : "")}>
+    <div
+      className={"split-workspace" + (note ? " is-split" : "")}
+      // 편집기가 탭 끌기를 글 끌어 넣기로 받지 않도록 캡처 단계에서 가로챈다.
+      onDragOverCapture={(event) => {
+        if (!tabDrag(event)) return;
+        event.stopPropagation();
+        const right = inRightHalf(event) && ready && !busy;
+        setDropZone(right);
+        if (!right) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropZone(false);
+      }}
+      onDropCapture={(event) => {
+        if (!tabDrag(event)) return;
+        event.stopPropagation();
+        event.preventDefault();
+        setDropZone(false);
+        if (inRightHalf(event) && ready && !busy) openDropped(event);
+      }}
+    >
+      {dropZone && (
+        <div className="split-drop-zone" aria-hidden="true">
+          <span>{t("여기에 놓아 분할로 열기")}</span>
+        </div>
+      )}
       <div className="split-primary">
         {note && (
           <div className="split-controls split-top-row">
@@ -417,7 +472,27 @@ export function SplitWorkspace({
             }
           }}
         >
-          <div className="split-tabs" role="tablist" aria-label={t("분할 노트 탭")}>
+          <div
+            className={"split-tabs" + (stripDrop ? " is-drop-target" : "")}
+            role="tablist"
+            aria-label={t("분할 노트 탭")}
+            // 위쪽 탭 줄의 탭을 여기 놓으면 분할 창으로 옮긴다(위쪽 탭은 NoteTabs가 닫는다).
+            onDragOver={(event) => {
+              if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE) || busy) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
+              setStripDrop(true);
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setStripDrop(false);
+            }}
+            onDrop={(event) => {
+              if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE)) return;
+              event.preventDefault();
+              setStripDrop(false);
+              openDropped(event);
+            }}
+          >
             {tabs.map((tab) => (
               <div key={tab.id}>
                 <button

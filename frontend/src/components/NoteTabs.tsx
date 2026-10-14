@@ -242,6 +242,7 @@ export function NoteTabs() {
         const id = dragId.current;
         if (!id || !event.dataTransfer.types.includes(TAB_DRAG_TYPE)) return;
         event.preventDefault();
+        dragId.current = null; // 줄 안에서 놓았다: dragend에서 닫지 않는다.
         const at = dropIndex(event.currentTarget, event.clientX);
         setDropAt(null);
         setTabs((current) => {
@@ -282,7 +283,9 @@ export function NoteTabs() {
             event.dataTransfer.setData(TAB_DRAG_TYPE, tab.id);
             event.dataTransfer.effectAllowed = "copyMove";
           }}
-          onDragEnd={() => {
+          onDragEnd={(event) => {
+            // 다른 곳(분할 탭 줄)이 "옮기기"로 받았으면 여기서는 닫는다.
+            if (dragId.current && event.dataTransfer.dropEffect === "move") void close(tab.id);
             dragId.current = null;
             setDropAt(null);
           }}
