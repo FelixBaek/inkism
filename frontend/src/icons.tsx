@@ -115,6 +115,7 @@ export {
   PaletteIcon as Palette,
   PaperclipIcon as Paperclip,
   PencilSimpleIcon as Pencil,
+  EraserIcon as Eraser,
   PushPinIcon as Pin,
   PlusIcon as Plus,
   QuotesIcon as Quote,

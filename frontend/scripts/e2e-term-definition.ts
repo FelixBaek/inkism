@@ -44,6 +44,14 @@ try{
  await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
  // Without a selection, Ctrl+G must leave the editor alone.
  await page.mouse.move(0,0);await select('에이전트');await page.keyboard.press('ArrowRight');await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});await page.keyboard.press('Control+g');assert.equal(await dialog.count(),0);
+ // Hover card: shows on hover without a title, hides after the pointer leaves; the eraser removes the mark undoably.
+ const term=page.locator('.tiptap [data-term-id]').first();
+ await term.hover();await dialog.waitFor();assert.equal(await dialog.getByText('용어 설명',{exact:true}).count(),0);
+ assert.ok((await dialog.boundingBox())!.width<=280,'hover card stays small');
+ await page.mouse.move(2,2);await dialog.waitFor({state:'hidden'});
+ await term.hover();await dialog.getByRole('button',{name:'설명 제거',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ assert.equal(await page.locator('.tiptap [data-term-id]').count(),0);
+ await page.locator('.tiptap[contenteditable=true]').first().focus();await page.keyboard.press('Control+z');await page.locator('.tiptap [data-term-id]').first().waitFor();
  // A read-only document still exposes saved definitions, but never edit controls.
  const saved=await rpc('get',{id:note.id});await rpc('patch',{id:note.id,revision:saved.revision,changes:{readonly:true},summary_only:true});
  await page.reload();await page.locator('.tiptap [data-term-id]').first().click();await dialog.waitFor();assert.equal(await dialog.getByRole('button',{name:'설명 수정',exact:true}).count(),0);await page.keyboard.press('Escape');

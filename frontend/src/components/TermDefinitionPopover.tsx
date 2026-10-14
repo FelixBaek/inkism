@@ -11,6 +11,7 @@ import { termGlossary, type TermGlossaryEntry } from "../lib/term-glossary";
 import { api } from "../api";
 import { useStore } from "../store";
 import { t } from "../i18n";
+import { Eraser, Pencil } from "../icons";
 import "./TermDefinitionPopover.css";
 
 const OPEN = "inkism-term-definition";
@@ -60,6 +61,8 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
   const panel = useRef<HTMLDialogElement>(null);
   const abort = useRef<AbortController>();
   const active = useRef<Target | null>(null);
+  const showTimer = useRef<number>();
+  const hideTimer = useRef<number>();
   const close = () => { if(mutating.current){return;} abort.current?.abort(); active.current = null; setTarget(null); setBusy(false); };
   const valid = (item: Target) => active.current === item && !editor.isDestroyed && editor.state.doc === item.doc && editor.isEditable && !readOnly && !disabled;
   const show = (item: Target) => {
@@ -91,16 +94,35 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
       }
       show({from,to,term:editor.state.doc.textBetween(from,to),id:crypto.randomUUID(),definition:"",doc:editor.state.doc,...position(from),preview:false});
     };
-    const existing = (event: Event) => {
-      if (active.current || disabled) return;
+    // 저장된 용어: 마우스를 올리면 잠깐 뒤(250ms) 작은 카드를 보이고, 용어·카드 밖으로 나가면 200ms 뒤 숨긴다.
+    // 키보드 포커스·클릭(터치)은 바로 보인다. 편집 창이 열려 있으면 건드리지 않는다.
+    const termAt = (event: Event) => {
       const span = (event.target as HTMLElement)?.closest?.<HTMLElement>("[data-term-id]");
-      const id = span?.dataset.termId;
-      if (!id) return;
-      if(!span || !dom.contains(span))return;
+      return span && dom.contains(span) ? span : null;
+    };
+    const previewOf = (span: HTMLElement): Target | null => {
+      const id = span.dataset.termId!;
       const occurrence=termDefinitionRange(editor.state.doc,editor.view.posAtDOM(span,0),id);
-      if(!occurrence)return;
+      if(!occurrence)return null;
       const {from,to,mark}=occurrence;
-      show({from,to,term:editor.state.doc.textBetween(from,to),id,definition:mark.attrs.definition??"",glossaryId:mark.attrs.glossaryId,noteId:mark.attrs.noteId,doc:editor.state.doc,...position(from),preview:true});
+      return {from,to,term:editor.state.doc.textBetween(from,to),id,definition:mark.attrs.definition??"",glossaryId:mark.attrs.glossaryId,noteId:mark.attrs.noteId,doc:editor.state.doc,...position(from),preview:true};
+    };
+    const existing = (event: Event, delay = 0) => {
+      const span = termAt(event);
+      if (!span || disabled) return;
+      window.clearTimeout(hideTimer.current); window.clearTimeout(showTimer.current);
+      const current = active.current;
+      if (current && (!current.preview || current.id === span.dataset.termId)) return;
+      const open = () => { const item = previewOf(span); if (item && (!active.current || active.current.preview)) show(item); };
+      if (delay) showTimer.current = window.setTimeout(open, delay); else open();
+    };
+    const hover = (event: Event) => existing(event, 250);
+    const leave = (event: Event) => {
+      const to = (event as MouseEvent).relatedTarget as Node | null;
+      const from = termAt(event);
+      if (!from || (to && (from.contains(to) || panel.current?.contains(to)))) return;
+      window.clearTimeout(showTimer.current);
+      if (active.current?.preview) hideTimer.current = window.setTimeout(() => { if (active.current?.preview) close(); }, 200);
     };
     let unregister: (() => void) | undefined;
     const register = () => {
@@ -114,9 +136,9 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
       if(item && !mutating.current && !item.preview && editor.isFocused && (editor.state.selection.from!==item.from || editor.state.selection.to!==item.to)) close();
     };
     const update = () => { if (active.current && editor.state.doc !== active.current.doc && !mutating.current) close(); };
-    dom.addEventListener(OPEN,open); dom.addEventListener("mouseover",existing); dom.addEventListener("focusin",existing); dom.addEventListener("click",existing);
+    dom.addEventListener(OPEN,open); dom.addEventListener("mouseover",hover); dom.addEventListener("mouseout",leave); dom.addEventListener("focusin",existing); dom.addEventListener("focusout",leave); dom.addEventListener("click",existing);
     dom.addEventListener("focusin",register); editor.on("transaction",update); editor.on("selectionUpdate",selectionChanged);
-    return () => { abort.current?.abort(); active.current=null; if(!editor.isDestroyed){editor.unregisterPlugin(decorationKey);} dom.removeEventListener(OPEN,open); dom.removeEventListener("mouseover",existing); dom.removeEventListener("focusin",existing); dom.removeEventListener("click",existing); dom.removeEventListener("focusin",register); unregister?.(); editor.off("transaction",update); editor.off("selectionUpdate",selectionChanged); };
+    return () => { abort.current?.abort(); active.current=null; if(!editor.isDestroyed){editor.unregisterPlugin(decorationKey);} dom.removeEventListener(OPEN,open); window.clearTimeout(showTimer.current); window.clearTimeout(hideTimer.current); dom.removeEventListener("mouseover",hover); dom.removeEventListener("mouseout",leave); dom.removeEventListener("focusin",existing); dom.removeEventListener("focusout",leave); dom.removeEventListener("click",existing); dom.removeEventListener("focusin",register); unregister?.(); editor.off("transaction",update); editor.off("selectionUpdate",selectionChanged); };
   }, [editor,readOnly,disabled]);
   useLayoutEffect(() => {
     const element=panel.current;
@@ -126,7 +148,15 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
       // Measure after details/validation/AI content changes; the small initial
       // estimate cannot predict an expanded panel on narrow screens.
       element.style.left=`${Math.max(12,Math.min(target.left,window.innerWidth-bounds.width-12))}px`;
-      element.style.top=`${Math.max(12,Math.min(target.top,window.innerHeight-bounds.height-12))}px`;
+      let top=Math.max(12,Math.min(target.top,window.innerHeight-bounds.height-12));
+      // 서식 메뉴가 떠 있으면 겹치지 않게 용어 위쪽으로 옮긴다(자리가 없으면 그대로).
+      const menu=document.querySelector(".format-menu")?.getBoundingClientRect();
+      const left=element.getBoundingClientRect().left;
+      if(target.preview && menu && menu.width && top<menu.bottom && top+bounds.height>menu.top && left<menu.right && left+bounds.width>menu.left){
+        const above=editor.view.coordsAtPos(target.from).top-10-bounds.height;
+        if(above>=12 && (above+bounds.height<=menu.top || above>=menu.bottom))top=above;
+      }
+      element.style.top=`${top}px`;
     };
     place();
     const observer=new ResizeObserver(place);
@@ -193,17 +223,33 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
     } catch(e) {if(active.current===target)setError(e instanceof Error?e.message:String(e));}
     finally {mutating.current=false;setSaving(false);settle(target);}
   };
+  /** 카드의 지우개: 확인 없이 이 용어의 설명 표시만 지운다. 편집 트랜잭션이라 Ctrl+Z로 되돌린다. */
+  const erase = () => {
+    if(!target || !valid(target))return;
+    const type=editor.schema.marks.termDefinition;
+    editor.view.dispatch(editor.state.tr.removeMark(target.from,target.to,type));
+    close();
+  };
   const remove = () => { if(!target || !valid(target)){return;} editor.chain().focus().setTextSelection({from:target.from,to:target.to}).unsetMark("termDefinition").run();close(); };
   if (!target) return null;
   const preview = target.preview;
-  return createPortal(<dialog open ref={panel} className="term-definition-popover" style={{left:target.left,top:target.top}} aria-label={t("용어 설명")}>
-    <header><strong>{t("용어 설명")}</strong><button type="button" aria-label={t("닫기")} disabled={saving} onClick={()=>{close();if(!editor.isDestroyed)editor.view.focus();}}>×</button></header>
-    <div className="term-definition-word">{target.term}</div>
+  const hoverCard = { onMouseEnter: () => window.clearTimeout(hideTimer.current), onMouseLeave: (event: React.MouseEvent) => {
+    const to = event.relatedTarget as Node | null;
+    if (!preview || (to instanceof Element && to.closest(`[data-term-id="${CSS.escape(target.id)}"]`))) return;
+    hideTimer.current = window.setTimeout(() => { if (active.current?.preview) close(); }, 200);
+  } };
+  return createPortal(<dialog open ref={panel} className={`term-definition-popover${preview?" is-preview":""}`} style={{left:target.left,top:target.top}} aria-label={t("용어 설명")} {...hoverCard}>
     {preview ? <>
+      {!readOnly && editor.isEditable && <div className="term-definition-tools">
+        <button type="button" aria-label={t("설명 수정")} title={t("설명 수정")} onClick={()=>{const next={...target,preview:false};active.current=next;setTarget(next);}}><Pencil size={14} aria-hidden /></button>
+        <button type="button" aria-label={t("설명 제거")} title={t("설명 제거")} onClick={erase}><Eraser size={14} aria-hidden /></button>
+      </div>}
+      <strong className="term-definition-word">{target.term}</strong>
       <p className="term-definition-preview">{definition}</p>
       {noteId && <a href={`note://${noteId}`}>{t("연결된 노트 열기")}</a>}
-      {!readOnly && editor.isEditable && <button type="button" onClick={()=>{const next={...target,preview:false};active.current=next;setTarget(next);}}>{t("설명 수정")}</button>}
     </> : <>
+      <header><strong>{t("용어 설명")}</strong><button type="button" aria-label={t("닫기")} disabled={saving} onClick={()=>{close();if(!editor.isDestroyed)editor.view.focus();}}>×</button></header>
+      <div className="term-definition-word">{target.term}</div>
       <label className="term-definition-label">{t("짧은 설명")}<textarea autoFocus maxLength={2000} rows={4} value={definition} disabled={busy} onChange={e=>{dirty.current=true;setDefinition(e.target.value);setAiPreview(false);}} placeholder={t("이 문맥에서 쓰인 의미를 적어 주세요.")} /></label>
       <div className="term-definition-ai"><button type="button" disabled={busy} onClick={()=>void generate()}>{t("AI로 설명")}</button><small>{definition.length}/2000</small></div>
       {busy && <p><output>{t("처리 중…")}</output> <button type="button" disabled={saving} onClick={close}>{t("취소")}</button></p>}

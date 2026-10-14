@@ -7,3 +7,11 @@
 .tiptap-prose [data-term-id]{text-decoration:underline dotted;text-underline-offset:4px;cursor:help}.tiptap-prose [data-term-id]:focus{outline:2px solid var(--green);outline-offset:2px}
 
 .term-definition-popover select{min-width:0;max-width:100%}.term-definition-popover option{background:var(--canvas);color:var(--text)}
+/* 저장된 용어에 마우스를 올리면 뜨는 작은 카드: 용어 + 설명, 오른쪽 위에 수정·지우기 아이콘 */
+.term-definition-popover.is-preview{width:auto;max-width:min(280px,calc(100vw - 24px));min-width:160px;padding:8px 10px;border-radius:8px;box-shadow:var(--shadow)}
+.term-definition-popover.is-preview .term-definition-word{display:block;font-size:13px;margin:0 0 2px}.term-definition-tools~.term-definition-word{margin-right:52px}
+.term-definition-popover.is-preview .term-definition-preview{margin:0;color:var(--muted)}
+.term-definition-popover.is-preview a{display:inline-block;margin-top:4px;font-size:12px}
+.term-definition-tools{position:absolute;top:4px;right:4px;display:flex;gap:2px}
+.term-definition-popover .term-definition-tools button{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted)}
+.term-definition-popover .term-definition-tools button:hover{background:var(--hover);color:var(--text)}
