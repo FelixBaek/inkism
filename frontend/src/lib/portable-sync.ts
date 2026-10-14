@@ -61,7 +61,7 @@ export async function planFolderChanges(files:File[],get:typeof api.get=api.get)
 export type FolderApplyResult={saved:number;errors:string[];applied:Map<string,Note|{id:string;revision:number}>};
 type FolderDeps={save:typeof api.save;patch:(id:string,revision:number,sourceHash:string)=>Promise<{id:string;revision:number}>;upload:typeof api.uploadAttachment;fromMarkdown?:typeof fromMarkdown};
 const folderDeps:FolderDeps={save:api.save,patch:(id:string,revision:number,sourceHash:string)=>rpc<{id:string;revision:number}>('patch',{id,revision,changes:{trashed:true},require_editable:true,expected_source_sha256:sourceHash}),upload:api.uploadAttachment};
-const noteReference=(path:string)=>new RegExp(`(^|[="'\\s(<[])(?:\\./)?${rx(path.slice(6))}(?=[#?|"'\\s<>)\\]]|$)`,'m');
+const noteReference=(path:string)=>new RegExp(String.raw`(^|[="'\s(<[])(?:\./)?${rx(path.slice(6))}(?=[#?|"'\s<>)\]]|$)`,'m');
 /** Dependency order: a change comes after the new notes it links to; cycles fail. */
 function orderChanges(plan:FolderPlan,selectedChanges:FolderChange[]){
  const dependencies=new Map(selectedChanges.map(c=>[c.key,plan.changes.filter(other=>other.kind==='create'&&other.key!==c.key&&noteReference(other.path).test(c.content)).map(other=>other.key)]));
