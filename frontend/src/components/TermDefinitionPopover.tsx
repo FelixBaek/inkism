@@ -11,7 +11,7 @@ import { termGlossary, type TermGlossaryEntry } from "../lib/term-glossary";
 import { api } from "../api";
 import { useStore } from "../store";
 import { t } from "../i18n";
-import { Eraser, Pencil } from "../icons";
+import { Eraser, Pencil, SparklesAi, X } from "../icons";
 import "./TermDefinitionPopover.css";
 
 const OPEN = "inkism-term-definition";
@@ -248,10 +248,9 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
       <p className="term-definition-preview">{definition}</p>
       {noteId && <a href={`note://${noteId}`}>{t("연결된 노트 열기")}</a>}
     </> : <>
-      <header><strong>{t("용어 설명")}</strong><button type="button" aria-label={t("닫기")} disabled={saving} onClick={()=>{close();if(!editor.isDestroyed)editor.view.focus();}}>×</button></header>
-      <div className="term-definition-word">{target.term}</div>
-      <label className="term-definition-label">{t("짧은 설명")}<textarea autoFocus maxLength={2000} rows={4} value={definition} disabled={busy} onChange={e=>{dirty.current=true;setDefinition(e.target.value);setAiPreview(false);}} placeholder={t("이 문맥에서 쓰인 의미를 적어 주세요.")} /></label>
-      <div className="term-definition-ai"><button type="button" disabled={busy} onClick={()=>void generate()}>{t("AI로 설명")}</button><small>{definition.length}/2000</small></div>
+      <header><strong className="term-definition-word">{target.term}</strong><button type="button" className="term-definition-close" aria-label={t("닫기")} disabled={saving} onClick={()=>{close();if(!editor.isDestroyed)editor.view.focus();}}><X size={14} aria-hidden /></button></header>
+      <textarea aria-label={t("짧은 설명")} autoFocus maxLength={2000} rows={3} value={definition} disabled={busy} onChange={e=>{dirty.current=true;setDefinition(e.target.value);setAiPreview(false);}} placeholder={t("이 문맥에서 쓰인 의미를 적어 주세요.")} />
+      <div className="term-definition-ai"><button type="button" disabled={busy} onClick={()=>void generate()}><SparklesAi size={14} aria-hidden />{t("AI로 설명")}</button><small>{definition.length}/2000</small></div>
       {busy && <p><output>{t("처리 중…")}</output> <button type="button" disabled={saving} onClick={close}>{t("취소")}</button></p>}
       {aiPreview && <output className="term-definition-hint">{t("AI 초안입니다. 확인한 뒤 저장하세요.")}</output>}
       <details><summary>{t("용어집 · 노트 연결")}</summary>
@@ -262,9 +261,7 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
         {noteId && <div>{t("노트 연결됨")} <button type="button" disabled={busy} onClick={()=>{dirty.current=true;setNoteId("");}}>{t("연결 해제")}</button></div>}
         <label><input type="checkbox" checked={expand} disabled={busy} onChange={e=>setExpand(e.target.checked)}/>{t("설명을 새 노트로 확장")}</label>
       </details>
-      {target.definition && <button type="button" disabled={busy} onClick={remove}>{t("본문 설명 제거")}</button>}
-      <p className="term-definition-hint">{t("기본 저장은 본문의 설명만 추가합니다.")}</p>
-      <footer><button type="button" disabled={saving} onClick={()=>{close();if(!editor.isDestroyed)editor.view.focus();}}>{t("취소")}</button><button type="button" className="term-definition-save" disabled={busy||!definition.trim()||!valid(target)} onClick={()=>void save()}>{t("설명 저장")}</button></footer>
+      <footer>{target.definition && <button type="button" className="term-definition-remove" disabled={busy} onClick={remove}>{t("설명 제거")}</button>}<span /><button type="button" disabled={saving} onClick={()=>{close();if(!editor.isDestroyed)editor.view.focus();}}>{t("취소")}</button><button type="button" className="term-definition-save" disabled={busy||!definition.trim()||!valid(target)} onClick={()=>void save()}>{t("저장")}</button></footer>
     </>}
     {error && <p role="alert">{error}</p>}
   </dialog>, document.body);

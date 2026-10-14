@@ -15,3 +15,16 @@
 .term-definition-tools{position:absolute;top:4px;right:4px;display:flex;gap:2px}
 .term-definition-popover .term-definition-tools button{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted)}
 .term-definition-popover .term-definition-tools button:hover{background:var(--hover);color:var(--text)}
+/* 간소화: 용어를 제목으로, 라벨·안내문 없이 입력 → AI·글자 수 → 연결(접힘) → 버튼 한 줄 */
+.term-definition-popover:not(.is-preview) header .term-definition-word{margin:0;flex:1;min-width:0}
+.term-definition-popover .term-definition-close{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;background:transparent;color:var(--muted)}
+.term-definition-popover .term-definition-close:hover{background:var(--hover);color:var(--text)}
+.term-definition-popover:not(.is-preview) textarea{min-height:72px}
+.term-definition-ai{margin-top:8px}
+.term-definition-ai button{display:inline-flex;align-items:center;gap:6px}
+.term-definition-ai small{color:var(--faint)}
+.term-definition-popover details{margin-top:10px;padding-top:0;border-top:0}
+.term-definition-popover summary{color:var(--muted);font-size:12px}
+.term-definition-popover footer{margin-top:14px}
+.term-definition-popover footer>span{flex:1}
+.term-definition-popover .term-definition-remove{border-color:transparent;background:transparent;color:var(--danger,var(--red))}

@@ -10,7 +10,7 @@ const dialog=page.getByRole('dialog',{name:'용어 설명',exact:true});
 async function until(fn:()=>Promise<boolean>){for(let i=0;i<100;i++){if(await fn())return;await page.waitForTimeout(80);}throw Error('condition timed out');}
 async function select(word:string){await page.locator('.tiptap[contenteditable=true]').first().evaluate((root,word)=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let n;while(n=walker.nextNode()){const at=n.textContent?.indexOf(word)??-1;if(at>=0){(root as HTMLElement).focus();const range=document.createRange();range.setStart(n,at);range.setEnd(n,at+word.length);const selection=getSelection()!;selection.removeAllRanges();selection.addRange(range);document.dispatchEvent(new Event('selectionchange'));return;}}throw Error('Missing term '+word);},word);await page.waitForTimeout(100);}
 async function open(word:string){await select(word);await page.keyboard.press('Control+g');await dialog.waitFor();}
-async function save(){await dialog.getByRole('button',{name:'설명 저장',exact:true}).click();await dialog.waitFor({state:'hidden'});}
+async function save(){await dialog.getByRole('button',{name:'저장',exact:true}).click();await dialog.waitFor({state:'hidden'});}
 async function edit(){await page.locator('.tiptap [data-term-id]').first().click();await dialog.getByRole('button',{name:'설명 수정',exact:true}).click();}
 try{
  const note=await rpc('save',{note:{title:'Term definition integration',content:'<p>에이전트는 도구를 선택한다. cache는 임시 저장소다.</p>',content_format:'html'}});
@@ -35,7 +35,7 @@ try{
  await open('cache');await dialog.getByRole('button',{name:'AI로 설명',exact:true}).click();await dialog.getByText('AI 초안입니다. 확인한 뒤 저장하세요.',{exact:true}).waitFor();await save();
  await until(async()=>/cache: 재사용/.test((await rpc('get',{id:note.id})).content));
  // Unlink/remove the annotation only; the promoted note and glossary remain.
- await edit();await dialog.getByRole('button',{name:'본문 설명 제거',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ await edit();await dialog.getByRole('button',{name:'설명 제거',exact:true}).click();await dialog.waitFor({state:'hidden'});
  await until(async()=>!new RegExp('data-term-note-id="'+linked+'"').test((await rpc('get',{id:note.id})).content));
  assert.equal((await rpc('get',{id:linked})).title,'에이전트');assert.equal((await rpc('knowledge_settings_get')).glossary.length,1);
  // Mobile popup stays on screen, including the expanded glossary area.
