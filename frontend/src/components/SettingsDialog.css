@@ -222,6 +222,7 @@
   font-size: var(--fs-small);
 }
 .settings-content label:has(> input:not([type="checkbox"], [type="radio"], [type="color"])),
+.settings-content label:has(> select:not(.settings-select)),
 .settings-content label:has(> textarea) {
   display: flex;
   flex-direction: column;
@@ -247,9 +248,22 @@
 .settings-content textarea:not(.settings-content dialog *) {
   padding: 8px 12px;
 }
-.settings-content input[type="file"]:not(.settings-content dialog *) {
-  color: var(--muted);
-  font-size: var(--fs-small);
+/* 파일 고르기: 브라우저 기본 "Choose File" 대신 보조 버튼 하나(입력은 숨김, 라벨이 대신 연다) */
+.settings-file > .btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+.settings-file:has(input:focus-visible) > .btn {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+.settings-file:has(input:disabled) > .btn {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .settings-content :is(input, select, textarea):focus-visible {
   outline: var(--focus-ring);
@@ -625,3 +639,51 @@
 .agent-api-secret input { flex: 1; min-width: 0; font-family: var(--mono, monospace); }
 .agent-api-settings fieldset { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .agent-api-settings fieldset label { display: inline-flex; align-items: center; gap: 6px; }
+
+/* 동작 줄: 주 버튼 → 보조 버튼, 지우기 같은 위험 동작은 오른쪽 끝 글자 버튼 */
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.settings-actions > .danger-text:last-child {
+  margin-left: auto;
+}
+.settings-content .btn.btn-ghost:not(.settings-content dialog *) {
+  border-color: transparent;
+  background: none;
+}
+.settings-content .btn.btn-ghost:not(:disabled, .settings-content dialog *):hover {
+  background: var(--hover);
+}
+/* 결과 알림: 성공은 확인 아이콘 + 초록, 실패는 빨강 */
+.settings-content p.settings-msg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: var(--fs-caption);
+}
+.settings-content p.settings-msg--ok {
+  color: var(--success);
+}
+.settings-content p.settings-msg--error {
+  color: var(--danger);
+}
+.settings-nav__item > svg {
+  flex: none;
+  margin-right: 8px;
+  color: var(--muted);
+}
+.settings-nav__item.is-active > svg {
+  color: inherit;
+}
+/* 바로 위 항목에 붙는 짧은 설명(안내 상자로 내리지 않는다) */
+.settings-card__text > p.settings-hint {
+  order: -2;
+  margin-top: -8px;
+  padding: 0;
+  background: none;
+}

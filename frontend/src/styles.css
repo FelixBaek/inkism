@@ -1724,6 +1724,10 @@ kbd {
   gap: 8px;
   margin-top: 16px;
 }
+/* 지우기 같은 위험 동작은 왼쪽 끝으로 떼어 주 버튼과 헷갈리지 않게 */
+.dialog-actions > .dialog-actions__start {
+  margin-right: auto;
+}
 /* 푸터 왼쪽 보조 동작과 오른쪽 주요 동작 사이 여백 */
 .dialog-actions-gap {
   flex: 1;
