@@ -13,7 +13,10 @@ import { t } from "../i18n";
 
 // A single audited inline extension; arbitrary HTML remains outside the GFM editor.
 const isSpace = (c: string | undefined) => c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f";
-const skipSpace = (source: string, i: number) => { while (isSpace(source[i])) i++; return i; };
+function skipSpace(source: string, i: number): number {
+  while (isSpace(source[i])) i++;
+  return i;
+}
 /** Index just past the attribute value starting at `i`, or -1 when its quote is never closed. */
 function valueEnd(source: string, i: number): number {
   const quote = source[i];
