@@ -45,6 +45,7 @@ import { BlockPreview } from "./blocks/BlockPreview";
 import "./blocks/BlockMenu.css";
 import { IconButton } from "./IconButton";
 import { Popover } from "./toolbar/Popover";
+import { FormatPreview } from "./toolbar/FormatPreview";
 import { BLOCK_ITEMS, TURN_INTO, blockKind, canConvertBlock, convertBlock } from "../extensions/block-items";
 import {
   AiMenu,
@@ -139,6 +140,12 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
   const [palettePinned, setPalettePinned] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [turnHover, setTurnHover] = useState<string | null>(null);
+  const [tip, setTip] = useState<{ id: string; label: string; item: HTMLElement } | null>(null);
+  const tipTimer = useRef<number | undefined>(undefined);
+  // 메뉴가 사라지면(선택 해제) 미리보기 카드도 지운다. 다시 떠도 묵은 카드가 남지 않게.
+  useEffect(() => {
+    if (tip && !tip.item.isConnected) setTip(null);
+  });
   const [lastColor, setLastColor] = useState(() => ({
     highlight: toolbarStore.get("inkism.colors.last.highlight", "#fff176"),
     color: toolbarStore.get("inkism.colors.last.color", "#f44336"),
@@ -205,7 +212,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
     name: string,
     fn: (chain: ChainedCommands) => ChainedCommands,
   ) => (
-    <IconButton label={label} active={editor.isActive(name)} disabled={disabled} onClick={cmd(fn)}>
+    <IconButton label={label} active={editor.isActive(name)} disabled={disabled} onClick={cmd(fn)} data-preview={name}>
       {icon}
     </IconButton>
   );
@@ -217,6 +224,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
       aria-expanded={isOpen(name)}
       disabled={disabled}
       onClick={toggle(name, level)}
+      data-preview={name}
     >
       {icon}
     </IconButton>
@@ -455,6 +463,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
       label={t("서식 지우기 (글자만 남김)")}
       disabled={disabled}
       onClick={() => void clearFormatting()}
+      data-preview="clear"
     >
       <ClearFormatting size={16} aria-hidden />
     </IconButton>
@@ -729,7 +738,26 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
           role="toolbar"
           aria-label={t("서식 도구 모음")}
           onMouseDown={(event) => {
+            setTip(null);
             if (!(event.target as HTMLElement).closest("input,select,textarea")) event.preventDefault();
+          }}
+          onMouseOver={(event) => {
+            const item = (event.target as HTMLElement).closest<HTMLElement>("[data-preview]");
+            if (!item || item === tip?.item) return;
+            window.clearTimeout(tipTimer.current);
+            const show = () =>
+              setTip({
+                id: item.dataset.preview!,
+                label: item.getAttribute("aria-label") ?? item.textContent!.trim(),
+                item,
+              });
+            // 처음엔 잠깐 머물러야 뜨고, 카드가 떠 있는 동안은 옮기는 대로 바로 바뀐다.
+            if (tip) show();
+            else tipTimer.current = window.setTimeout(show, 400);
+          }}
+          onMouseLeave={() => {
+            window.clearTimeout(tipTimer.current);
+            setTip(null);
           }}
           onKeyDown={(event) => {
             if (event.key === "Escape" && !stack.length) {
@@ -764,12 +792,13 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
               active={editor.isActive("link")}
               disabled={disabled}
               onClick={() => void linkAction(s, editor)}
+              data-preview="link"
             >
               <Link2 size={16} aria-hidden />
             </IconButton>
             {markButton(t("취소선"), <Strikethrough size={16} aria-hidden />, "strike", (c) => c.toggleStrike())}
             {markButton(t("인라인 코드"), <InlineCode size={16} aria-hidden />, "code", (c) => c.toggleCode())}
-            <IconButton label={t("인라인 수식")} disabled={disabled} onClick={() => requestMath(editor, { kind: "inlineMath" })}>
+            <IconButton label={t("인라인 수식")} disabled={disabled} onClick={() => requestMath(editor, { kind: "inlineMath" })} data-preview="inlineMath">
               <SquareSigma size={16} aria-hidden />
             </IconButton>
             {popButton("more", 0, t("서식 더보기"), <MoreVertical size={16} weight="bold" aria-hidden />)}
@@ -780,6 +809,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             className="fm-row"
             disabled={disabled || !canDefineTerm(editor)}
             title={t("용어 설명 (Ctrl/⌘+G)")}
+            data-preview="term"
             onClick={() => openTermDefinition(editor)}
           >
             {t("용어 설명")}
@@ -789,6 +819,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             className="fm-row"
             disabled={disabled || extracting}
             aria-label={t("선택 영역을 새 노트로 추출")}
+            data-preview="extract"
             onClick={() => void extract()}
           >
             {extracting ? t("추출 중…") : t("새 노트로 추출")}
@@ -799,7 +830,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
           </div>
           <div className="fm-ai-list">
             {(["polish", "spelling", "shorter", "longer", "summarize"] as const).map((action) => (
-              <button key={action} type="button" className="fm-row" disabled={disabled} onClick={() => void runAi(action)}>
+              <button key={action} type="button" className="fm-row" disabled={disabled} onClick={() => void runAi(action)} data-preview={action}>
                 {AI_LABELS[action]}
               </button>
             ))}
@@ -813,6 +844,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             aria-expanded={aiOpen}
             disabled={disabled}
             onClick={toggle("ai", 0)}
+            data-preview="aiEdit"
           >
             {/* 예전 도구줄 AI 버튼과 같은 반짝임을 줄 전체에: 마우스를 올리면 켜진다 */}
             <span className="tb-ai-halo" aria-hidden />
@@ -838,6 +870,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
       </span>
       <span ref={caret} className="fm-caret" aria-hidden />
       {stack.map((pop, level) => renderPop(pop, level))}
+      {tip && !stack.length && row.current && <FormatPreview {...tip} menu={row.current} />}
       {editor.isActive("callout") && (
         <fieldset
           className="callout-tools"
