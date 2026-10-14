@@ -1288,7 +1288,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
 
   // 새 노트를 편집하지 않고 떠나면 흔적을 남기지 않는다.
   useEffect(() => {
-    if (draft && draft.isNew && !dirtyRef.current) {
+    if (draft?.isNew && !dirtyRef.current) {
       // 그대로 둔다: 첫 편집 시 저장된다.
     }
   }, [draft]);
@@ -1986,7 +1986,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     },
     [prompt],
   );
-  const removeTag = useCallback(async (name:string)=>{requestTagChange({name,replacement:null});},[]);
+  const removeTag = useCallback((name:string)=>{requestTagChange({name,replacement:null});return Promise.resolve();},[]);
 
   // ---------- 폴더 관리 ----------
   const addNotebook = useCallback(

@@ -20,7 +20,7 @@ export function useDocumentMetadata(id:string|undefined,isNew:boolean) {
  return {metadata,items,error,truncated,setError};
 }
 /** 문서 설정 판 (Figma 30): 편집기 도구줄의 [문서 설정]이 open을 바꾼다. */
-export function DocumentTools({data,open:panelOpen,onOpenChange}:{data:ReturnType<typeof useDocumentMetadata>;open:boolean;onOpenChange:(open:boolean)=>void}) {
+export function DocumentTools({data,open:panelOpen,onOpenChange}:Readonly<{data:ReturnType<typeof useDocumentMetadata>;open:boolean;onOpenChange:(open:boolean)=>void}>) {
  const s=useStore(),id=s.draft!.id;
  const [style,setStyle]=useState<DocumentSettings>({}),[busy,setBusy]=useState(false),[title,setTitle]=useState(''),[childId,setChildId]=useState(()=>crypto.randomUUID()),[saved,setSaved]=useState(false);
  useEffect(()=>{setStyle(data.metadata?.document??{});},[data.metadata]);

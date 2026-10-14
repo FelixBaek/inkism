@@ -24,7 +24,7 @@ export function CanvasBoard({ notes = [], storageKey = "inkism.canvas.default", 
   };
   const changed=useRef(onStateChange);changed.current=onStateChange;const first=useRef(true);
   useEffect(() => {if(first.current){first.current=false;return;}changed.current?.(state);}, [state]);
-  const addNote = () => { const n = notes.find(n => n.id === noteChoice) || notes.find(n => !state.nodes.some(c => c.noteId === n.id)); if (!n) return; setState(s => ({ ...s, nodes: [...s.nodes, createNoteCard(n, s.nodes.length)] })); };
+  const addNote = () => { const n = notes.find(n => n.id === noteChoice) ?? notes.find(n => !state.nodes.some(c => c.noteId === n.id)); if (!n) return; setState(s => ({ ...s, nodes: [...s.nodes, createNoteCard(n, s.nodes.length)] })); };
   const addGroup=()=>{const group=createGroupCard(selected ? state.nodes.filter(n=>n.id===selected) : []);setState(s=>({...s,nodes:[group,...s.nodes]}));setSelected(group.id);};
   const addText = () => setState(s => ({ ...s, nodes: [...s.nodes, createTextCard("", s.nodes.length)] }));
   const addWeb = () => { const value = window.prompt(t("웹 주소"), "https://"); const card = value ? createWebCard(value, state.nodes.length) : undefined; if (card?.url) setState(s => ({ ...s, nodes: [...s.nodes, card] })); };

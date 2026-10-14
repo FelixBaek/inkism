@@ -162,7 +162,7 @@ pub(crate) fn state_files(db_path: &str) -> Result<Vec<String>> {
         .unwrap_or_else(|| std::path::Path::new("."));
     let name = db
         .file_name()
-        .and_then(|n| n.to_str())
+        .and_then(std::ffi::OsStr::to_str)
         .ok_or_else(|| RuntimeError::config("invalid library path"))?;
     let mut files = Vec::new();
     let legacy = format!("{db_path}.sync");

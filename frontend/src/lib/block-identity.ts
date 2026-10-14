@@ -21,7 +21,7 @@ export function cloneHTMLIdentity(html:string):string {
  * Existing IDs (including ambiguous imported duplicates) are never redirected. */
 export function prepareHTMLBlockIdentity(html:string):string {
  const blocks=new Set(['p','h1','h2','h3','h4','h5','h6','blockquote','ul','ol','li','pre','hr','table','tr','td','th','details','summary','img']);
- return html.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<(script|style|textarea|title)\b[^>]*>[\s\S]*?<\/\1\s*>|<[a-zA-Z][^>"']*(?:(?:"[^"]*"|'[^']*')[^>"']*)*>/gi,tag=>{
+ return html.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<(script|style|textarea|title)\b[^>]*>[\s\S]*?<\/\1\s*>|<[a-z][^>"']*(?:(?:"[^"]*"|'[^']*')[^>"']*)*>/gi,tag=>{
   const name=/^<([a-z][\w:-]*)\b/i.exec(tag)?.[1].toLowerCase();
   if(!name||!blocks.has(name))return tag;
   const attrs=Array.from(tag.matchAll(/\s([\w:-]+)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s>]+))?/g));

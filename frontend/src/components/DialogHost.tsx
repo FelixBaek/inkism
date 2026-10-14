@@ -18,7 +18,7 @@ function dialogClassName(d: NonNullable<ReturnType<typeof useStore>["dialog"]>) 
 }
 
 /** 대화상자 제목 줄: 제목 + 오른쪽 닫기 버튼. */
-function DialogHead({ danger, children }: { danger?: boolean; children: React.ReactNode }) {
+function DialogHead({ danger, children }: Readonly<{ danger?: boolean; children: React.ReactNode }>) {
   const store = useStore();
   return (
     <div className="dialog-title-row">

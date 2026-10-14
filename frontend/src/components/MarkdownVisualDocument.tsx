@@ -65,7 +65,9 @@ export function MarkdownVisualDocument({ fallback }: Readonly<{ fallback?: React
     return (
       <>
         <div className="source-hint">
-          <p role="status">{initial.error}</p>
+          <p>
+            <output>{initial.error}</output>
+          </p>
           <button type="button" className="btn btn-small" onClick={() => void s.setMode("markdown")}>
             {t("Markdown 원문 편집")}
           </button>

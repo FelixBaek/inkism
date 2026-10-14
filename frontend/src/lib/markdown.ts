@@ -79,7 +79,7 @@ export function htmlToMarkdown(html: string): string {
 
 /** Plain text remains literal text, even when it contains Markdown syntax. */
 export function textToMarkdown(text: string): string {
-  return text.replace(/\r\n?/g, "\n").replace(/([\\`*_[\]{}<>#+.!|~$&\-])/g, "\\$1").split("\n").join("  \n");
+  return text.replace(/\r\n?/g, "\n").replace(/([\\`*_[\]{}<>#+.!|~$&-])/g, String.raw`\$1`).replaceAll("\n", "  \n");
 }
 
 export function sourceToMarkdown(content: string, format: "text" | "html" | "markdown" = "html"): string {

@@ -105,8 +105,7 @@ export function safeDiagramSVG(svg:string):string {
   const externalCSS=(value:string)=>/\\|@import|@font-face/i.test(value)||[...value.matchAll(/url\(\s*(["']?)(.*?)\1\s*\)/gi)].some(match=>!match[2].trim().startsWith('#'));
   for(const element of document.querySelectorAll('*')){
     for(const attr of [...element.attributes]){
-      if((attr.localName==='href'&&!attr.value.startsWith('#'))||/^on/i.test(attr.name))element.removeAttributeNode(attr);
-      else if(externalCSS(attr.value))element.removeAttributeNode(attr);
+      if((attr.localName==='href'&&!attr.value.startsWith('#'))||/^on/i.test(attr.name)||externalCSS(attr.value))element.removeAttributeNode(attr);
     }
     if(element.localName==='style'&&externalCSS(element.textContent??''))element.remove();
   }

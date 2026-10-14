@@ -15,7 +15,7 @@ export interface EditorColor {
   label: string;
   value: string;
 }
-export const validFontFamily = (value: string) => /^[\p{L}\p{N} _.\-]{1,100}$/u.test(value.trim());
+export const validFontFamily = (value: string) => /^[\p{L}\p{N} _.-]{1,100}$/u.test(value.trim());
 export const validEditorColor = (value: string) => /^#[0-9a-f]{6}$/i.test(value);
 export function parseEditorFonts(raw: string | null): EditorFont[] {
   try {

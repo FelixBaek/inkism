@@ -1,5 +1,5 @@
 import { t } from "../../i18n";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import {
   CheckCircle2 as CheckCircle,
   ChatTone,
@@ -100,8 +100,8 @@ interface PaletteProps {
 }
 export function ColorPalette({ kind, current, pinned, onPick, onPin, onClose }: Readonly<PaletteProps>) {
   const [registeredColors] = usePref(COLORS_KEY, parseEditorColors);
-  const [, refreshPlugins] = useState(0);
-  useEffect(() => subscribePlugins(() => refreshPlugins((x) => x + 1)), []);
+  const [, refreshPlugins] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => subscribePlugins(() => refreshPlugins()), []);
   const key = `inkism.colors.custom.${kind}`;
   const [custom, setCustom] = useState<string[]>(() => store.get<string[]>(key, []));
   const picker = useRef<HTMLInputElement>(null);

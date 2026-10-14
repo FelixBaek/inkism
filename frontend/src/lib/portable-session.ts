@@ -2,7 +2,7 @@ import {t} from '../i18n';
 import {applyFolderChanges,planFolderChanges,readFolderHandle,writeDatabaseSnapshot,type FolderPlan,type WritableFolderHandle} from './portable-sync';
 type Session={folder:WritableFolderHandle|null;watch:boolean;autoWrite:boolean;autoImport:boolean;busy:boolean;plan:FolderPlan|null;error:string;lastChecked:number};
 let state:Session={folder:null,watch:false,autoWrite:false,autoImport:false,busy:false,plan:null,error:'',lastChecked:0};
-let callbacks:{beforeAction:()=>Promise<boolean>;onApplied?:()=>Promise<void>|void}={beforeAction:async()=>true};
+let callbacks:{beforeAction:()=>Promise<boolean>;onApplied?:()=>Promise<void>|void}={beforeAction:()=>Promise.resolve(true)};
 const listeners=new Set<()=>void>();let timer:ReturnType<typeof setInterval>|undefined;
 function update(patch:Partial<Session>){state={...state,...patch};listeners.forEach(fn=>fn());}
 export const getPortableSession=()=>state;

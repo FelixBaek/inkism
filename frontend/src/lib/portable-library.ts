@@ -12,7 +12,7 @@ export async function sha256(bytes: Uint8Array): Promise<string> { return Array.
 const hashText = (text: string) => sha256(new TextEncoder().encode(text));
 export function validatePortableManifest(raw: unknown): PortableManifest {
   const m = raw as PortableManifest;
-  if (!m || m.version !== 1 || !Array.isArray(m.notes) || m.notes.length > 2048 || !Array.isArray(m.attachments) || m.attachments.length > 512) throw new Error(t("지원하지 않는 외부 편집 폴더입니다."));
+  if (m?.version !== 1 || !Array.isArray(m.notes) || m.notes.length > 2048 || !Array.isArray(m.attachments) || m.attachments.length > 512) throw new Error(t("지원하지 않는 외부 편집 폴더입니다."));
   const seen = new Set<string>(); const paths = new Set<string>();
   for (const n of m.notes) {
     const extension = ({markdown:"md",html:"html",text:"txt"} as const)[n?.file_format ?? n?.format];
@@ -21,17 +21,17 @@ export function validatePortableManifest(raw: unknown): PortableManifest {
   }
   seen.clear();
   for (const a of m.attachments) {
-    if (!a || !UUID.test(a.id) || !new RegExp(`^attachments/${a.id}(?:\\.[a-zA-Z0-9]{1,12})?$`).test(a.path) || !HASH.test(a.sha256) || !Number.isSafeInteger(a.size) || a.size < 0 || a.size > LIMIT || seen.has(a.id)) throw new Error(t("첨부파일 목록이 올바르지 않습니다."));
+    if (!a || !UUID.test(a.id) || !new RegExp(String.raw`^attachments/${a.id}(?:\.[a-zA-Z0-9]{1,12})?$`).test(a.path) || !HASH.test(a.sha256) || !Number.isSafeInteger(a.size) || a.size < 0 || a.size > LIMIT || seen.has(a.id)) throw new Error(t("첨부파일 목록이 올바르지 않습니다."));
     seen.add(a.id);
   }
   return m;
 }
-function escaped(text: string) { return text.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); }
+function escaped(text: string) { return text.replace(/[.*+?^${}()|[\]\\]/g,String.raw`\$&`); }
 export function restorePortableLinks(source: string, manifest: PortableManifest): string {
   let result = source;
-  for (const a of manifest.attachments) result = result.replace(new RegExp(`(^|[="'\\s(<])\\.\\./${escaped(a.path)}(?=[?"'\\s<>\\)\\]#]|$)`,"gm"), (_all, prefix) => `${prefix}/api/attachments/${a.id}`);
+  for (const a of manifest.attachments) result = result.replace(new RegExp(String.raw`(^|[="'\s(<])\.\./${escaped(a.path)}(?=[?"'\s<>\)\]#]|$)`,"gm"), (_all, prefix) => `${prefix}/api/attachments/${a.id}`);
   result = result.replace(/(^|[="'\s(<[])inkism:\/\/note\/([A-Za-z0-9_-]+)(?=[#?|"'\s<>)\]]|$)/gm, (_all, prefix, id) => `${prefix}note://${id}`);
-  for (const n of manifest.notes) result = result.replace(new RegExp(`(^|[="'\\s(<\\[])(?:\\./)?${escaped(n.path.slice(6))}(?=[#?|"'\\s<>\\)\\]]|$)`,"gm"), (_all, prefix) => `${prefix}note://${n.id}`);
+  for (const n of manifest.notes) result = result.replace(new RegExp(String.raw`(^|[="'\s(<\[])(?:\./)?${escaped(n.path.slice(6))}(?=[#?|"'\s<>\)\]]|$)`,"gm"), (_all, prefix) => `${prefix}note://${n.id}`);
   return result;
 }
 /** All files and current revisions are checked before the UI enables Apply. */
@@ -45,7 +45,7 @@ export async function planPortableImport(files: File[], get: (id: string) => Pro
   const descriptor = byPath.get(".inkism-portable.json");
   if (!descriptor || descriptor.size > 8*1024*1024) throw new Error(t("ZIP을 푼 폴더 전체를 선택해 주세요. .inkism-portable.json이 필요합니다."));
   const manifest = validatePortableManifest(JSON.parse(await descriptor.text()));
-  for (const a of manifest.attachments) { const file = byPath.get(a.path); if (!file || file.size !== a.size || await sha256(new Uint8Array(await file.arrayBuffer())) !== a.sha256) throw new Error(t("첨부파일이 변경되었거나 없습니다. 원본 첨부파일을 유지해 주세요.")); }
+  for (const a of manifest.attachments) { const file = byPath.get(a.path); if (file?.size !== a.size || await sha256(new Uint8Array(await file.arrayBuffer())) !== a.sha256) throw new Error(t("첨부파일이 변경되었거나 없습니다. 원본 첨부파일을 유지해 주세요.")); }
   const plan: PortablePlan = { changes:[], unchanged:0, conflicts:[], ignored:[...byPath.keys()].filter(path => ![".inkism-portable.json", "README.txt", "INDEX.md"].includes(path) && !manifest.notes.some(n => n.path === path) && !manifest.attachments.some(a => a.path === path)).length };
   for (const entry of manifest.notes) {
     const file = byPath.get(entry.path);

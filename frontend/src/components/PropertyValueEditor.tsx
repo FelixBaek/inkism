@@ -1,7 +1,7 @@
 import React, {useEffect,useState} from 'react';
 import {t} from '../i18n';
 import {type KnowledgeItem,type NoteProperty} from '../lib/knowledge';
-export function PropertyValueEditor({property,items,onChange}:{property:NoteProperty;items:KnowledgeItem[];onChange:(patch:Partial<NoteProperty>)=>void}) {
+export function PropertyValueEditor({property,items,onChange}:Readonly<{property:NoteProperty;items:KnowledgeItem[];onChange:(patch:Partial<NoteProperty>)=>void}>) {
  const [raw,setRaw]=useState('');
  useEffect(()=>setRaw((property.options??[]).join(', ')),[property.options]);
  const choices=property.type==='relation'?items.map(n=>({id:n.id,label:n.title||t('제목 없음')})):(property.options??[]).map(x=>({id:x,label:x}));

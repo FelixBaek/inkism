@@ -9,7 +9,7 @@ use local_api::{start_upload_server, AgentApi, Clipper, Deadline, Engine, Handle
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 use tauri::http;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -184,7 +184,7 @@ pub fn run(session: Session) -> local_api::Result<Option<PathBuf>> {
     agent.close();
     uploads.close();
     result?;
-    let next = state.next_library.lock().unwrap_or_else(|p| p.into_inner()).take();
+    let next = state.next_library.lock().unwrap_or_else(PoisonError::into_inner).take();
     Ok(next)
 }
 
@@ -271,7 +271,10 @@ fn native(session: &Session, state: &Arc<CloseState>, app_cell: &Arc<OnceLock<Ap
             let checked = integrate::check_library(&binary, &path, Instant::now() + Duration::from_secs(90));
             drop(lock);
             checked?;
-            *state.next_library.lock().unwrap_or_else(|p| p.into_inner()) = Some(path);
+            *state
+                .next_library
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner) = Some(path);
             drop(busy);
             state.ready.store(true, Ordering::SeqCst);
             close_window(&app_cell);

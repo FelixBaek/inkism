@@ -8,7 +8,7 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Mutex, MutexGuard};
+use std::sync::{mpsc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 pub const MAX_MESSAGE: usize = 64 << 20;
@@ -267,7 +267,7 @@ impl Process {
     }
 
     fn lock(&self) -> MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(|e| e.into_inner())
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Starts the engine after a lock or a suspended start. Refuses while a
@@ -524,7 +524,10 @@ fn run(
     let stderr = process.stderr.take().expect("piped stderr");
     let process = Mutex::new(process);
     let kill = || {
-        let _ = process.lock().unwrap_or_else(|e| e.into_inner()).kill();
+        let _ = process
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .kill();
     };
     let (chunks_tx, chunks) = mpsc::channel::<(bool, Vec<u8>)>();
     let err_tx = chunks_tx.clone();
@@ -538,7 +541,10 @@ fn run(
             let _ = io::copy(input, &mut stdin);
         }
         let (failure, diagnostic) = drain(chunks, combined, &mut *output, kill);
-        let status = process.lock().unwrap_or_else(|e| e.into_inner()).wait();
+        let status = process
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .wait();
         finished.store(true, Ordering::SeqCst);
         let _ = watchdog.join();
         if let Some(e) = failure {
