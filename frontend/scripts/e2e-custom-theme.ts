@@ -4,9 +4,9 @@ const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,ar
 const page=await browser.newPage({viewport:{width:1440,height:900},acceptDownloads:true});
 const base=process.env.INKISM_URL||'http://127.0.0.1:48128';
 const color=()=>page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim());
-// 사용자 테마는 설정 화면의 '모양' 항목 안에 펼쳐져 있다. 화면 밝기는 '일반'에 있다.
+// 사용자 테마는 설정 화면의 '모양' 항목 안에 펼쳐져 있다. 화면 밝기도 '모양'에 있다.
 const open=async()=>{if(!(await page.locator('dialog.settings-dialog[open]').count()))await page.getByRole('button',{name:'설정 열기',exact:true}).click();await page.locator('.settings-nav').getByRole('button',{name:'모양',exact:true}).click();};
-const general=()=>page.locator('.settings-nav').getByRole('button',{name:'일반',exact:true}).click();
+const appearance=()=>page.locator('.settings-nav').getByRole('button',{name:'모양',exact:true}).click();
 const input=()=>page.locator('.custom-theme input[type=file]');
 const colors={canvas:'#fff9ee',surface:'#f5f6f5',text:'#202624',muted:'#626b66',green:'#087f5b',border:'#e4e7e5'};
 try{
@@ -23,7 +23,7 @@ try{
  await input().setInputFiles({name:'hostile.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version:1,light:{...colors,canvas:'url(https://example.invalid/track)'}}))});await page.getByRole('alert').filter({hasText:'#RRGGBB'}).waitFor();assert.equal(await color(),'#fff9ee');
  await input().setInputFiles({name:'large.json',mimeType:'application/json',buffer:Buffer.alloc(4097)});await page.getByRole('alert').filter({hasText:'4KB'}).waitFor();
  await input().setInputFiles({name:'valid.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version:1,light:{...colors,canvas:'#eef9ff'}}))});assert.equal(await color(),'#fff9ee');await page.getByRole('button',{name:'테마 저장',exact:true}).click();assert.equal(await color(),'#eef9ff');
- await general();await page.getByRole('button',{name:'다크 모드로 전환',exact:true}).click();assert.equal(await color(),'#121110');await page.getByRole('button',{name:'라이트 모드로 전환',exact:true}).click();assert.equal(await color(),'#eef9ff');
+ await appearance();await page.getByRole('button',{name:'다크 모드로 전환',exact:true}).click();assert.equal(await color(),'#121110');await page.getByRole('button',{name:'라이트 모드로 전환',exact:true}).click();assert.equal(await color(),'#eef9ff');
  await open();await page.getByRole('button',{name:'기본값 복원',exact:true}).click();assert.equal(await color(),'#f3eee3');await page.reload();await open();assert.equal(await color(),'#f3eee3');
  await page.evaluate(()=>{Storage.prototype.setItem=function(){throw Error('quota');};});await page.getByLabel('본문 배경 색상',{exact:true}).fill('#fff9ee');await page.getByRole('button',{name:'테마 저장',exact:true}).click();await page.getByRole('alert').filter({hasText:'저장하지 못'}).waitFor();assert.equal(await color(),'#f3eee3');
  console.log('PASS custom theme: save/reload, cancel, contrast, JSON export/import, hostile/oversized input, independent modes, reset and storage failure preserve active colors');

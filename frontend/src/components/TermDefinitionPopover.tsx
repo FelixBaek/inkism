@@ -28,7 +28,7 @@ async function promoteNote(id:string,title:string,text:string) {
   }
 }
 
-export function openTermDefinition(editor: Editor) { editor.view.dom.dispatchEvent(new Event(OPEN)); }
+export function openTermDefinition(editor: Editor, menu?: HTMLElement | null) { editor.view.dom.dispatchEvent(new CustomEvent(OPEN, { detail: menu })); }
 export function canDefineTerm(editor: Editor) {
   const { selection, doc } = editor.state;
   // Browser caret movement can precede ProseMirror's selectionchange handler.
@@ -39,7 +39,7 @@ export function canDefineTerm(editor: Editor) {
     selection.$from.sameParent(selection.$to) && doc.textBetween(selection.from, selection.to).trim().length > 0 &&
     doc.textBetween(selection.from, selection.to).length <= 120;
 }
-type Target = { from: number; to: number; term: string; id: string; definition: string; glossaryId?: string; noteId?: string; doc: PMNode; left: number; top: number; preview: boolean; createdNoteId?: string; promotionId?: string };
+type Target = { from: number; to: number; term: string; id: string; definition: string; glossaryId?: string; noteId?: string; doc: PMNode; left: number; top: number; preview: boolean; menu?: HTMLElement; menuRect?: DOMRect; createdNoteId?: string; promotionId?: string };
 
 export function TermDefinitionPopover({ editor, readOnly = false, disabled = false }: { editor: Editor; readOnly?: boolean; disabled?: boolean }) {
   const store = useStore();
@@ -84,15 +84,17 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
       return DecorationSet.create(state.doc,decorations);
     }}}));
     const position = (from: number) => { const c = editor.view.coordsAtPos(from); return {left: Math.max(12, Math.min(c.left, window.innerWidth - 372)), top: Math.max(12, Math.min(c.bottom + 10, window.innerHeight - 440))}; };
-    const open = () => {
+    const open = (event?: Event) => {
       if (disabled || readOnly || !canDefineTerm(editor)) return;
+      const menu = (event as CustomEvent<HTMLElement | undefined> | undefined)?.detail;
+      const anchor = menu instanceof HTMLElement ? {menu, menuRect: menu.getBoundingClientRect()} : {};
       let {from,to} = editor.state.selection;
       const occurrence=termDefinitionRange(editor.state.doc,from);
       if(occurrence && to<=occurrence.to) {
         const {from:start,to:end,mark:existing}=occurrence;
-        show({from:start,to:end,term:editor.state.doc.textBetween(start,end),id:existing.attrs.id,definition:existing.attrs.definition,glossaryId:existing.attrs.glossaryId,noteId:existing.attrs.noteId,doc:editor.state.doc,...position(start),preview:false});return;
+        show({from:start,to:end,term:editor.state.doc.textBetween(start,end),id:existing.attrs.id,definition:existing.attrs.definition,glossaryId:existing.attrs.glossaryId,noteId:existing.attrs.noteId,doc:editor.state.doc,...position(start),...anchor,preview:false});return;
       }
-      show({from,to,term:editor.state.doc.textBetween(from,to),id:crypto.randomUUID(),definition:"",doc:editor.state.doc,...position(from),preview:false});
+      show({from,to,term:editor.state.doc.textBetween(from,to),id:crypto.randomUUID(),definition:"",doc:editor.state.doc,...position(from),...anchor,preview:false});
     };
     // 저장된 용어: 마우스를 올리면 잠깐 뒤(250ms) 작은 카드를 보이고, 용어·카드 밖으로 나가면 200ms 뒤 숨긴다.
     // 키보드 포커스·클릭(터치)은 바로 보인다. 편집 창이 열려 있으면 건드리지 않는다.
@@ -145,24 +147,35 @@ export function TermDefinitionPopover({ editor, readOnly = false, disabled = fal
     if(!target || !element)return;
     const place=()=>{
       const bounds=element.getBoundingClientRect();
-      // Measure after details/validation/AI content changes; the small initial
-      // estimate cannot predict an expanded panel on narrow screens.
-      element.style.left=`${Math.max(12,Math.min(target.left,window.innerWidth-bounds.width-12))}px`;
+      let left=Math.max(12,Math.min(target.left,window.innerWidth-bounds.width-12));
       let top=Math.max(12,Math.min(target.top,window.innerHeight-bounds.height-12));
-      // 서식 메뉴가 떠 있으면 겹치지 않게 용어 위쪽으로 옮긴다(자리가 없으면 그대로).
-      const menu=document.querySelector(".format-menu")?.getBoundingClientRect();
-      const left=element.getBoundingClientRect().left;
-      if(target.preview && menu && menu.width && top<menu.bottom && top+bounds.height>menu.top && left<menu.right && left+bounds.width>menu.left){
-        const above=editor.view.coordsAtPos(target.from).top-10-bounds.height;
-        if(above>=12 && (above+bounds.height<=menu.top || above>=menu.bottom))top=above;
+      const liveMenu=target.menu?.isConnected ? target.menu.getBoundingClientRect() : undefined;
+      const menu=liveMenu?.width ? liveMenu : target.menuRect;
+      if(!target.preview && menu?.width){
+        // Figma B: align the editor to the format menu's top, 8px beside it.
+        const right=menu.right+8, before=menu.left-8-bounds.width;
+        left=right+bounds.width<=window.innerWidth-12 ? right : before>=12 ? before : Math.max(12,Math.min(menu.left,window.innerWidth-bounds.width-12));
+        top=Math.max(12,Math.min(menu.top,window.innerHeight-bounds.height-12));
+        // Narrow viewports cannot fit two columns: stack when there is room.
+        if(right+bounds.width>window.innerWidth-12 && before<12 && menu.bottom+8+bounds.height<=window.innerHeight-12)top=menu.bottom+8;
       }
+      if(target.preview){
+        const visibleMenu=document.querySelector(".format-menu")?.getBoundingClientRect();
+        if(visibleMenu?.width && top<visibleMenu.bottom && top+bounds.height>visibleMenu.top && left<visibleMenu.right && left+bounds.width>visibleMenu.left){
+          const above=editor.view.coordsAtPos(target.from).top-10-bounds.height;
+          if(above>=12 && (above+bounds.height<=visibleMenu.top || above>=visibleMenu.bottom))top=above;
+        }
+      }
+      element.style.left=`${left}px`;
       element.style.top=`${top}px`;
     };
     place();
     const observer=new ResizeObserver(place);
     observer.observe(element);
+    if(target.menu?.isConnected)observer.observe(target.menu);
     window.addEventListener("resize",place);
-    return()=>{observer.disconnect();window.removeEventListener("resize",place);};
+    window.addEventListener("scroll",place,true);
+    return()=>{observer.disconnect();window.removeEventListener("resize",place);window.removeEventListener("scroll",place,true);};
   }, [target]);
   useEffect(() => {
     if (!target) return;
