@@ -140,8 +140,8 @@ public static class InkismInput {
     [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr window);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr window, System.Text.StringBuilder text, int count);
     [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
-    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern bool SetWindowText(IntPtr window, string text);
-    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr window, System.Text.StringBuilder text, int count);
+    [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)] static extern IntPtr SendText(IntPtr window, uint message, IntPtr size, string text, uint flags, uint timeout, out IntPtr result);
+    [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)] static extern IntPtr ReadText(IntPtr window, uint message, IntPtr size, System.Text.StringBuilder text, uint flags, uint timeout, out IntPtr result);
     public static IntPtr DialogControl(IntPtr dialog, int id, string className) {
         IntPtr found=IntPtr.Zero;int process=WindowProcessId(dialog);
         EnumChildWindows(dialog,(window,data)=>{
@@ -153,9 +153,12 @@ public static class InkismInput {
         return found;
     }
     public static bool SetFilename(IntPtr field, string path) {
-        if(!SetWindowText(field,path))return false;
-        var text=new System.Text.StringBuilder(path.Length+2);GetWindowText(field,text,text.Capacity);
-        return text.ToString()==path;
+        // Cross-process edit controls require WM_SETTEXT/WM_GETTEXT, not
+        // SetWindowText/GetWindowText (which only retrieve remote captions).
+        IntPtr result;
+        if(SendText(field,0x000C,IntPtr.Zero,path,2,3000,out result)==IntPtr.Zero || result==IntPtr.Zero)return false;
+        var text=new System.Text.StringBuilder(path.Length+2);
+        return ReadText(field,0x000D,new IntPtr(text.Capacity),text,2,3000,out result)!=IntPtr.Zero && text.ToString()==path;
     }
 
 }
