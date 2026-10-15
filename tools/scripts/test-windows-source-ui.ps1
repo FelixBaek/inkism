@@ -435,7 +435,19 @@ function Invoke-NoteCommand([string[]]$path) {
     foreach ($label in $path) {
         # Filter first: a long palette can expose offscreen UIA options whose
         # raw bounds would otherwise click unrelated content behind it.
-        Paste-Text (Find-Element '명령 검색어') $label
+        $search = Find-Element '명령 검색어'
+        # aria-activedescendant exposes the selected option as UIA focus;
+        # HasKeyboardFocus on the combobox is therefore not a caret check.
+        $search.SetFocus()
+        if ([InkismInput]::GetForegroundWindow() -ne $app.MainWindowHandle) { throw 'Command search lost the app foreground' }
+        Set-TestClipboard $label
+        [InkismInput]::Shortcut(0x41)
+        [InkismInput]::Shortcut(0x56)
+        $queryDeadline = [DateTime]::UtcNow.AddSeconds(5)
+        while ((Read-Field $search) -cne $label) {
+            if ([DateTime]::UtcNow -ge $queryDeadline) { throw 'Native command query was not accepted' }
+            Start-Sleep -Milliseconds 20
+        }
         # CommandPalette exposes role=listbox/option, mapped to UIA List and
         # ListItem. Search inside the command list, never a hidden toolbar
         # trigger or a similarly named text node elsewhere in the app.
@@ -591,9 +603,11 @@ function Paste-Text($element, [string]$text, [bool]$replaceAll = $true) {
     Trace-PasteState 'paste-timeout' $element
     throw "Native paste was not accepted by the focused field: [$actual]"
 }
-function Save-Screenshot([string]$name) {
+function Save-Screenshot([string]$name, [IntPtr]$captureHandle = [IntPtr]::Zero) {
     if ($null -eq $app -or $app.HasExited -or $app.MainWindowHandle -eq [IntPtr]::Zero) { return }
-    $window = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+    if ($captureHandle -eq [IntPtr]::Zero) { $captureHandle = $app.MainWindowHandle }
+    if ([InkismInput]::WindowProcessId($captureHandle) -ne $app.Id) { throw 'Screenshot target is outside the owned app' }
+    $window = [System.Windows.Automation.AutomationElement]::FromHandle($captureHandle)
     $rect = $window.Current.BoundingRectangle
     if ($rect.Width -le 0 -or $rect.Height -le 0) { return }
     $image = New-Object System.Drawing.Bitmap([int]$rect.Width, [int]$rect.Height)
@@ -603,7 +617,7 @@ function Save-Screenshot([string]$name) {
         # unrelated window even when cropped to the app's bounding rectangle.
         $dc = $graphics.GetHdc()
         try {
-            if (-not [InkismInput]::PrintWindow($app.MainWindowHandle, $dc, 2)) {
+            if (-not [InkismInput]::PrintWindow($captureHandle, $dc, 2)) {
                 throw 'App-only PrintWindow capture failed; no screen fallback'
             }
         } finally { $graphics.ReleaseHdc($dc) }
@@ -751,10 +765,9 @@ function Confirm-TestDownloadPermission([ref]$attempts) {
         if ($_.Exception.GetBaseException() -isnot [System.Windows.Automation.ElementNotAvailableException]) { throw }
     }
 }
-# The preview opens from the command palette; the editor toolbar no longer has a preview button.
+# Exercise the command route as well as the editor's preview trigger.
 function Open-Preview {
-    Open-CommandPalette
-    Invoke-Element (Find-Element '미리보기' ([System.Windows.Automation.ControlType]::ListItem))
+    Invoke-NoteCommand @('미리보기')
 }
 # Blocks edited in the rich editor gain a random ink-block id; every other byte must match.
 function Remove-BlockIds([string]$text) { $text -creplace ' id="ink-block-[0-9a-f-]{36}"','' }
@@ -773,7 +786,7 @@ function Complete-TestSave([string]$path, [bool]$cancel = $false) {
         Start-Sleep -Milliseconds 50
     } while ([DateTime]::UtcNow -lt $deadline)
     if ($null -eq $picker) { throw 'Owned native Save As dialog did not open' }
-    Save-Screenshot 'windows-ui-native-save-dialog'
+    Save-Screenshot 'windows-ui-native-save-dialog' ([IntPtr]$picker.Current.NativeWindowHandle)
     if ($cancel) {
         [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
     } else {
@@ -786,7 +799,10 @@ function Complete-TestSave([string]$path, [bool]$cancel = $false) {
     $deadline = [DateTime]::UtcNow.AddSeconds(10)
     do {
         if ([InkismInput]::GetForegroundWindow() -eq $app.MainWindowHandle -and
-            ($cancel -or [System.IO.File]::Exists($path))) { return }
+            ($cancel -or [System.IO.File]::Exists($path))) {
+            $action = Find-AnyElement @('원문 내보내기', '서식 HTML 내보내기', 'PDF 내보내기') ([System.Windows.Automation.ControlType]::Button)
+            if ($action.Current.IsEnabled) { return }
+        }
         Start-Sleep -Milliseconds 50
     } while ([DateTime]::UtcNow -lt $deadline)
     throw 'Native save did not finish or return to the app'
