@@ -1,3 +1,4 @@
+import { saveFile } from "../lib/save-file";
 import { t } from "../i18n";
 import React from "react";
 import { api } from "../api";
@@ -43,16 +44,7 @@ export const NOTE_COLORS: { label: string; value: string }[] = [
   { label: t("회색"), value: "#8b8d98" },
 ];
 
-function download(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob),
-    a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-}
+
 
 export type NoteMenuTarget = { item: Summary; x: number; y: number };
 
@@ -106,7 +98,7 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
       const note = await saved();
       if (kind === "source") {
         const extension = { text: "txt", html: "html", markdown: "md" }[note.content_format ?? "html"];
-        download(new Blob([note.content], { type: "text/plain;charset=utf-8" }), sourceFilename(note.title, extension));
+        await saveFile(new Blob([note.content], { type: "text/plain;charset=utf-8" }), sourceFilename(note.title, extension));
         return;
       }
       const markdown = kind === "markdown"
@@ -128,7 +120,7 @@ export function useNoteCommands(item: Summary, onReminder: () => void, onPublish
         }
         throw new Error(message);
       }
-      download(await response.blob(), sourceFilename(note.title, kind === "markdown" ? "zip" : kind));
+      await saveFile(await response.blob(), sourceFilename(note.title, kind === "markdown" ? "zip" : kind));
     });
   const copyAs = (kind: "text" | "markdown") =>
     run(t("복사 실패"), async () => {

@@ -47,7 +47,7 @@ export function Popover({
       const right = Math.min(bounds?.getBoundingClientRect().right ?? innerWidth, innerWidth) - 8;
       // 옆에 열 때는 부모(서식 메뉴·부모 팝오버) 바깥에 붙여 부모와 고른 글을 가리지 않는다.
       const left = side
-        ? u.right + 6 + el.offsetWidth <= right ? u.right + 6 : Math.max(8, u.left - 6 - el.offsetWidth)
+        ? u.right + 8 + el.offsetWidth <= right ? u.right + 8 : Math.max(8, u.left - 8 - el.offsetWidth)
         : Math.max(8, Math.min(a.left - 4, right - el.offsetWidth));
       const top = Math.max(8, Math.min(side ? a.top - 4 : u.bottom + 6, innerHeight - el.offsetHeight - 8));
       setPos((p) => (p?.left === left && p.top === top ? p : { left, top }));

@@ -112,7 +112,7 @@ pub fn run(session: Session) -> local_api::Result<Option<PathBuf>> {
     let result = (|| {
         let app = tauri::Builder::default()
             .manage(crate::ai_key::KeyStore::new(session.config_root.join("Inkism").join("ai-key.dpapi")))
-            .invoke_handler(tauri::generate_handler![crate::ai_key::ai_key])
+            .invoke_handler(tauri::generate_handler![crate::ai_key::ai_key, crate::file_export::save_export])
             .register_asynchronous_uri_scheme_protocol(SCHEME, {
                 let handler = handler.clone();
                 move |ctx, request, responder| {
@@ -133,6 +133,7 @@ pub fn run(session: Session) -> local_api::Result<Option<PathBuf>> {
                     let _ = app_cell.set(app.handle().clone());
                     let url = start_url().parse().expect("static URL");
                     let builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::CustomProtocol(url))
+                        .initialization_script("window.__inkismNativeSave = true;")
                         .title("inkism")
                         .inner_size(1360.0, 900.0)
                         .min_inner_size(900.0, 600.0)

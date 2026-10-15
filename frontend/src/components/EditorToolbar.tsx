@@ -828,7 +828,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             disabled={disabled || !canDefineTerm(editor)}
             title={t("뜻 달기 (Ctrl/⌘+G)")}
             data-preview="term"
-            onClick={() => openTermDefinition(editor)}
+            onClick={() => openTermDefinition(editor, row.current)}
           >
             <BookOpenText size={16} aria-hidden />
             {t("뜻 달기")}
@@ -873,6 +873,13 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
               ),
             )}
           </div>
+          {aiBusy && !["polish", "spelling", "shorter", "longer", "summarize"].includes(aiBusy) && (
+            <div className="fm-row is-busy" aria-live="polite">
+              <Loader2 size={16} className="spin" aria-hidden />
+              <span className="fm-busy-label">{t("AI가 작업하는 중…")}</span>
+              <button type="button" className="fm-cancel" onClick={() => aiAbort.current?.abort()}>{t("취소")}</button>
+            </div>
+          )}
           <button
             ref={aiButton}
             type="button"

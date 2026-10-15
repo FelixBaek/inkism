@@ -308,3 +308,15 @@ section.note-list {
     padding-bottom: 136px;
   }
 }
+
+/* 모바일 도면 65:8875: 목록을 열 때부터 검색을 보여 준다. */
+@media (max-width: 760px) {
+  .note-list .list-search.is-collapsed {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    height: auto;
+    padding: 12px 14px;
+    overflow: visible;
+  }
+}

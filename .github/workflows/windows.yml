@@ -174,11 +174,14 @@ jobs:
           npm --prefix frontend run build
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Build Windows application
+        id: build_app
         run: |
           cargo build --locked --features encrypted-storage --release --manifest-path core/runtime-core/Cargo.toml
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Force dist/windows | Out-Null
           $env:INKISM_APP_COMMIT = $env:GITHUB_SHA
+          $env:INKISM_APP_VERSION = (Get-Content desktop-tauri/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $env:INKISM_APP_UPDATE_FEED = "https://github.com/FelixBaek/inkism/releases/latest/download/"
           cargo build --locked --release --manifest-path desktop-tauri/src-tauri/Cargo.toml
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Copy-Item target/release/inkism.exe dist/windows/Inkism.exe
@@ -239,20 +242,16 @@ jobs:
         if: inputs.scope != 'backend' && inputs.scope != 'installer'
         run: ./tools/scripts/ensure-webview2.ps1
       - name: Real WebView2 editor and close-save
-        if: inputs.scope != 'backend' && inputs.scope != 'installer'
-        # Non-blocking until the UI redesign lands: these drive the current UI by its labels.
-        continue-on-error: true
+        if: ${{ !cancelled() && steps.build_app.outcome == 'success' && inputs.scope != 'backend' && inputs.scope != 'installer' }}
         run: node frontend/scripts/windows-ui-test.ts
       - name: Encrypted WebView2 editor and close-save
-        if: inputs.scope != 'backend' && inputs.scope != 'installer'
-        # Non-blocking until the UI redesign lands: these drive the current UI by its labels.
-        continue-on-error: true
+        if: ${{ !cancelled() && steps.build_app.outcome == 'success' && inputs.scope != 'backend' && inputs.scope != 'installer' }}
         env:
           INKISM_TEST_ENCRYPTED: '1'
           INKISM_TEST_SCREENSHOT_SUFFIX: '-encrypted'
         run: node frontend/scripts/windows-ui-test.ts
       - name: Register Korean input in disposable hosted runner
-        if: inputs.scope != 'backend' && inputs.scope != 'installer'
+        if: ${{ !cancelled() && steps.build_app.outcome == 'success' && inputs.scope != 'backend' && inputs.scope != 'installer' }}
         shell: powershell
         run: |
           $list = Get-WinUserLanguageList
@@ -263,9 +262,7 @@ jobs:
           Get-WinUserLanguageList | Format-List LanguageTag, InputMethodTips
           Get-ChildItem "$env:WINDIR/System32/IME/IMEKR" -ErrorAction SilentlyContinue | Select-Object Name
       - name: Encrypted native windowed selection typing and system IME
-        if: inputs.scope != 'backend' && inputs.scope != 'installer'
-        # Non-blocking until the UI redesign lands: these drive the current UI by its labels.
-        continue-on-error: true
+        if: ${{ !cancelled() && steps.build_app.outcome == 'success' && inputs.scope != 'backend' && inputs.scope != 'installer' }}
         env:
           INKISM_TEST_ENCRYPTED: '1'
           INKISM_TEST_SCREENSHOT_SUFFIX: '-windowed-ime'
@@ -278,18 +275,21 @@ jobs:
           node frontend/scripts/windows-ui-test.ts 2>&1 | Tee-Object -FilePath dist/windows-native-windowed.log
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Build and validate Windows installer
+        if: ${{ !cancelled() && steps.build_app.outcome == 'success' }}
         run: |
           & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" tools/build/windows/installer.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" /DValidationBuild tools/build/windows/installer.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          # The installed-app UI pass is skipped like the other native UI checks until the UI redesign.
+          # Installer lifecycle is isolated; native UI acceptance runs in the preceding gates.
           ./tools/scripts/test-windows-installer.ps1 -SkipUI
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           (Get-FileHash dist/Inkism-setup.exe -Algorithm SHA256).Hash | Set-Content dist/Inkism-setup.exe.sha256
       - name: Package validated Windows files
         run: |
-          Compress-Archive -Path dist/windows -DestinationPath dist/Inkism-windows-x64.zip
+          New-Item -ItemType Directory -Force dist/update-package/Inkism | Out-Null
+          Copy-Item dist/windows/* dist/update-package/Inkism/
+          Compress-Archive -Path dist/update-package/Inkism -DestinationPath dist/Inkism-windows-x64.zip
           (Get-FileHash dist/Inkism-windows-x64.zip -Algorithm SHA256).Hash | Set-Content dist/Inkism-windows-x64.zip.sha256
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
@@ -453,6 +453,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Force dist/windows | Out-Null
           $env:INKISM_APP_COMMIT = $env:GITHUB_SHA
+          $env:INKISM_APP_VERSION = (Get-Content desktop-tauri/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $env:INKISM_APP_UPDATE_FEED = "https://github.com/FelixBaek/inkism/releases/latest/download/"
           cargo build --locked --release --manifest-path desktop-tauri/src-tauri/Cargo.toml
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Copy-Item target/release/inkism.exe dist/windows/Inkism.exe
@@ -463,7 +465,9 @@ jobs:
           $env:GITHUB_SHA | Set-Content dist/windows/BUILD.txt
           & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" tools/build/windows/installer.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Compress-Archive -Path dist/windows -DestinationPath dist/Inkism-windows-x64.zip
+          New-Item -ItemType Directory -Force dist/update-package/Inkism | Out-Null
+          Copy-Item dist/windows/* dist/update-package/Inkism/
+          Compress-Archive -Path dist/update-package/Inkism -DestinationPath dist/Inkism-windows-x64.zip
           (Get-FileHash dist/Inkism-setup.exe -Algorithm SHA256).Hash | Set-Content dist/Inkism-setup.exe.sha256
           (Get-FileHash dist/Inkism-windows-x64.zip -Algorithm SHA256).Hash | Set-Content dist/Inkism-windows-x64.zip.sha256
           'UNVALIDATED: targeted Windows browser/Rust checks only; this candidate has not repeated native WebView2, installer or personal-PC acceptance.' | Set-Content dist/VALIDATION.txt

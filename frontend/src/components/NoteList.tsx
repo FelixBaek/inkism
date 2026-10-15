@@ -175,7 +175,7 @@ export function NoteList() {
           id="note-search"
           type="search"
           className="search-field"
-          placeholder={notebook ? t("{name}에서 검색", { name: notebook.name }) : ""}
+          placeholder={notebook ? t("{name}에서 검색", { name: notebook.name }) : t("제목·본문·태그 검색")}
           aria-label={t("노트 검색")}
           value={s.searchInput}
           onChange={(e) => s.setSearchInput(e.target.value)}

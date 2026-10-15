@@ -135,6 +135,34 @@ public static class InkismInput {
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr window, int command);
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr window, uint message, IntPtr wparam, IntPtr lparam);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr window, IntPtr dc, uint flags);
+    delegate bool EnumChildProc(IntPtr window, IntPtr data);
+    [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumChildProc callback, IntPtr data);
+    [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr window);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr window, System.Text.StringBuilder text, int count);
+    [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
+    [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr window);
+    [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW")] static extern IntPtr EditMessage(IntPtr window, uint message, IntPtr wparam, IntPtr lparam, uint flags, uint timeout, out IntPtr result);
+    [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)] static extern IntPtr ReadText(IntPtr window, uint message, IntPtr size, System.Text.StringBuilder text, uint flags, uint timeout, out IntPtr result);
+    public static IntPtr DialogControl(IntPtr dialog, int id, string className) {
+        IntPtr found=IntPtr.Zero;int process=WindowProcessId(dialog);
+        EnumChildWindows(dialog,(window,data)=>{
+            if(GetDlgCtrlID(window)!=id || WindowProcessId(window)!=process)return true;
+            var name=new System.Text.StringBuilder(256);GetClassName(window,name,name.Capacity);
+            if(name.ToString()!=className)return true;
+            found=window;return false;
+        },IntPtr.Zero);
+        return found;
+    }
+    public static bool SetFilename(IntPtr field, string path) {
+        // Paste through the edit control so the Shell receives its normal
+        // edit notifications; WM_SETTEXT alone can leave its filename model stale.
+        IntPtr result;
+        if(EditMessage(field,0x00B1,IntPtr.Zero,new IntPtr(-1),2,3000,out result)==IntPtr.Zero)return false; // EM_SETSEL
+        if(EditMessage(field,0x0302,IntPtr.Zero,IntPtr.Zero,2,3000,out result)==IntPtr.Zero)return false; // WM_PASTE
+        var text=new System.Text.StringBuilder(path.Length+2);
+        return ReadText(field,0x000D,new IntPtr(text.Capacity),text,2,3000,out result)!=IntPtr.Zero && text.ToString()==path;
+    }
+
 }
 '@
 # UIA bounds are physical pixels. Keep pointer coordinates in the same space
@@ -194,6 +222,7 @@ function Open-Inkism([bool]$remembered = $false) {
     if (-not $remembered -and $env:INKISM_TEST_ENCRYPTED -ne '1') { $info.Arguments += ' --create-plaintext' }
     $info.WorkingDirectory = $root
     $info.UseShellExecute = $false
+    $info.EnvironmentVariables["INKISM_EXPORT_TRACE"] = "1"
     $info.RedirectStandardOutput = $true
     $info.RedirectStandardError = $true
     $info.StandardOutputEncoding = [System.Text.Encoding]::UTF8
@@ -302,14 +331,21 @@ function Wait-BlockNumber([string]$expected) {
 function Wait-WindowText([string]$text, [bool]$present, [int]$timeoutSeconds = 10, [string]$editorName = '노트 본문 (리치 텍스트 편집기)') {
     $deadline = [DateTime]::UtcNow.AddSeconds($timeoutSeconds)
     do {
-        $field = Find-Element $editorName
-        $pattern = $null
-        if ($field.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) {
-            $value = $pattern.Current.Value
-        } else {
-            $value = $field.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern).DocumentRange.GetText(-1)
+        # History remounts the editor. Its UIA name can appear before either
+        # text pattern is available; missing observation never proves absence.
+        $value = $null
+        try {
+            $field = Find-Element $editorName
+            $pattern = $null
+            if ($field.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) {
+                $value = $pattern.Current.Value
+            } elseif ($field.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern, [ref]$pattern)) {
+                $value = $pattern.DocumentRange.GetText(-1)
+            }
+        } catch [System.Windows.Automation.ElementNotAvailableException] {
+            # Reacquire the replaced element on the next bounded iteration.
         }
-        if ($value.Contains($text) -eq $present) { return }
+        if ($null -ne $value -and $value.Contains($text) -eq $present) { return }
         Start-Sleep -Milliseconds 50
     } while ([DateTime]::UtcNow -lt $deadline)
     throw "Window text state mismatch: $text expected presence $present"
@@ -412,9 +448,42 @@ function Invoke-Element($element) {
         Click-Element $element
     }
 }
+function New-TestNote {
+    Invoke-Element (Find-Element '새 노트 만들기')
+    # newNote awaits the previous draft flush. The old title field can remain
+    # mounted meanwhile; typing into it races the new draft's focus effect.
+    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    do {
+        $field = Find-Element '노트 제목'
+        if ((Read-Field $field) -ceq '') { return }
+        Start-Sleep -Milliseconds 20
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw 'New note did not expose an empty title before input'
+}
+function Open-CommandPalette {
+    # Figma's top bar puts this action inside the note menu.
+    Invoke-Element (Find-Element '노트 메뉴' ([System.Windows.Automation.ControlType]::Button))
+    Invoke-Element (Find-Element '명령창 열기' ([System.Windows.Automation.ControlType]::MenuItem))
+    Find-Element '노트 명령' ([System.Windows.Automation.ControlType]::List) | Out-Null
+}
 function Invoke-NoteCommand([string[]]$path) {
-    Invoke-Element (Find-Element '명령창 열기' ([System.Windows.Automation.ControlType]::Button))
+    Open-CommandPalette
     foreach ($label in $path) {
+        # Filter first: a long palette can expose offscreen UIA options whose
+        # raw bounds would otherwise click unrelated content behind it.
+        $search = Find-Element '명령 검색어'
+        # aria-activedescendant exposes the selected option as UIA focus;
+        # HasKeyboardFocus on the combobox is therefore not a caret check.
+        $search.SetFocus()
+        if ([InkismInput]::GetForegroundWindow() -ne $app.MainWindowHandle) { throw 'Command search lost the app foreground' }
+        Set-TestClipboard $label
+        [InkismInput]::Shortcut(0x41)
+        [InkismInput]::Shortcut(0x56)
+        $queryDeadline = [DateTime]::UtcNow.AddSeconds(5)
+        while ((Read-Field $search) -cne $label) {
+            if ([DateTime]::UtcNow -ge $queryDeadline) { throw 'Native command query was not accepted' }
+            Start-Sleep -Milliseconds 20
+        }
         # CommandPalette exposes role=listbox/option, mapped to UIA List and
         # ListItem. Search inside the command list, never a hidden toolbar
         # trigger or a similarly named text node elsewhere in the app.
@@ -570,9 +639,11 @@ function Paste-Text($element, [string]$text, [bool]$replaceAll = $true) {
     Trace-PasteState 'paste-timeout' $element
     throw "Native paste was not accepted by the focused field: [$actual]"
 }
-function Save-Screenshot([string]$name) {
+function Save-Screenshot([string]$name, [IntPtr]$captureHandle = [IntPtr]::Zero) {
     if ($null -eq $app -or $app.HasExited -or $app.MainWindowHandle -eq [IntPtr]::Zero) { return }
-    $window = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+    if ($captureHandle -eq [IntPtr]::Zero) { $captureHandle = $app.MainWindowHandle }
+    if ([InkismInput]::WindowProcessId($captureHandle) -ne $app.Id) { throw 'Screenshot target is outside the owned app' }
+    $window = [System.Windows.Automation.AutomationElement]::FromHandle($captureHandle)
     $rect = $window.Current.BoundingRectangle
     if ($rect.Width -le 0 -or $rect.Height -le 0) { return }
     $image = New-Object System.Drawing.Bitmap([int]$rect.Width, [int]$rect.Height)
@@ -582,7 +653,7 @@ function Save-Screenshot([string]$name) {
         # unrelated window even when cropped to the app's bounding rectangle.
         $dc = $graphics.GetHdc()
         try {
-            if (-not [InkismInput]::PrintWindow($app.MainWindowHandle, $dc, 2)) {
+            if (-not [InkismInput]::PrintWindow($captureHandle, $dc, 2)) {
                 throw 'App-only PrintWindow capture failed; no screen fallback'
             }
         } finally { $graphics.ReleaseHdc($dc) }
@@ -730,13 +801,64 @@ function Confirm-TestDownloadPermission([ref]$attempts) {
         if ($_.Exception.GetBaseException() -isnot [System.Windows.Automation.ElementNotAvailableException]) { throw }
     }
 }
-# The preview opens from the command palette; the editor toolbar no longer has a preview button.
+# Exercise the command route as well as the editor's preview trigger.
 function Open-Preview {
-    Invoke-Element (Find-Element '명령창 열기' ([System.Windows.Automation.ControlType]::Button))
-    Invoke-Element (Find-Element '미리보기' ([System.Windows.Automation.ControlType]::ListItem))
+    Invoke-NoteCommand @('미리보기')
 }
 # Blocks edited in the rich editor gain a random ink-block id; every other byte must match.
 function Remove-BlockIds([string]$text) { $text -creplace ' id="ink-block-[0-9a-f-]{36}"','' }
+function Complete-TestSave([string]$path, [bool]$cancel = $false) {
+    $deadline = [DateTime]::UtcNow.AddSeconds(30)
+    $picker = $null
+    do {
+        $foreground = [InkismInput]::GetForegroundWindow()
+        if ($foreground -ne [IntPtr]::Zero -and [InkismInput]::WindowProcessId($foreground) -eq $app.Id) {
+            $candidate = [System.Windows.Automation.AutomationElement]::FromHandle($foreground)
+            if ($candidate.Current.ClassName -eq '#32770' -and $candidate.Current.Name -eq '다른 이름으로 저장') {
+                $picker = $candidate
+                break
+            }
+        }
+        Start-Sleep -Milliseconds 50
+    } while ([DateTime]::UtcNow -lt $deadline)
+    if ($null -eq $picker) { throw 'Owned native Save As dialog did not open' }
+    # Shell controls initialize after the HWND. Native Win32 control IDs avoid
+    # traversing unrelated Shell UIA providers (which may deny token access).
+    $pickerHandle = [IntPtr]$picker.Current.NativeWindowHandle
+    $deadline = [DateTime]::UtcNow.AddSeconds(20)
+    $actionId = if ($cancel) { 2 } else { 1 }
+    do {
+        $action = [InkismInput]::DialogControl($pickerHandle, $actionId, 'Button')
+        $nameField = [InkismInput]::DialogControl($pickerHandle, 1001, 'Edit')
+        if ($action -ne [IntPtr]::Zero -and [InkismInput]::IsWindowEnabled($action) -and ($cancel -or $nameField -ne [IntPtr]::Zero)) { break }
+        Start-Sleep -Milliseconds 50
+    } while ([DateTime]::UtcNow -lt $deadline)
+    if ($action -eq [IntPtr]::Zero -or (-not $cancel -and $nameField -eq [IntPtr]::Zero)) { throw 'Native save controls did not become ready' }
+    Save-Screenshot 'windows-ui-native-save-dialog' $pickerHandle
+    if (-not $cancel) {
+        Set-TestClipboard $path
+        if (-not [InkismInput]::SetFilename($nameField, $path)) { throw 'Native save filename was not accepted' }
+    }
+    [InkismInput]::PostMessage($action, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null # BM_CLICK
+    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    do {
+        if (-not [InkismInput]::IsWindow($pickerHandle) -and
+            ($cancel -or [System.IO.File]::Exists($path))) {
+            $action = Find-AnyElement @('원문 내보내기', '서식 HTML 내보내기', 'PDF 내보내기', 'Markdown + 첨부 ZIP 내보내기') ([System.Windows.Automation.ControlType]::Button)
+            if ($action.Current.IsEnabled) { return }
+        }
+        Start-Sleep -Milliseconds 50
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw ("Native save did not finish: pickerOpen=" + [InkismInput]::IsWindow($pickerHandle) + "; fileExists=" + [System.IO.File]::Exists($path) + "; cancel=" + $cancel)
+}
+function Wait-TestExport([string]$path, [scriptblock]$ready) {
+    $deadline = [DateTime]::UtcNow.AddSeconds(30)
+    do {
+        try { if (& $ready ([System.IO.File]::ReadAllBytes($path))) { return $path } } catch {}
+        Start-Sleep -Milliseconds 50
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw "Native export bytes did not match: $path"
+}
 function Wait-TestDownload([string]$title,[string]$extension,[DateTime]$since,[scriptblock]$ready = $null) {
     $deadline=[DateTime]::UtcNow.AddSeconds(30)
     $permissionAttempts = 0
@@ -788,7 +910,7 @@ try {
     # The shared isolated profile/clipboard/WM_CLOSE harness now covers the
     # default rich note before the two source formats. This is not physical IME.
     Open-Inkism
-    Invoke-Element (Find-Element '새 노트 만들기')
+    New-TestNote
     $richTitle='inkism-native-'+$testID+'-rich'
     $richBody='리치검증-'+$testID+' 한글 😀 블록 편집'
     Paste-Text (Find-Element '노트 제목') $richTitle
@@ -850,21 +972,19 @@ try {
             $stream=[System.IO.File]::Open($db,[System.IO.FileMode]::Open,[System.IO.FileAccess]::Read,[System.IO.FileShare]::ReadWrite)
             try{$header=New-Object byte[] 16;if($stream.Read($header,0,16)-ne 16 -or [System.Text.Encoding]::ASCII.GetString($header).StartsWith('SQLite format 3')){throw 'Encrypted source fixture has plaintext/missing header'}}finally{$stream.Dispose()}
         }
-        Invoke-Element (Find-Element '새 노트 만들기')
+        New-TestNote
         $title='inkism-native-'+$testID+'-'+$format
         Paste-Text (Find-Element '노트 제목') $title
-        # HTML is a view of the new HTML note; only Markdown designates a
-        # different source format and therefore asks for explicit confirmation.
-        Invoke-Element (Find-Element 'HTML' ([System.Windows.Automation.ControlType]::Button))
-        Source-Field 'html' | Out-Null
+        # The MARKDOWN tab is now a view of HTML, not a format conversion.
+        # Use the explicit editor conversion before testing raw Markdown bytes.
         if($format -eq 'markdown') {
+            Invoke-Element (Find-Element 'MARKDOWN 에디터로 변환' ([System.Windows.Automation.ControlType]::Button))
+            Find-Element 'HTML 에디터로 변환' | Out-Null
             Invoke-Element (Find-Element 'MARKDOWN' ([System.Windows.Automation.ControlType]::Button))
-            Find-Element '원문 형식 변경' | Out-Null
-            Invoke-Element (Find-Element '취소' ([System.Windows.Automation.ControlType]::Button))
-            Source-Field 'html' | Out-Null
-            Invoke-Element (Find-Element 'MARKDOWN' ([System.Windows.Automation.ControlType]::Button))
-            Invoke-Element (Find-Element '형식 변경' ([System.Windows.Automation.ControlType]::Button))
+        } else {
+            Invoke-Element (Find-Element 'HTML' ([System.Windows.Automation.ControlType]::Button))
         }
+        Source-Field $format | Out-Null
         $marker='원문검증-'+$format
         $content=switch($format){
             'html' { "<h2>$marker</h2>`n<p data-unused=`"preserve`">한글 &amp; &lt;원문&gt;</p>`n<!-- 그대로 보존 -->" }
@@ -891,18 +1011,27 @@ try {
         Find-Element ('노트 탭: '+$title) | Out-Null
         if((Read-Field (Find-Element '노트 제목')) -ne $title){throw 'Active source tab did not restore'}
         Wait-SourceMarker $format 'native_typed'
-        $before=[DateTime]::UtcNow
-        Invoke-NoteCommand @('Export as', '원문')
+        Invoke-NoteCommand @('Export as')
+        Invoke-Element (Find-Element '원문' ([System.Windows.Automation.ControlType]::RadioButton))
+        $filesBefore = @(Get-ChildItem -LiteralPath $scratch -File).Count
+        Invoke-Element (Find-Element '원문 내보내기' ([System.Windows.Automation.ControlType]::Button))
+        Complete-TestSave '' $true
+        if (@(Get-ChildItem -LiteralPath $scratch -File).Count -ne $filesBefore) { throw 'Cancelled export created a file' }
+        Invoke-Element (Find-Element '원문 내보내기' ([System.Windows.Automation.ControlType]::Button))
         $extension=switch($format){'html'{'html'}'markdown'{'md'}default{'txt'}}
-        $download=Wait-TestDownload $title $extension $before {param([byte[]]$data) (Remove-BlockIds ([System.Text.Encoding]::UTF8.GetString($data))) -ceq $content}
+        $download = Join-Path $scratch ('원문-' + $title + '.' + $extension)
+        Complete-TestSave $download
+        $download=Wait-TestExport $download {param([byte[]]$data) (Remove-BlockIds ([System.Text.Encoding]::UTF8.GetString($data))) -ceq $content}
         if((Remove-BlockIds ([System.IO.File]::ReadAllText($download,[System.Text.Encoding]::UTF8))) -cne $content){throw 'Downloaded source differs from canonical content'}
-        # Observe preview open/close without silently reinterpreting the source.
-        Invoke-NoteCommand @('미리보기')
-        Find-Element '미리보기 · 내보내기' | Out-Null
+        # Export opens the Figma format chooser; preview is requested explicitly.
+        Invoke-Element (Find-Element '미리보기' ([System.Windows.Automation.ControlType]::Button))
         Find-Element '저장된 원문의 미리보기' | Out-Null
+        Invoke-Element (Find-Element '서식 HTML' ([System.Windows.Automation.ControlType]::RadioButton))
         $before=[DateTime]::UtcNow
         Invoke-Element (Find-Element '서식 HTML 내보내기' ([System.Windows.Automation.ControlType]::Button))
-        $rendered=Wait-TestDownload $title 'html' $before {param([byte[]]$data)
+        $rendered = Join-Path $scratch ('서식-' + $title + '.html')
+        Complete-TestSave $rendered
+        $rendered=Wait-TestExport $rendered {param([byte[]]$data)
             $text=[System.Text.Encoding]::UTF8.GetString($data)
             $text.Contains($marker) -and $text -match '(?i)<!doctype html|<html' -and $text.TrimEnd().EndsWith('</html>')
         }
@@ -910,10 +1039,30 @@ try {
         if(-not $renderedText.Contains($marker) -or $renderedText -notmatch '(?i)<!doctype html|<html'){throw 'Rendered HTML export missing source snapshot'}
         if($format -eq 'html') {
             $before=[DateTime]::UtcNow
+            Invoke-Element (Find-Element 'PDF' ([System.Windows.Automation.ControlType]::RadioButton))
             Invoke-Element (Find-Element 'PDF 내보내기' ([System.Windows.Automation.ControlType]::Button))
-            $pdf=Wait-TestDownload $title 'pdf' $before {param([byte[]]$data) $data.Length -ge 8 -and [System.Text.Encoding]::ASCII.GetString($data,0,5) -eq '%PDF-'}
+            $pdf = Join-Path $scratch ($title + '.pdf')
+            Complete-TestSave $pdf
+            $pdf=Wait-TestExport $pdf {param([byte[]]$data) $data.Length -ge 8 -and [System.Text.Encoding]::ASCII.GetString($data,0,5) -eq '%PDF-'}
             $bytes=[System.IO.File]::ReadAllBytes($pdf)
             if($bytes.Length -lt 8 -or [System.Text.Encoding]::ASCII.GetString($bytes,0,5) -ne '%PDF-'){throw 'Native PDF download is invalid'}
+        }
+        if($format -eq 'markdown') {
+            Invoke-Element (Find-Element 'Markdown + 첨부 ZIP' ([System.Windows.Automation.ControlType]::RadioButton))
+            Invoke-Element (Find-Element 'Markdown + 첨부 ZIP 내보내기' ([System.Windows.Automation.ControlType]::Button))
+            $zip = Join-Path $scratch ($title + '.zip')
+            Complete-TestSave $zip
+            $zip = Wait-TestExport $zip {param([byte[]]$data) $data.Length -gt 4 -and $data[0] -eq 80 -and $data[1] -eq 75}
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+            try {
+                $entry = @($archive.Entries | Where-Object { $_.FullName -ceq 'note.md' })
+                if ($entry.Count -ne 1) { throw 'Native Markdown ZIP must contain one note' }
+                $reader = New-Object System.IO.StreamReader($entry[0].Open(), [System.Text.Encoding]::UTF8)
+                try { $markdown = $reader.ReadToEnd() } finally { $reader.Dispose() }
+                if (-not $markdown.Contains($marker) -or -not $markdown.Contains('native_typed')) { throw 'Native Markdown ZIP lost note content' }
+            } finally { $archive.Dispose() }
+
         }
         Invoke-Element (Find-Element '미리보기 닫기' ([System.Windows.Automation.ControlType]::Button))
         Wait-SourceMarker $format 'native_typed'

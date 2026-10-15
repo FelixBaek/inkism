@@ -182,13 +182,14 @@ export function ColorPalette({ kind, current, pinned, onPick, onPin, onClose }: 
         <span className="tb-palette-label">{t("기본 색")}</span>
         <div className="tb-swatches">{base.map(swatch)}</div>
       </div>
-      {custom.length > 0 && (
+      {(
         <div className="tb-palette-section">
           <div className="tb-palette-section-head">
             <span className="tb-palette-label">{t("직접 고른 색 · 최근 7개")}</span>
             <button
               type="button"
               className="icon-btn"
+              disabled={custom.length === 0}
               aria-label={t("직접 고른 색 지우기")}
               title={t("직접 고른 색 지우기")}
               onClick={() => {
