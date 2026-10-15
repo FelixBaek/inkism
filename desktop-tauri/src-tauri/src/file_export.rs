@@ -36,7 +36,7 @@ pub async fn save_export(window: WebviewWindow, request: Request<'_>) -> Result<
     };
     tauri::async_runtime::spawn_blocking(move || {
         let mut dialog = rfd::FileDialog::new().set_parent(&window).set_title("다른 이름으로 저장").set_file_name(&name);
-        if let Some(extension) = Path::new(&name).extension().and_then(|v| v.to_str()) {
+        if let Some(extension) = Path::new(&name).extension().and_then(std::ffi::OsStr::to_str) {
             dialog = dialog.add_filter(extension.to_uppercase(), &[extension]);
         }
         let Some(path) = dialog.save_file() else { return Ok(false); };

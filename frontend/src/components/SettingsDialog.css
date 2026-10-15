@@ -163,9 +163,6 @@
   font-weight: 500;
   line-height: 1.6;
 }
-.settings-content section > h3 {
-  margin-bottom: 12px;
-}
 .settings-card__text > :not(strong, p) {
   order: -2;
 }

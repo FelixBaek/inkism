@@ -281,13 +281,10 @@ export function SettingsDialog() {
               </>
             )}
             {section === "import" && (
-              <>
-                <Card title={t("기록 가져오기")} desc={t("Markdown 파일이나 저장하지 못한 편집을 보관해 둔 파일에서 노트를 가져옵니다.")}>
-                  <MarkdownImport />
-                  <RecoveryImport />
-                </Card>
-
-              </>
+              <Card title={t("기록 가져오기")} desc={t("Markdown 파일이나 저장하지 못한 편집을 보관해 둔 파일에서 노트를 가져옵니다.")}>
+                <MarkdownImport />
+                <RecoveryImport />
+              </Card>
             )}
             {section === "look" && <><ThemeSettings /><CustomTheme /></>}
             {section === "photo" && <PhotoSettings />}
