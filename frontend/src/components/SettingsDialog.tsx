@@ -43,7 +43,7 @@ type Section = "ai" | "agent" | "general" | "editor" | "plugins" | "sync" | "bac
 const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "ai", label: t("AI 연결"), icon: Sparkle },
   { id: "general", label: t("일반"), icon: SettingsIcon },
-  { id: "editor", label: t("편집기"), icon: FileText },
+  { id: "editor", label: t("편집기 설정"), icon: FileText },
   { id: "plugins", label: t("플러그인"), icon: SettingsIcon },
   { id: "sync", label: t("동기화"), icon: RefreshCw },
   { id: "backup", label: t("백업과 복원"), icon: Download },
@@ -200,6 +200,7 @@ export function SettingsDialog() {
       {createPortal(<dialog
         ref={dialog}
         className="settings-dialog"
+        data-section={section}
         aria-labelledby="settings-title"
         onCancel={(e) => {
           // 안쪽 도구 창의 Esc는 그 창만 닫는다
@@ -243,7 +244,7 @@ export function SettingsDialog() {
             {section === "backup" && (
               <>
                 <PortableLibrarySettings beforeAction={() => s.flushNow()} onApplied={async () => { s.refreshList(); await s.refreshMeta(); window.dispatchEvent(new Event("inkism-sync-check")); window.dispatchEvent(new Event("inkism-knowledge-changed")); }} />
-                <Card title={t("백업 파일")} desc={t("모든 노트와 첨부파일을 한 파일로 내려받고, 내려받은 백업 파일(.zip, .json)에서 노트를 되살립니다.")}>
+                <Card title={t("백업 내려받기")} desc={t("모든 노트와 첨부파일을 한 파일로 내려받습니다.")}>
                   <button
                     type="button"
                     className="btn btn-primary"
@@ -252,6 +253,8 @@ export function SettingsDialog() {
                   >
                     <Download size={14} aria-hidden /> {t("노트·첨부파일 백업 다운로드")}
                   </button>
+                </Card>
+                <Card title={t("백업 복원")} desc={t("내려받은 백업 파일(.zip, .json)에서 노트를 되살립니다.")}>
                   <button
                     type="button"
                     className="btn"

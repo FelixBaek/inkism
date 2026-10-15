@@ -11,7 +11,7 @@ await page.addInitScript(()=>{
  // Deterministic browser font service. Native Windows enumeration is checked separately.
  Object.defineProperty(window,'queryLocalFonts',{configurable:true,value:async()=>[{family:'Arial'},{family:'Arial'},{family:'Georgia'}]});
 });
-const settings=async()=>{await page.getByRole('button',{name:'설정 열기',exact:true}).click();await page.getByRole('button',{name:'편집기',exact:true}).click();};
+const settings=async()=>{await page.getByRole('button',{name:'설정 열기',exact:true}).click();await page.getByRole('button',{name:'편집기 설정',exact:true}).click();};
 const close=()=>page.getByRole('button',{name:'설정 닫기',exact:true}).click();
 const until=async(fn:()=>Promise<boolean>)=>{for(let i=0;i<200;i++){if(await fn())return;await page.waitForTimeout(50);}throw new Error('condition timeout');};
 const find=async(title:string)=>(await rpc('list',{view:'all',limit:100})).items.find((n:any)=>n.title===title);

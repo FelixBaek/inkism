@@ -741,3 +741,6 @@
   .settings-content > .settings-card > .settings-card__action { max-width: 100%; }
   .settings-content > .settings-card > .settings-card__text { flex-basis: 160px; }
 }
+
+/* The AI connection design uses a taller form, bounded by the viewport. */
+.settings-dialog[data-section="ai"] { height: min(965px, calc(100dvh - 32px)); }
