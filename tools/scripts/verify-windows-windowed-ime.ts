@@ -6,6 +6,7 @@ database; no network and no UI. The document body is fully synthetic
 (nativeimeblock##### original paragraph), so nothing user data is involved.
 */
 import assert from 'node:assert/strict';
+import {assertBlockBytes} from '../../frontend/scripts/block-identity-bytes.ts';
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import {pathToFileURL} from 'node:url';
@@ -58,7 +59,7 @@ function main() {
     const hits = rpc(engine, db, {op: 'list', view: 'all', query}).items;
     assert.ok(hits.some((item: any) => item.id === expected.id), '입력 검색 불일치');
     const note = rpc(engine, db, {op: 'get', id: expected.id});
-    assert.ok(note.content === body, '커밋 본문 불일치');
+    assertBlockBytes(note.content, body, {added: 1, message: 'native IME committed body'});
     metaUnchanged(note, expected);
     assert.ok(note.revision > expected.revision, '리비전 미증가');
     console.log(`PASS ${mode}: 본문 정확, 메타 불변, ` +

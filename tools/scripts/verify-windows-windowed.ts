@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
+import {assertBlockBytes, withoutBlockIds} from '../../frontend/scripts/block-identity-bytes.ts';
 
 const args = process.argv.slice(2);
 if (args.length !== 4) throw new Error(`expected 4 arguments (ENGINE DATABASE FIXTURE seed|verify), got ${args.length}`);
@@ -27,12 +28,20 @@ if (mode === 'seed') {
   const content: string = note.content, marker = 'chunk_typed';
   const count = (s: string) => content.split(s).length - 1;
   assert.equal(count(marker), 1, String(count(marker)));
-  assert.ok(content.replace(marker, '') === expected.content, 'Unrelated source changed');
-  const idx = content.indexOf(marker);
-  const start = content.slice(0, idx).lastIndexOf('<p>'), end = content.indexOf('</p>', idx);
-  const found = content.slice(start, end); // Same negative-index semantics as Python slicing.
+  // Only the edited paragraph gains an identity. All other bytes and the
+  // other 9,999 blocks must remain exact, including after reopening.
+  const ids = assertBlockBytes(content.replace(marker, ''), expected.content, {
+    added: 1, ids: expected.ids, message: 'native windowed source',
+  });
+  const normalized = withoutBlockIds(content);
+  const idx = normalized.indexOf(marker);
+  const start = normalized.slice(0, idx).lastIndexOf('<p>'), end = normalized.indexOf('</p>', idx);
+  const found = normalized.slice(start, end); // Same negative-index semantics as Python slicing.
   assert.ok(Array.from({length: 32}, (_, i) => 5000 + i).some(i => found.includes(block(i))), found);
-  assert.equal(count('<p>'), 10000);
+  assert.equal(normalized.split('<p>').length - 1, 10000);
+  const edited = content.match(/<p id="ink-block-[0-9a-f-]{36}">[^<]*chunk_typed[^<]*<\/p>/g);
+  assert.equal(edited?.length, 1, 'the sole generated identity belongs to the edited paragraph');
+  fs.writeFileSync(file, JSON.stringify({...expected, ids}), 'utf8');
   assert.ok(note.revision >= 2);
   console.log('PASS native mid-document insertion remains within blocks 5001-5032; all 10000 original blocks preserved after close/restart');
 }
