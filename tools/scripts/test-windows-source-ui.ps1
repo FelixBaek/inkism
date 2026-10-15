@@ -140,6 +140,7 @@ public static class InkismInput {
     [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr window);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr window, System.Text.StringBuilder text, int count);
     [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
+    [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr window);
     [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)] static extern IntPtr SendText(IntPtr window, uint message, IntPtr size, string text, uint flags, uint timeout, out IntPtr result);
     [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)] static extern IntPtr ReadText(IntPtr window, uint message, IntPtr size, System.Text.StringBuilder text, uint flags, uint timeout, out IntPtr result);
     public static IntPtr DialogControl(IntPtr dialog, int id, string className) {
@@ -829,14 +830,14 @@ function Complete-TestSave([string]$path, [bool]$cancel = $false) {
     [InkismInput]::PostMessage($action, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null # BM_CLICK
     $deadline = [DateTime]::UtcNow.AddSeconds(10)
     do {
-        if ([InkismInput]::GetForegroundWindow() -eq $app.MainWindowHandle -and
+        if (-not [InkismInput]::IsWindow($pickerHandle) -and
             ($cancel -or [System.IO.File]::Exists($path))) {
             $action = Find-AnyElement @('원문 내보내기', '서식 HTML 내보내기', 'PDF 내보내기', 'Markdown + 첨부 ZIP 내보내기') ([System.Windows.Automation.ControlType]::Button)
             if ($action.Current.IsEnabled) { return }
         }
         Start-Sleep -Milliseconds 50
     } while ([DateTime]::UtcNow -lt $deadline)
-    throw 'Native save did not finish or return to the app'
+    throw ("Native save did not finish: pickerOpen=" + [InkismInput]::IsWindow($pickerHandle) + "; fileExists=" + [System.IO.File]::Exists($path) + "; cancel=" + $cancel)
 }
 function Wait-TestExport([string]$path, [scriptblock]$ready) {
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
@@ -1033,6 +1034,8 @@ try {
             $pdf=Wait-TestExport $pdf {param([byte[]]$data) $data.Length -ge 8 -and [System.Text.Encoding]::ASCII.GetString($data,0,5) -eq '%PDF-'}
             $bytes=[System.IO.File]::ReadAllBytes($pdf)
             if($bytes.Length -lt 8 -or [System.Text.Encoding]::ASCII.GetString($bytes,0,5) -ne '%PDF-'){throw 'Native PDF download is invalid'}
+        }
+        if($format -eq 'markdown') {
             Invoke-Element (Find-Element 'Markdown + 첨부 ZIP' ([System.Windows.Automation.ControlType]::RadioButton))
             Invoke-Element (Find-Element 'Markdown + 첨부 ZIP 내보내기' ([System.Windows.Automation.ControlType]::Button))
             $zip = Join-Path $scratch ($title + '.zip')
@@ -1041,7 +1044,7 @@ try {
             Add-Type -AssemblyName System.IO.Compression.FileSystem
             $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
             try {
-                $entry = @($archive.Entries | Where-Object { $_.FullName.EndsWith('.md') })
+                $entry = @($archive.Entries | Where-Object { $_.FullName -ceq 'note.md' })
                 if ($entry.Count -ne 1) { throw 'Native Markdown ZIP must contain one note' }
                 $reader = New-Object System.IO.StreamReader($entry[0].Open(), [System.Text.Encoding]::UTF8)
                 try { $markdown = $reader.ReadToEnd() } finally { $reader.Dispose() }
