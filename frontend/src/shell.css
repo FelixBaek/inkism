@@ -143,7 +143,7 @@
 .side-icon {
   color: inherit;
 }
-/* 아이콘 없는 항목(웹 보기)도 글자 줄을 맞춘다. */
+/* 아이콘 없는 항목도 글자 줄을 맞춘다. */
 .side-item > .side-label:first-child {
   padding-left: 26px;
 }

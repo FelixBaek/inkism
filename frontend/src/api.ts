@@ -84,7 +84,7 @@ export async function rpc<T>(
 }
 
 /** 셸 전용 JSON 경로(/api/...): {ok,data}|{ok:false,error}. */
-async function shellJSON<T>(path: string, body?: unknown): Promise<T> {
+export async function shellJSON<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(
     path,
     body === undefined
@@ -305,6 +305,8 @@ export const api = {
 
   defaults: () => rpc<Defaults>("defaults_get"),
   setDefaults: (changes: Partial<Defaults>) => rpc<Defaults>("defaults_set", changes),
+  setTagColor: (name: string, color: string | null) => rpc<unknown>("tag_color_set", { name, color }),
+  setNotebookIcon: (id: string, icon: string | null) => rpc<unknown>("notebook_icon_set", { id, icon }),
   deleteNotebook: (id: string, current_id?: string, current_revision?: number) =>
     rpc<{ deleted: boolean; current: Summary | null }>("delete_notebook", { id, current_id, current_revision }),
 

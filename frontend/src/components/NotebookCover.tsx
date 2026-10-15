@@ -33,7 +33,7 @@ export function CoverCredit({ cover, className = "" }: Readonly<{ cover: Noteboo
   );
 }
 
-/** 폴더 머리말 위 배너(Notion식): object-fit cover + 아래쪽 바탕색 그라데이션. */
+/** 폴더 머리말 위 배너: object-fit cover + 아래쪽 바탕색 그라데이션. */
 export function CoverBanner({ cover }: Readonly<{ cover: NotebookCover }>) {
   const [broken, setBroken] = useState(false);
   useEffect(() => setBroken(false), [cover.url]);

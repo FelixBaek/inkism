@@ -37,6 +37,8 @@ const RENDERER_OPS: &[&str] = &[
     "link_resolve", "graph_get", "relations", "daily_note", "template_create", "type_preset_apply", "page_create",
     "defaults_get",
     "defaults_set",
+    "tag_color_set",
+    "notebook_icon_set",
     "vault_status",
     "vault_create",
     "vault_unlock",

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { LockKeyhole } from "../icons";
+import { LockKeyhole, X } from "../icons";
 import { securityRequest, type SecurityStatus } from "../lib/app-security";
 import { useStore } from "../store";
 import { flushWorkspaceForClose } from "../lib/workspace";
@@ -390,7 +390,12 @@ export function LockNowButton() {
           if (pending) e.preventDefault();
         }}
       >
-        <h2 id="google-lock-title">{t("Google 로그인으로 앱 잠금")}</h2>
+        <div className="dialog-title-row">
+          <h2 id="google-lock-title" className="dialog-title">{t("Google 로그인으로 앱 잠금")}</h2>
+          <button type="button" className="icon-btn" aria-label={t("대화상자 닫기")} disabled={pending} onClick={() => dialog.current?.close()}>
+            <X size={16} aria-hidden />
+          </button>
+        </div>
         {setup ? (
           <SetupNotice />
         ) : (

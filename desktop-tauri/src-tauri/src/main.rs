@@ -10,7 +10,7 @@ mod note_link;
 mod reminders;
 mod security;
 mod shell;
-mod web_viewer;
+mod window_trust;
 
 use launch::LaunchOptions;
 use local_api::Result;

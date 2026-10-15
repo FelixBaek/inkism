@@ -18,6 +18,28 @@
   font: 400 var(--fs-small) / 1.5 var(--font-mono);
   color: var(--faint);
 }
+/* 단축키는 상자 없이 흐린 글자로 오른쪽에 */
+.menu-item-kbd {
+  border: 0;
+  padding: 0;
+}
+/* 메뉴 항목의 초점은 배경으로 보인다. 마우스로 연 메뉴의 첫 항목에 굵은 초점 테두리가 뜨지 않게 한다. */
+.menu-item:focus-visible {
+  outline: none;
+}
+/* 편집기 우클릭 메뉴: 서식 메뉴와 같은 둥근 모서리(판 10, 항목 6) */
+.menu-rounded .menu-popup {
+  border-radius: 10px;
+  padding: 6px;
+  gap: 2px;
+}
+.menu-rounded .menu-item {
+  border-radius: 6px;
+  padding: 0 10px;
+}
+.menu-rounded .menu-separator {
+  margin: 2px 0;
+}
 .menu-item.is-open {
   background: var(--active);
 }
@@ -30,10 +52,6 @@
   max-height: min(420px, 80vh);
   overflow-y: auto;
 }
-.menu-popup.menu-sub.flip {
-  left: auto;
-  right: calc(100% - 2px);
-}
 .context-menu {
   position: fixed;
   z-index: 60;
@@ -41,4 +59,38 @@
 .context-menu > .menu-popup {
   position: static;
   min-width: 250px;
+}
+.menu-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+/* 색·아이콘 고르기: 글자 없이 8칸 격자. 고른 칸은 테두리로 표시한다. */
+.menu-popup.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 32px);
+  gap: 2px;
+  min-width: 0;
+  max-width: none;
+  max-height: min(360px, 80vh);
+  padding: 6px;
+}
+.menu-grid > .menu-item {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+}
+.menu-grid > .menu-item .menu-item-icon {
+  margin: 0;
+}
+.menu-grid > .menu-item[aria-checked="true"] {
+  outline: 1.5px solid var(--text);
+  outline-offset: -2px;
+}
+.menu-grid .menu-swatch {
+  width: 18px;
+  height: 18px;
 }

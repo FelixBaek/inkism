@@ -21,6 +21,13 @@ import {
   X,
   CloudCheck,
   Keyboard,
+  FileText,
+  Palette,
+  Image,
+  LockKeyhole,
+  Info,
+  Sparkle,
+  type LucideIcon,
 } from "../icons";
 import { ShortcutsDialog, SHORTCUTS_EVENT, SHORTCUT_GROUPS } from "./ShortcutsDialog";
 import { LANGS, lang, setLang, t, type Lang } from "../i18n";
@@ -33,19 +40,19 @@ import { parseWrap } from "./EditorPane";
 import "./SettingsDialog.css";
 
 type Section = "ai" | "agent" | "general" | "editor" | "plugins" | "sync" | "backup" | "import" | "look" | "photo" | "lock" | "about";
-const SECTIONS: { id: Section; label: string }[] = [
-  { id: "general", label: t("일반") },
-  { id: "editor", label: t("편집기") },
-  { id: "plugins", label: t("플러그인") },
-  { id: "sync", label: t("동기화") },
-  { id: "backup", label: t("백업과 복원") },
-  { id: "import", label: t("가져오기") },
-  { id: "look", label: t("모양") },
-  { id: "photo", label: t("사진 검색") },
-  { id: "ai", label: t("AI 연결") },
-  { id: "agent", label: t("외부 AI 연결") },
-  { id: "lock", label: t("앱 잠금") },
-  { id: "about", label: t("정보") },
+const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
+  { id: "general", label: t("일반"), icon: SettingsIcon },
+  { id: "editor", label: t("편집기"), icon: FileText },
+  { id: "plugins", label: t("플러그인"), icon: SettingsIcon },
+  { id: "sync", label: t("동기화"), icon: RefreshCw },
+  { id: "backup", label: t("백업과 복원"), icon: Download },
+  { id: "import", label: t("가져오기"), icon: Upload },
+  { id: "look", label: t("모양"), icon: Palette },
+  { id: "photo", label: t("사진 검색"), icon: Image },
+  { id: "ai", label: t("AI 연결"), icon: Sparkle },
+  { id: "agent", label: t("외부 AI 연결"), icon: Sparkle },
+  { id: "lock", label: t("앱 잠금"), icon: LockKeyhole },
+  { id: "about", label: t("정보"), icon: Info },
 ];
 
 /** 한 줄 설정 카드: 왼쪽 제목·설명, 오른쪽 동작(기존 도구의 버튼을 그대로 둔다). */
@@ -97,6 +104,7 @@ function GeneralSettings() {
             onChange={(e) => setWrap(e.target.checked)}
           />
         </label>
+        <p className="settings-hint">{t("HTML·Markdown 원문 편집에서 긴 줄을 창 너비에 맞춰 접습니다.")}</p>
         <fieldset className="settings-segmented semantic-group" aria-label={t("화면 밝기")}>
           <button
             type="button"
@@ -115,7 +123,6 @@ function GeneralSettings() {
             {t("라이트 모드")}
           </button>
         </fieldset>
-        <p>{t("HTML·Markdown 원문 편집에서 긴 줄을 창 너비에 맞춰 접습니다.")}</p>
       </div>
     </div>
   );
@@ -255,6 +262,7 @@ export function SettingsDialog() {
                 aria-current={x.id === section ? "page" : undefined}
                 onClick={() => {if(x.id!==section)void leave(x.id);}}
               >
+                <x.icon size={15} aria-hidden />
                 {x.label}
               </button>
             ))}

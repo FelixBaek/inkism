@@ -14,10 +14,10 @@ pub mod agent;
 pub mod engine;
 pub mod gate;
 
+mod ai_cli;
 mod attachments;
 mod backup;
 mod clipper;
-mod reader;
 mod export;
 mod markdown_export;
 mod fonts;
@@ -203,12 +203,12 @@ impl Handler {
             (_, "/api/export/pdf") => export::formatted(self, r, true),
             (_, "/api/reminders/settings") => reminders::settings(self, r),
             (_, p) if p.starts_with("/api/unsplash/") => unsplash::serve(self, r, deadline),
-            (_, "/api/reader") => reader::serve(r),
             (_, "/api/clipper") => clipper::serve(self, r),
             (_, "/api/agent") => agent::settings(self, r),
             (_, "/api/publications") => publications::serve(self, r),
             ("GET" | "HEAD", p) if p.starts_with(attachments::PATH_PREFIX) => attachments::download(self, r),
             (_, p) if p.starts_with("/api/update/") => update::serve(self, r),
+            (_, "/api/ai/cli") => ai_cli::serve(self, r, deadline),
             ("GET", "/api/upload-access") => attachments::upload_access(self),
             ("GET", "/api/backup") => backup::export_bundle(self, r),
             ("POST", "/api/restore") => backup::restore_bundle(self, r),
