@@ -331,14 +331,21 @@ function Wait-BlockNumber([string]$expected) {
 function Wait-WindowText([string]$text, [bool]$present, [int]$timeoutSeconds = 10, [string]$editorName = '노트 본문 (리치 텍스트 편집기)') {
     $deadline = [DateTime]::UtcNow.AddSeconds($timeoutSeconds)
     do {
-        $field = Find-Element $editorName
-        $pattern = $null
-        if ($field.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) {
-            $value = $pattern.Current.Value
-        } else {
-            $value = $field.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern).DocumentRange.GetText(-1)
+        # History remounts the editor. Its UIA name can appear before either
+        # text pattern is available; missing observation never proves absence.
+        $value = $null
+        try {
+            $field = Find-Element $editorName
+            $pattern = $null
+            if ($field.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) {
+                $value = $pattern.Current.Value
+            } elseif ($field.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern, [ref]$pattern)) {
+                $value = $pattern.DocumentRange.GetText(-1)
+            }
+        } catch [System.Windows.Automation.ElementNotAvailableException] {
+            # Reacquire the replaced element on the next bounded iteration.
         }
-        if ($value.Contains($text) -eq $present) { return }
+        if ($null -ne $value -and $value.Contains($text) -eq $present) { return }
         Start-Sleep -Milliseconds 50
     } while ([DateTime]::UtcNow -lt $deadline)
     throw "Window text state mismatch: $text expected presence $present"
