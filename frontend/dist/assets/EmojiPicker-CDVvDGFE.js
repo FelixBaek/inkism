@@ -1,5 +1,5 @@
-import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./jsx-runtime-BShSzW0e.js";import{i as r}from"./i18n-CYtlih5I.js";import{a as i}from"./icons-DLXxryDu.js";import{N as a}from"./index-Dw_NY1Hf.js";var o=e(t(),1),s=new Map([[`bold`,o.createElement(o.Fragment,null,o.createElement(`path`,{d:`M128,20A108,108,0,1,0,236,128,108.12,108.12,0,0,0,128,20Zm0,192a84,84,0,1,1,84-84A84.09,84.09,0,0,1,128,212Zm68-84a12,12,0,0,1-12,12H128a12,12,0,0,1-12-12V72a12,12,0,0,1,24,0v44h44A12,12,0,0,1,196,128Z`}))],[`duotone`,o.createElement(o.Fragment,null,o.createElement(`path`,{d:`M224,128a96,96,0,1,1-96-96A96,96,0,0,1,224,128Z`,opacity:`0.2`}),o.createElement(`path`,{d:`M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm64-88a8,8,0,0,1-8,8H128a8,8,0,0,1-8-8V72a8,8,0,0,1,16,0v48h48A8,8,0,0,1,192,128Z`}))],[`fill`,o.createElement(o.Fragment,null,o.createElement(`path`,{d:`M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm56,112H128a8,8,0,0,1-8-8V72a8,8,0,0,1,16,0v48h48a8,8,0,0,1,0,16Z`}))],[`light`,o.createElement(o.Fragment,null,o.createElement(`path`,{d:`M128,26A102,102,0,1,0,230,128,102.12,102.12,0,0,0,128,26Zm0,192a90,90,0,1,1,90-90A90.1,90.1,0,0,1,128,218Zm62-90a6,6,0,0,1-6,6H128a6,6,0,0,1-6-6V72a6,6,0,0,1,12,0v50h50A6,6,0,0,1,190,128Z`}))],[`regular`,o.createElement(o.Fragment,null,o.createElement(`path`,{d:`M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm64-88a8,8,0,0,1-8,8H128a8,8,0,0,1-8-8V72a8,8,0,0,1,16,0v48h48A8,8,0,0,1,192,128Z`}))],[`thin`,o.createElement(o.Fragment,null,o.createElement(`path`,{d:`M128,28A100,100,0,1,0,228,128,100.11,100.11,0,0,0,128,28Zm0,192a92,92,0,1,1,92-92A92.1,92.1,0,0,1,128,220Zm60-92a4,4,0,0,1-4,4H128a4,4,0,0,1-4-4V72a4,4,0,0,1,8,0v52h52A4,4,0,0,1,188,128Z`}))]]),c=o.forwardRef((e,t)=>o.createElement(i,{ref:t,...e,weights:s}));c.displayName=`ClockIcon`;var l=e=>e.trim().split(`
-`).map(e=>{let[t,n,r,i=``]=e.trim().split(`|`);return{char:t,name:n,code:r,keywords:i}}),u=[{id:`face`,label:r(`표정`),icon:`😀`,items:l(`
+import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./jsx-runtime-BShSzW0e.js";import{a as r}from"./i18n-D_2N6Jim.js";import"./icons-DjsEWvb5.js";import{N as i,P as a}from"./index-DyCELUPv.js";var o=e(t(),1),s=e=>e.trim().split(`
+`).map(e=>{let[t,n,r,i=``]=e.trim().split(`|`);return{char:t,name:n,code:r,keywords:i}}),c=[{id:`face`,label:r(`표정`),icon:`😀`,items:s(`
 😀|웃는 얼굴|grinning|웃음 미소 기쁨 smile 활짝 웃는 얼굴 스마일 grinning face
 😃|크게 웃는 얼굴|smiley|웃음 기쁨 smile 눈을 크게 뜨고 웃는 얼굴 미소 스마일 입 벌리고 grinning face with big eyes
 😄|눈웃음|smile|웃음 행복 미소 짓는 눈으로 활짝 웃는 얼굴 스마일 입 벌리고 눈웃음 grinning face with smiling eyes
@@ -125,7 +125,7 @@ import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./j
 😾|뾰로통한 고양이 얼굴|pouting_cat|고양이 뾰로통한 얼굴 토라짐 pouting cat
 🙈|눈을 가리고 있는 원숭이|see_no_evil_monkey|눈을 가리고 있는 원숭이 손으로 가린 아무것도 안 보려는 see-no-evil monkey
 🙉|귀를 막고 있는 원숭이|hear_no_evil_monkey|귀를 막고 있는 원숭이 손으로 가린 아무것도 안 들리는 hear-no-evil monkey
-🙊|입을 막고 있는 원숭이|speak_no_evil_monkey|손으로 입을 가린 원숭이 아무것도 말할 수 없는 막고 있는 speak-no-evil monkey`)},{id:`people`,label:r(`사람과 신체`),icon:`👋`,items:l(`
+🙊|입을 막고 있는 원숭이|speak_no_evil_monkey|손으로 입을 가린 원숭이 아무것도 말할 수 없는 막고 있는 speak-no-evil monkey`)},{id:`people`,label:r(`사람과 신체`),icon:`👋`,items:s(`
 👋|손 흔들기|wave|안녕 인사 손 흔드는 펼친 waving hand
 👍|좋아요|thumbsup|좋아 최고 엄지 확인 올린 따봉 좋아요 thumbs up
 👎|싫어요|thumbsdown|싫어 별로 엄지 내린 싫어요 야유 최악 thumbs down
@@ -483,7 +483,7 @@ import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./j
 👥|사람들 그림자|busts_in_silhouette|사람들 그림자 상반신 상체 busts in silhouette
 🫂|포옹하는 사람|people_hugging|고마워 안녕 잘 가 포옹 포옹하는 사람 people hugging
 👪|가족|family|가족 사람들 아빠 아이 엄마 family
-👣|발자국|footprints|발 발바닥 발자국 족적 footprints`)},{id:`animal`,label:r(`동물`),icon:`🐶`,items:l(`
+👣|발자국|footprints|발 발바닥 발자국 족적 footprints`)},{id:`animal`,label:r(`동물`),icon:`🐶`,items:s(`
 🐶|강아지|dog|개 강아지 멍멍 얼굴 개띠 동물 dog face
 🐱|고양이|cat|고양이 야옹 얼굴 동물 cat face
 🐭|쥐|mouse|쥐 얼굴 동물 쥐띠 mouse face
@@ -628,7 +628,7 @@ import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./j
 🍃|바람에 흔들리는 나뭇잎|leaf_fluttering_in_wind|가을 낙엽 바람에 떨어지는 잎 흔들리는 나뭇잎 leaf fluttering in wind
 🪹|빈 둥지|empty_nest|둥지 빈 새둥우리 empty nest
 🪺|알이 들어 있는 둥지|nest_with_eggs|둥지 새둥우리 알이 들어 있는 nest with eggs
-🍄|버섯|mushroom|나무 버섯 식물 mushroom`)},{id:`food`,label:r(`음식`),icon:`🍎`,items:l(`
+🍄|버섯|mushroom|나무 버섯 식물 mushroom`)},{id:`food`,label:r(`음식`),icon:`🍎`,items:s(`
 🍎|사과|apple|사과 과일 빨간 red apple
 🍊|귤|tangerine|귤 오렌지 과일 밀감 tangerine
 🍋|레몬|lemon|레몬 과일 lemon
@@ -759,7 +759,7 @@ import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./j
 🥄|숟가락|spoon|수저 숟가락 스푼 식기 주방용품 테이블웨어 spoon
 🔪|식칼|kitchen_knife|식칼 요리용 칼 kitchen knife
 🫙|작은 병|jar|보관 비어 있는 소스 양념 용기 작은 병 저장 jar
-🏺|암포라|amphora|단지 암포라 amphora`)},{id:`activity`,label:r(`활동`),icon:`⚽`,items:l(`
+🏺|암포라|amphora|단지 암포라 amphora`)},{id:`activity`,label:r(`활동`),icon:`⚽`,items:s(`
 ⚽|축구공|soccer|축구 공 운동 축구공 soccer ball
 🏀|농구공|basketball|농구 운동 농구공 스포츠 basketball
 ⚾|야구공|baseball|야구 운동 야구공 공 baseball
@@ -851,7 +851,7 @@ import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./j
 🧵|실타래|thread|뜨개질 바느질 바늘 실 실타래 thread
 🪡|바늘|sewing_needle|바느질 바늘 봉합 자수 재단 sewing needle
 🧶|실뭉치|yarn|니트 실뭉치 코바늘 yarn
-🪢|매듭|knot|꼬인 노끈 매듭 밧줄 엉킨 knot`)},{id:`travel`,label:r(`여행`),icon:`✈️`,items:l(`
+🪢|매듭|knot|꼬인 노끈 매듭 밧줄 엉킨 knot`)},{id:`travel`,label:r(`여행`),icon:`✈️`,items:s(`
 ✈️|비행기|airplane|비행기 여행 출장 비행 항공 airplane
 🚗|자동차|car|자동차 차 운전 승용차 차량 automobile
 🚕|택시|taxi|택시 자동차 taxi
@@ -1068,7 +1068,7 @@ import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./j
 ⛄|스노우맨|snowman_without_snow|겨울 눈 스노우맨 snowman without snow
 ☄️|혜성|comet|우주 혜성 comet
 💧|물방울|droplet|땀 물방울 droplet
-🌊|파도|water_wave|물결 파도 풍랑 water wave`)},{id:`object`,label:r(`사물`),icon:`💡`,items:l(`
+🌊|파도|water_wave|물결 파도 풍랑 water wave`)},{id:`object`,label:r(`사물`),icon:`💡`,items:s(`
 💡|전구|bulb|아이디어 생각 전구 기발한 아하 light bulb
 📌|압정|pushpin|고정 중요 핀 압정 pushpin
 📎|클립|paperclip|클립 첨부 종이 paperclip
@@ -1321,7 +1321,7 @@ import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./j
 🪬|함사|hamsa|마리아 미리암 보호 부적 손 파티마 함사 hamsa
 🗿|모아이|moai|모아이 모아이상 석상 moai
 🪧|플래카드|placard|데모 시위 표지판 플래카드 피켓 placard
-🪪|신분증|identification_card|ID 보안 신분증 자격증 허가증 identification card`)},{id:`symbol`,label:r(`기호`),icon:`❤️`,items:l(`
+🪪|신분증|identification_card|ID 보안 신분증 자격증 허가증 identification card`)},{id:`symbol`,label:r(`기호`),icon:`❤️`,items:s(`
 ❤️|빨간 하트|heart|하트 사랑 좋아 빨간색 마음 red heart
 🧡|주황 하트|orange_heart|하트 주황색 orange heart
 💛|노란 하트|yellow_heart|하트 노란색 노란 사랑 yellow heart
@@ -1587,7 +1587,7 @@ import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./j
 🏳️|펄럭이는 흰색 깃발|white_flag|깃발 펄럭이는 흰색 플래그 항복 white flag
 🏳️‍🌈|무지개 깃발|rainbow_flag|깃발 무지개 rainbow flag
 🏳️‍⚧️|트랜스젠더 깃발|transgender_flag|깃발 분홍색 트랜스젠더 하늘색 하얀색 transgender flag
-🏴‍☠️|해적 깃발|pirate_flag|보물섬 약탈자 해골 깃발 해적 pirate flag`)},{id:`flag`,label:r(`국기`),icon:`🏳️`,items:l(`
+🏴‍☠️|해적 깃발|pirate_flag|보물섬 약탈자 해골 깃발 해적 pirate flag`)},{id:`flag`,label:r(`국기`),icon:`🏳️`,items:s(`
 🇦🇨|어센션섬|flag_ascension_island|국기 깃발 국가 나라 지역 깃발   깃발: 어센션섬 flag: Ascension Island ac
 🇦🇩|안도라|flag_andorra|국기 깃발 국가 나라 지역 깃발   깃발: 안도라 flag: Andorra ad
 🇦🇪|아랍에미리트|flag_united_arab_emirates|국기 깃발 국가 나라 지역 깃발   깃발: 아랍에미리트 flag: United Arab Emirates ae
@@ -1848,4 +1848,4 @@ import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./j
 🇿🇼|짐바브웨|flag_zimbabwe|국기 깃발 국가 나라 지역 깃발   깃발: 짐바브웨 flag: Zimbabwe zw
 🏴󠁧󠁢󠁥󠁮󠁧󠁿|잉글랜드|flag_england|국기 깃발 국가 나라 지역 깃발   깃발: 잉글랜드 flag: England
 🏴󠁧󠁢󠁳󠁣󠁴󠁿|스코틀랜드|flag_scotland|국기 깃발 국가 나라 지역 깃발   깃발: 스코틀랜드 flag: Scotland
-🏴󠁧󠁢󠁷󠁬󠁳󠁿|웨일즈|flag_wales|국기 깃발 국가 나라 지역 깃발   깃발: 웨일즈 flag: Wales`)}],d=n(),f=`inkism.emoji.recent`,p=[`👍`,`✅`,`🔥`,`💡`,`📌`,`❤️`,`🙏`,`🎉`],m=u.flatMap(e=>e.items),h=new Map(m.map(e=>[e.char,e]));function g(){let e=p;try{let t=JSON.parse(localStorage.getItem(f)||`null`);Array.isArray(t)&&t.length&&(e=t)}catch{}return e.map(e=>h.get(e)).filter(e=>!!e)}function _(e){try{let t=g().map(e=>e.char).filter(t=>t!==e);localStorage.setItem(f,JSON.stringify([e,...t].slice(0,16)))}catch{}}function v({onPick:e}){let[t,n]=(0,o.useState)(``),[i,s]=(0,o.useState)(`recent`),l=(0,o.useMemo)(g,[]),[f,p]=(0,o.useState)(l[0]),h=(0,o.useRef)(null),v=t.trim().toLowerCase(),y=v?[{id:`search`,label:r(`검색 결과`),items:m.filter(e=>(e.char+` `+e.name+` `+e.code+` `+e.keywords).toLowerCase().includes(v))}]:[{id:`recent`,label:r(`자주 쓴 것`),items:l},...u],b=t=>{_(t.char),e(t.char)},x=e=>{n(``),s(e),requestAnimationFrame(()=>h.current?.querySelector(`[data-section="${e}"]`)?.scrollIntoView({block:`start`}))};return(0,d.jsxs)(`div`,{className:`tb-emoji`,children:[(0,d.jsxs)(`label`,{className:`tb-emoji-search`,children:[(0,d.jsx)(a,{size:16,"aria-hidden":!0}),(0,d.jsx)(`input`,{value:t,onChange:e=>n(e.target.value),placeholder:r(`이모지 검색 (예: 웃음, 하트)`),"aria-label":r(`이모지 검색`)})]}),(0,d.jsxs)(`div`,{className:`tb-emoji-tabs`,role:`tablist`,"aria-label":r(`이모지 분류`),children:[(0,d.jsx)(`button`,{type:`button`,role:`tab`,"aria-selected":i===`recent`,"aria-label":r(`자주 쓴 것`),title:r(`자주 쓴 것`),onClick:()=>x(`recent`),children:(0,d.jsx)(c,{size:16,"aria-hidden":!0})}),u.map(e=>(0,d.jsx)(`button`,{type:`button`,role:`tab`,"aria-selected":i===e.id,"aria-label":e.label,title:e.label,onClick:()=>x(e.id),children:e.icon},e.id))]}),(0,d.jsx)(`div`,{className:`tb-emoji-body`,ref:h,onScroll:()=>{let e=h.current;if(!e||v)return;let t=`recent`;for(let n of e.querySelectorAll(`[data-section]`))n.offsetTop-e.offsetTop<=e.scrollTop+4&&(t=n.dataset.section);s(t)},children:y.map(e=>(0,d.jsxs)(`section`,{"data-section":e.id,"aria-label":e.label,children:[(0,d.jsx)(`h4`,{children:e.label}),e.items.length===0?(0,d.jsx)(`p`,{className:`tb-empty`,children:r(`찾는 이모지가 없습니다.`)}):(0,d.jsx)(`div`,{className:`tb-emoji-grid`,children:e.items.map(t=>(0,d.jsx)(`button`,{type:`button`,"aria-label":t.name,title:t.name,onMouseEnter:()=>p(t),onFocus:()=>p(t),onClick:()=>b(t),children:t.char},e.id+t.char))})]},e.id))}),(0,d.jsx)(`div`,{className:`tb-emoji-foot`,"aria-live":`polite`,children:f&&(0,d.jsxs)(d.Fragment,{children:[(0,d.jsx)(`span`,{className:`tb-emoji-big`,"aria-hidden":!0,children:f.char}),(0,d.jsx)(`strong`,{children:f.name}),(0,d.jsxs)(`code`,{children:[`:`,f.code,`:`]})]})})]})}export{v as default};
+🏴󠁧󠁢󠁷󠁬󠁳󠁿|웨일즈|flag_wales|국기 깃발 국가 나라 지역 깃발   깃발: 웨일즈 flag: Wales`)}],l=n(),u=`inkism.emoji.recent`,d=[`👍`,`✅`,`🔥`,`💡`,`📌`,`❤️`,`🙏`,`🎉`],f=c.flatMap(e=>e.items),p=new Map(f.map(e=>[e.char,e]));function m(){let e=d;try{let t=JSON.parse(localStorage.getItem(u)||`null`);Array.isArray(t)&&t.length&&(e=t)}catch{}return e.map(e=>p.get(e)).filter(e=>!!e)}function h(e){try{let t=m().map(e=>e.char).filter(t=>t!==e);localStorage.setItem(u,JSON.stringify([e,...t].slice(0,16)))}catch{}}function g({onPick:e}){let[t,n]=(0,o.useState)(``),[s,u]=(0,o.useState)(`recent`),d=(0,o.useMemo)(m,[]),[p,g]=(0,o.useState)(d[0]),_=(0,o.useRef)(null),v=t.trim().toLowerCase(),y=v?[{id:`search`,label:r(`검색 결과`),items:f.filter(e=>(e.char+` `+e.name+` `+e.code+` `+e.keywords).toLowerCase().includes(v))}]:[{id:`recent`,label:r(`자주 쓴 것`),items:d},...c],b=t=>{h(t.char),e(t.char)},x=e=>{n(``),u(e),requestAnimationFrame(()=>_.current?.querySelector(`[data-section="${e}"]`)?.scrollIntoView({block:`start`}))};return(0,l.jsxs)(`div`,{className:`tb-emoji`,children:[(0,l.jsxs)(`label`,{className:`tb-emoji-search`,children:[(0,l.jsx)(i,{size:16,"aria-hidden":!0}),(0,l.jsx)(`input`,{value:t,onChange:e=>n(e.target.value),placeholder:r(`이모지 검색 (예: 웃음, 하트)`),"aria-label":r(`이모지 검색`)})]}),(0,l.jsxs)(`div`,{className:`tb-emoji-tabs`,role:`tablist`,"aria-label":r(`이모지 분류`),children:[(0,l.jsx)(`button`,{type:`button`,role:`tab`,"aria-selected":s===`recent`,"aria-label":r(`자주 쓴 것`),title:r(`자주 쓴 것`),onClick:()=>x(`recent`),children:(0,l.jsx)(a,{size:16,"aria-hidden":!0})}),c.map(e=>(0,l.jsx)(`button`,{type:`button`,role:`tab`,"aria-selected":s===e.id,"aria-label":e.label,title:e.label,onClick:()=>x(e.id),children:e.icon},e.id))]}),(0,l.jsx)(`div`,{className:`tb-emoji-body`,ref:_,onScroll:()=>{let e=_.current;if(!e||v)return;let t=`recent`;for(let n of e.querySelectorAll(`[data-section]`))n.offsetTop-e.offsetTop<=e.scrollTop+4&&(t=n.dataset.section);u(t)},children:y.map(e=>(0,l.jsxs)(`section`,{"data-section":e.id,"aria-label":e.label,children:[(0,l.jsx)(`h4`,{children:e.label}),e.items.length===0?(0,l.jsx)(`p`,{className:`tb-empty`,children:r(`찾는 이모지가 없습니다.`)}):(0,l.jsx)(`div`,{className:`tb-emoji-grid`,children:e.items.map(t=>(0,l.jsx)(`button`,{type:`button`,"aria-label":t.name,title:t.name,onMouseEnter:()=>g(t),onFocus:()=>g(t),onClick:()=>b(t),children:t.char},e.id+t.char))})]},e.id))}),(0,l.jsx)(`div`,{className:`tb-emoji-foot`,"aria-live":`polite`,children:p&&(0,l.jsxs)(l.Fragment,{children:[(0,l.jsx)(`span`,{className:`tb-emoji-big`,"aria-hidden":!0,children:p.char}),(0,l.jsx)(`strong`,{children:p.name}),(0,l.jsxs)(`code`,{children:[`:`,p.code,`:`]})]})})]})}export{g as default};
