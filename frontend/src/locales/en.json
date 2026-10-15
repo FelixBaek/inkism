@@ -2535,7 +2535,19 @@
   "이번 달": "This month",
   "지난달": "Last month",
   "created:·updated: 조건은 2026-10-15, 2026-10 또는 2026-10-01..2026-10-15처럼 입력해 주세요.": "Write created:/updated: as 2026-10-15, 2026-10 or 2026-10-01..2026-10-15.",
-  "제목·본문·태그 검색": "Search titles, content, and tags",
+  "제목·본문·태그 검색": "Search titles, content, and tags",
   "폴더 ZIP 내보내기": "Export folder ZIP",
-  "폴더 선택": "Choose folder"
+  "폴더 선택": "Choose folder",
+  "블록 내용을 바꿨어요.": "Updated the block.",
+  "이전 버전으로 되돌렸어요.": "Restored the previous version.",
+  "대화 열기 · {count}": "Open chat · {count}",
+  "버전 {count}": "Version {count}",
+  "블록 안 내용과 이 대화만 AI에 보냅니다": "Only this block and this chat are sent to AI",
+  "나": "Me",
+  "이전 버전으로": "Previous version",
+  "멈추기": "Stop",
+  "이어서 요청하세요 — 예: 더 짧게, 제목 바꿔 줘": "Keep asking — e.g. make it shorter, change the title",
+  "무엇을 만들까요? — 예: 회의 내용을 요점 3개로 정리해 줘": "What should I make? — e.g. summarize the meeting in 3 points",
+  "완료하면 대화를 접고 내용만 남깁니다": "Done hides the chat and keeps the content",
+  "AI 블록 풀기": "Unwrap AI block"
 }

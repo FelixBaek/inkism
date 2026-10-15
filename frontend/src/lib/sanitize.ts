@@ -2,18 +2,21 @@ import DOMPurify from "dompurify";
 
 // This inert metadata is plain text. DOMPurify otherwise removes literal HTML
 // examples inside attribute values; it is never inserted as innerHTML.
-const termText = new WeakMap<Node, string>();
+// AI 블록 대화(data-chat)도 같은 일반 글자 JSON이다.
+const KEPT: Record<string, [string, number]> = { SPAN: ["termDefinition", 2000], DIV: ["chat", 120000] };
+const keptText = new WeakMap<Node, [string, string]>();
 DOMPurify.addHook('beforeSanitizeAttributes', node => {
-  if (!(node instanceof HTMLElement) || node.tagName !== 'SPAN') return;
-  const value = node.dataset.termDefinition;
-  if (value?.trim() && Array.from(value).length <= 2000 &&
-      !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) termText.set(node, value);
+  if (!(node instanceof HTMLElement) || !KEPT[node.tagName]) return;
+  const [key, max] = KEPT[node.tagName];
+  const value = node.dataset[key];
+  if (value?.trim() && Array.from(value).length <= max &&
+      !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) keptText.set(node, [key, value]);
 });
 DOMPurify.addHook('afterSanitizeAttributes', node => {
-  const value = termText.get(node);
-  if (value !== undefined && node instanceof HTMLElement) {
-    node.dataset.termDefinition = value;
-    termText.delete(node);
+  const kept = keptText.get(node);
+  if (kept !== undefined && node instanceof HTMLElement) {
+    node.dataset[kept[0]] = kept[1];
+    keptText.delete(node);
   }
 });
 
