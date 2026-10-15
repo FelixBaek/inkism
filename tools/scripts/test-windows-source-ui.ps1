@@ -135,6 +135,29 @@ public static class InkismInput {
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr window, int command);
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr window, uint message, IntPtr wparam, IntPtr lparam);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr window, IntPtr dc, uint flags);
+    delegate bool EnumChildProc(IntPtr window, IntPtr data);
+    [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumChildProc callback, IntPtr data);
+    [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr window);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr window, System.Text.StringBuilder text, int count);
+    [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern bool SetWindowText(IntPtr window, string text);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr window, System.Text.StringBuilder text, int count);
+    public static IntPtr DialogControl(IntPtr dialog, int id, string className) {
+        IntPtr found=IntPtr.Zero;int process=WindowProcessId(dialog);
+        EnumChildWindows(dialog,(window,data)=>{
+            if(GetDlgCtrlID(window)!=id || WindowProcessId(window)!=process)return true;
+            var name=new System.Text.StringBuilder(256);GetClassName(window,name,name.Capacity);
+            if(name.ToString()!=className)return true;
+            found=window;return false;
+        },IntPtr.Zero);
+        return found;
+    }
+    public static bool SetFilename(IntPtr field, string path) {
+        if(!SetWindowText(field,path))return false;
+        var text=new System.Text.StringBuilder(path.Length+2);GetWindowText(field,text,text.Capacity);
+        return text.ToString()==path;
+    }
+
 }
 '@
 # UIA bounds are physical pixels. Keep pointer coordinates in the same space
@@ -786,21 +809,26 @@ function Complete-TestSave([string]$path, [bool]$cancel = $false) {
         Start-Sleep -Milliseconds 50
     } while ([DateTime]::UtcNow -lt $deadline)
     if ($null -eq $picker) { throw 'Owned native Save As dialog did not open' }
-    Save-Screenshot 'windows-ui-native-save-dialog' ([IntPtr]$picker.Current.NativeWindowHandle)
-    if ($cancel) {
-        [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
-    } else {
-        [System.Windows.Forms.SendKeys]::SendWait('%n')
-        [InkismInput]::Shortcut(0x41)
-        Set-TestClipboard $path
-        [InkismInput]::Shortcut(0x56)
-        [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-    }
+    # Shell controls initialize after the HWND. Native Win32 control IDs avoid
+    # traversing unrelated Shell UIA providers (which may deny token access).
+    $pickerHandle = [IntPtr]$picker.Current.NativeWindowHandle
+    $deadline = [DateTime]::UtcNow.AddSeconds(20)
+    $actionId = if ($cancel) { 2 } else { 1 }
+    do {
+        $action = [InkismInput]::DialogControl($pickerHandle, $actionId, 'Button')
+        $nameField = [InkismInput]::DialogControl($pickerHandle, 1001, 'Edit')
+        if ($action -ne [IntPtr]::Zero -and [InkismInput]::IsWindowEnabled($action) -and ($cancel -or $nameField -ne [IntPtr]::Zero)) { break }
+        Start-Sleep -Milliseconds 50
+    } while ([DateTime]::UtcNow -lt $deadline)
+    if ($action -eq [IntPtr]::Zero -or (-not $cancel -and $nameField -eq [IntPtr]::Zero)) { throw 'Native save controls did not become ready' }
+    Save-Screenshot 'windows-ui-native-save-dialog' $pickerHandle
+    if (-not $cancel -and -not [InkismInput]::SetFilename($nameField, $path)) { throw 'Native save filename was not accepted' }
+    [InkismInput]::PostMessage($action, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null # BM_CLICK
     $deadline = [DateTime]::UtcNow.AddSeconds(10)
     do {
         if ([InkismInput]::GetForegroundWindow() -eq $app.MainWindowHandle -and
             ($cancel -or [System.IO.File]::Exists($path))) {
-            $action = Find-AnyElement @('원문 내보내기', '서식 HTML 내보내기', 'PDF 내보내기') ([System.Windows.Automation.ControlType]::Button)
+            $action = Find-AnyElement @('원문 내보내기', '서식 HTML 내보내기', 'PDF 내보내기', 'Markdown + 첨부 ZIP 내보내기') ([System.Windows.Automation.ControlType]::Button)
             if ($action.Current.IsEnabled) { return }
         }
         Start-Sleep -Milliseconds 50
@@ -931,18 +959,16 @@ try {
         New-TestNote
         $title='inkism-native-'+$testID+'-'+$format
         Paste-Text (Find-Element '노트 제목') $title
-        # HTML is a view of the new HTML note; only Markdown designates a
-        # different source format and therefore asks for explicit confirmation.
-        Invoke-Element (Find-Element 'HTML' ([System.Windows.Automation.ControlType]::Button))
-        Source-Field 'html' | Out-Null
+        # The MARKDOWN tab is now a view of HTML, not a format conversion.
+        # Use the explicit editor conversion before testing raw Markdown bytes.
         if($format -eq 'markdown') {
+            Invoke-Element (Find-Element 'MARKDOWN 에디터로 변환' ([System.Windows.Automation.ControlType]::Button))
+            Find-Element 'HTML 에디터로 변환' | Out-Null
             Invoke-Element (Find-Element 'MARKDOWN' ([System.Windows.Automation.ControlType]::Button))
-            Find-Element '원문 형식 변경' | Out-Null
-            Invoke-Element (Find-Element '취소' ([System.Windows.Automation.ControlType]::Button))
-            Source-Field 'html' | Out-Null
-            Invoke-Element (Find-Element 'MARKDOWN' ([System.Windows.Automation.ControlType]::Button))
-            Invoke-Element (Find-Element '형식 변경' ([System.Windows.Automation.ControlType]::Button))
+        } else {
+            Invoke-Element (Find-Element 'HTML' ([System.Windows.Automation.ControlType]::Button))
         }
+        Source-Field $format | Out-Null
         $marker='원문검증-'+$format
         $content=switch($format){
             'html' { "<h2>$marker</h2>`n<p data-unused=`"preserve`">한글 &amp; &lt;원문&gt;</p>`n<!-- 그대로 보존 -->" }
@@ -1004,6 +1030,21 @@ try {
             $pdf=Wait-TestExport $pdf {param([byte[]]$data) $data.Length -ge 8 -and [System.Text.Encoding]::ASCII.GetString($data,0,5) -eq '%PDF-'}
             $bytes=[System.IO.File]::ReadAllBytes($pdf)
             if($bytes.Length -lt 8 -or [System.Text.Encoding]::ASCII.GetString($bytes,0,5) -ne '%PDF-'){throw 'Native PDF download is invalid'}
+            Invoke-Element (Find-Element 'Markdown + 첨부 ZIP' ([System.Windows.Automation.ControlType]::RadioButton))
+            Invoke-Element (Find-Element 'Markdown + 첨부 ZIP 내보내기' ([System.Windows.Automation.ControlType]::Button))
+            $zip = Join-Path $scratch ($title + '.zip')
+            Complete-TestSave $zip
+            $zip = Wait-TestExport $zip {param([byte[]]$data) $data.Length -gt 4 -and $data[0] -eq 80 -and $data[1] -eq 75}
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+            try {
+                $entry = @($archive.Entries | Where-Object { $_.FullName.EndsWith('.md') })
+                if ($entry.Count -ne 1) { throw 'Native Markdown ZIP must contain one note' }
+                $reader = New-Object System.IO.StreamReader($entry[0].Open(), [System.Text.Encoding]::UTF8)
+                try { $markdown = $reader.ReadToEnd() } finally { $reader.Dispose() }
+                if (-not $markdown.Contains($marker) -or -not $markdown.Contains('native_typed')) { throw 'Native Markdown ZIP lost note content' }
+            } finally { $archive.Dispose() }
+
         }
         Invoke-Element (Find-Element '미리보기 닫기' ([System.Windows.Automation.ControlType]::Button))
         Wait-SourceMarker $format 'native_typed'
