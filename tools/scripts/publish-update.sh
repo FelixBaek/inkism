@@ -3,9 +3,9 @@
 #   INKISM_UPDATE_NOTES="..." tools/scripts/publish-update.sh 0.3.2
 # Output: dist/update-tauri/<version>/ (zip, latest.json, latest.json.sig).
 # Optional env:
-#   INKISM_UPDATE_SIGNING_KEY  private key (default: ~/.config/mindbox-update/signing.key)
+#   INKISM_UPDATE_SIGNING_KEY  private key (default: ~/.config/inkism-update/signing.key)
 #   INKISM_UPDATE_DIR          feed folder to copy into, e.g. /srv/mindbox-updates/inkism (skipped when unset)
-#   INKISM_APP_UPDATE_FEED     HTTPS feed baked into the exe (default: the one in desktop-tauri main.rs)
+#   INKISM_APP_UPDATE_FEED     HTTPS feed baked into the exe (default: the latest GitHub release)
 #   INKISM_UPDATE_NOTES        release notes shown in the app
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -13,7 +13,8 @@ version="${1:-}"
 if [[ $# -ne 1 || ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "Usage: tools/scripts/publish-update.sh <x.y.z>" >&2; exit 2
 fi
-key="${INKISM_UPDATE_SIGNING_KEY:-$HOME/.config/mindbox-update/signing.key}"
+key="${INKISM_UPDATE_SIGNING_KEY:-$HOME/.config/inkism-update/signing.key}"
+export INKISM_APP_UPDATE_FEED="${INKISM_APP_UPDATE_FEED:-https://github.com/FelixBaek/inkism/releases/latest/download/}"
 dest="${INKISM_UPDATE_DIR:-}"
 zip="Inkism-$version-windows-x64.zip"
 out="dist/update-tauri/$version"

@@ -166,7 +166,11 @@ impl Updater {
         let local = feed.as_ref().is_ok_and(|u| u.scheme() == "http");
         let mut builder =
             reqwest::blocking::Client::builder().redirect(reqwest::redirect::Policy::custom(|a| {
-                a.error("redirect refused")
+                if a.previous().len() < 5 && redirect_allowed(a.url()) {
+                    a.follow()
+                } else {
+                    a.error("redirect refused")
+                }
             }));
         if local {
             builder = builder.no_proxy();
@@ -385,6 +389,16 @@ fn escape_path(p: &str) -> String {
             }
         })
         .collect()
+}
+
+/// GitHub release downloads hop through github.com to its asset host. The
+/// manifest signature and zip hash still gate what gets installed.
+pub(crate) fn redirect_allowed(to: &Url) -> bool {
+    to.scheme() == "https"
+        && matches!(
+            to.host_str(),
+            Some("github.com" | "objects.githubusercontent.com" | "release-assets.githubusercontent.com")
+        )
 }
 
 pub(crate) fn feed_base(built: &str, over: &str) -> std::result::Result<Url, String> {
