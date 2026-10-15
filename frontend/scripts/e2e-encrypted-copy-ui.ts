@@ -39,7 +39,7 @@ try{
  await page.keyboard.press('Escape');await page.waitForTimeout(100);assert.equal(await page.locator('dialog.settings-dialog').evaluate((e:HTMLDialogElement)=>e.open),true,'copy in progress keeps settings open');
  assert.equal(calls,1);release();release=null;
  await page.getByText('암호화 사본을 만들었습니다.',{exact:false}).waitFor();
- assert.equal(await page.locator('.sync-settings').evaluate(e=>e.scrollWidth<=e.clientWidth),true,'long destination overflows');
+ assert.equal(await page.locator('.sync-settings--storage').evaluate(e=>e.scrollWidth<=e.clientWidth),true,'long destination overflows');
  await page.screenshot({path:process.env.INKISM_SCREENSHOT||'/tmp/inkism-copy-ui.png'});
  mode='cancel';await button.click();await waitHost();release();release=null;await page.getByText('폴더 선택을 취소했습니다.',{exact:true}).waitFor();
  mode='failure';await button.click();await waitHost();release();release=null;await page.getByText('복사 실패 시험: 원본 유지',{exact:true}).waitFor();
