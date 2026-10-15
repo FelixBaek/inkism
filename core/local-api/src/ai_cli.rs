@@ -128,8 +128,10 @@ fn run(turn: &Turn, deadline: Deadline) -> Result<String, String> {
     let pipe = |r: Option<Box<dyn Read + Send>>| {
         std::thread::spawn(move || {
             let mut buf = Vec::new();
-            if let Some(r) = r {
-                let _ = r.take(MAX_OUTPUT).read_to_end(&mut buf);
+            if let Some(mut r) = r {
+                let _ = (&mut r).take(MAX_OUTPUT).read_to_end(&mut buf);
+                // Keep draining past the cap so a full pipe never blocks the CLI until the deadline.
+                let _ = std::io::copy(&mut r, &mut std::io::sink());
             }
             buf
         })

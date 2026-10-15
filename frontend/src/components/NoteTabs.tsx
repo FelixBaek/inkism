@@ -14,6 +14,11 @@ export function openInNewTab(s: { selectNote: (id: string) => Promise<void> }, i
   window.dispatchEvent(new CustomEvent(OPEN_TAB_EVENT, { detail: id }));
   return s.selectNote(id);
 }
+const TAB_MOVED_EVENT = "inkism-tab-moved";
+/** 분할 창이 끌어 온 탭을 실제로 열었을 때만 위쪽 탭을 닫는다. */
+export function closeMovedTab(id: string) {
+  window.dispatchEvent(new CustomEvent(TAB_MOVED_EVENT, { detail: id }));
+}
 
 /** Saved tabs that are not already open, followed by the open tabs. */
 function prependMissing<T extends { id: string }>(saved: T[], current: T[]): T[] {
@@ -218,6 +223,13 @@ export function NoteTabs() {
       setClosing(false);
     }
   };
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    const moved = (event: Event) => void closeRef.current((event as CustomEvent<string>).detail);
+    window.addEventListener(TAB_MOVED_EVENT, moved);
+    return () => window.removeEventListener(TAB_MOVED_EVENT, moved);
+  }, []);
   if (!tabs.length && !workspaceError) return null;
   return (
     <div
@@ -283,9 +295,8 @@ export function NoteTabs() {
             event.dataTransfer.setData(TAB_DRAG_TYPE, tab.id);
             event.dataTransfer.effectAllowed = "copyMove";
           }}
-          onDragEnd={(event) => {
-            // 다른 곳(분할 탭 줄)이 "옮기기"로 받았으면 여기서는 닫는다.
-            if (dragId.current && event.dataTransfer.dropEffect === "move") void close(tab.id);
+          onDragEnd={() => {
+            // 분할 탭 줄로 옮긴 탭은 그 창이 연 뒤 closeMovedTab으로 닫는다.
             dragId.current = null;
             setDropAt(null);
           }}

@@ -53,11 +53,11 @@ export function DocumentTools({data,open:panelOpen,onOpenChange}:Readonly<{data:
   }catch(e){data.setError(errorText(e));}finally{setBusy(false);}
  };
  const blocked=Boolean(s.draft?.readonly)||Boolean(s.note?.trashed)||s.editorConverting;
- // 노트 본문을 먼저 저장해 최신 revision으로 쓴다. 판이 닫히는 중이면 서버의 revision을 쓴다.
+ // 노트 본문을 먼저 저장해 최신 revision으로 쓴다. 판이 닫히는 중이면 진행 중인 저장을 기다린 뒤 서버의 revision을 쓴다.
  const persist=(next:DocumentSettings,leaving=false)=>{queue.current=queue.current.then(async()=>{
   try{
    let revision:number;
-   if(leaving)revision=(await api.get(id,{max_body_bytes:0})).revision;
+   if(leaving){await s.flushNow();revision=(await api.get(id,{max_body_bytes:0})).revision;}
    else{
     if(!await s.flushNow())throw new Error(t('먼저 노트를 저장해 주세요.'));
     const draft=s.readDraft();if(draft?.id!==id)throw new Error(t('선택한 노트가 바뀌었습니다.'));

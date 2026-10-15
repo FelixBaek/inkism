@@ -21,7 +21,7 @@ import { DraftJournal } from "../lib/draft-journal";
 import { deriveSplices } from "../lib/splice-client";
 import "./SplitWorkspace.css";
 import { t } from "../i18n";
-import { TAB_DRAG_TYPE } from "./NoteTabs";
+import { TAB_DRAG_TYPE, closeMovedTab } from "./NoteTabs";
 type SourceNote = Note & { content_format?: "text" | "html" | "markdown"; readonlyRevision?: number };
 type Tab = { id: string; title: string };
 /** Updates the tab's title in place, or appends it. */
@@ -343,7 +343,12 @@ function SplitPane({
   // 끌어 놓은 탭은 기본 편집기 초안을 먼저 저장한 뒤 이 창에서 연다.
   const openDropped = (event: React.DragEvent) => {
     const id = event.dataTransfer.getData(TAB_DRAG_TYPE);
-    if (id) void s.flushNow().then((ok) => (ok ? openRef.current(id) : undefined));
+    if (!id) return;
+    void s.flushNow().then(async (ok) => {
+      if (!ok) return;
+      await openRef.current(id);
+      if (draft.current?.id === id) closeMovedTab(id);
+    });
   };
   const closeTab = async (id: string) => {
     const index = tabsRef.current.findIndex((t) => t.id === id),

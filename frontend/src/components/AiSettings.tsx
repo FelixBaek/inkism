@@ -35,7 +35,7 @@ export function AiSettings(){const [config,setConfig]=useState(aiConfig),[key,se
  </>}
  <div className="settings-actions"><button className="btn btn-primary" disabled={busy} onClick={()=>run(async()=>{await configureAI({...config,enabled:true},key);setKey('');setMessage(t('저장됨'));kickSemanticIndex();setKeyState(await aiKeyState());})}>{t('AI 연결 저장')}</button>
  <button className="btn" disabled={busy} onClick={()=>run(async()=>setMessage(t('연결됨: {reply}',{reply:(await completeAI('Reply with OK.','')).slice(0,80)})))}>{t('AI 연결 테스트')}</button>
- <button className="btn btn-ghost danger-text" onClick={()=>run(async()=>{const cleared=clearAI();setConfig(aiConfig());setKey('');setModels([]);setMessage('');await cleared;setKeyState(await aiKeyState());})}>{t('AI 연결 삭제')}</button></div>
+ <button className="btn btn-ghost danger-text" disabled={busy} onClick={()=>run(async()=>{const cleared=clearAI();setConfig(aiConfig());setKey('');setModels([]);setMessage('');await cleared;setKeyState(await aiKeyState());})}>{t('AI 연결 삭제')}</button></div>
  {message&&<p className={'settings-msg settings-msg--'+tone}>{tone==='ok'&&<CheckCircle2 size={14} aria-hidden/>}{tone==='warn'&&<AlertTriangle size={14} aria-hidden/>}<output>{message}</output></p>}
  <SemanticIndexStatus enabled={Boolean(aiConfig().enabled&&aiConfig().embedModel?.trim())}/>
  <section className="ai-disclosure" aria-label={t('AI로 보내는 내용')}><p>{host?t('AI를 실행할 때만 아래 내용이 {host}로 전송됩니다.',{host}):t('AI를 실행할 때만 아래 내용이 등록한 서버로 전송됩니다.')}</p><ul>

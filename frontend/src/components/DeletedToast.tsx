@@ -19,7 +19,7 @@ export function DeletedToast() {
     const timer = window.setTimeout(dismissDeleted, SHOW_MS);
     // 글 입력 칸의 Ctrl Z는 그 칸의 실행취소다.
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "z" || editable(e.target)) return;
+      if (e.defaultPrevented || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "z" || editable(e.target)) return;
       e.preventDefault();
       void undoTrash();
     };
