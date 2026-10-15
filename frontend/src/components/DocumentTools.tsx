@@ -57,7 +57,7 @@ export function DocumentTools({data,open:panelOpen,onOpenChange}:Readonly<{data:
  const persist=(next:DocumentSettings,leaving=false)=>{queue.current=queue.current.then(async()=>{
   try{
    let revision:number;
-   if(leaving){await s.flushNow();revision=(await api.get(id,{max_body_bytes:0})).revision;}
+   if(leaving){if(!await s.flushNow())throw new Error(t('먼저 노트를 저장해 주세요.'));revision=(await api.get(id,{max_body_bytes:0})).revision;}
    else{
     if(!await s.flushNow())throw new Error(t('먼저 노트를 저장해 주세요.'));
     const draft=s.readDraft();if(draft?.id!==id)throw new Error(t('선택한 노트가 바뀌었습니다.'));
@@ -67,7 +67,7 @@ export function DocumentTools({data,open:panelOpen,onOpenChange}:Readonly<{data:
    await knowledge.set({...meta,document:next},revision);
    if(!leaving)data.setError('');
    window.dispatchEvent(new Event('inkism-knowledge-changed'));
-  }catch(e){if(!leaving)data.setError(errorText(e));}
+  }catch(e){if(leaving)void s.showError(t('문서 설정'),errorText(e));else data.setError(errorText(e));}
  });};
  const flush=(leaving=false)=>{if(timer.current===undefined)return;window.clearTimeout(timer.current);timer.current=undefined;persist(latest.current,leaving);};
  useEffect(()=>()=>flush(true),[]);
