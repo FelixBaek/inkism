@@ -234,7 +234,7 @@ export function SettingsDialog() {
               <button type="button" className="settings-close" aria-label={t("설정 닫기")} onClick={() => void leave()}><X size={16} aria-hidden /></button>
             </header>
             {/* 닫으면 내용을 내린다: 동기화 상태 확인 같은 주기 작업이 화면 밖에서 돌지 않게 */}
-            {open && <div className="settings-content">
+            {open && <div key={section} className="settings-content">
             {section === "ai" && <AiSettings />}
             {section === "agent" && <AgentApiSettings />}
             {section === "general" && <><GeneralSettings /><CommandSettings /><DefaultSettings /></>}

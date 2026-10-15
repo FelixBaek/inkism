@@ -28,7 +28,9 @@ try {
     assert.equal(await dialog.locator('.settings-content').evaluate(e=>e.scrollWidth<=e.clientWidth),true);
     assert.notEqual(await dialog.evaluate(e=>getComputedStyle(e,'::backdrop').backgroundColor),'rgba(0, 0, 0, 0)');
   }
+  await dialog.locator('.settings-content').evaluate(e=>e.scrollTop=200);
   await select('백업과 복원');
+  assert.equal(await dialog.locator('.settings-content').evaluate(e=>e.scrollTop),0,'switching settings starts at the top');
   await dialog.getByRole('button',{name:'외부 편집 폴더 선택',exact:true}).waitFor();
   await select('가져오기');
   assert.equal(await dialog.getByRole('button',{name:'외부 편집 폴더 선택',exact:true}).count(),0);
