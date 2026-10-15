@@ -141,7 +141,7 @@ public static class InkismInput {
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr window, System.Text.StringBuilder text, int count);
     [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
     [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr window);
-    [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)] static extern IntPtr SendText(IntPtr window, uint message, IntPtr size, string text, uint flags, uint timeout, out IntPtr result);
+    [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW")] static extern IntPtr EditMessage(IntPtr window, uint message, IntPtr wparam, IntPtr lparam, uint flags, uint timeout, out IntPtr result);
     [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)] static extern IntPtr ReadText(IntPtr window, uint message, IntPtr size, System.Text.StringBuilder text, uint flags, uint timeout, out IntPtr result);
     public static IntPtr DialogControl(IntPtr dialog, int id, string className) {
         IntPtr found=IntPtr.Zero;int process=WindowProcessId(dialog);
@@ -154,10 +154,11 @@ public static class InkismInput {
         return found;
     }
     public static bool SetFilename(IntPtr field, string path) {
-        // Cross-process edit controls require WM_SETTEXT/WM_GETTEXT, not
-        // SetWindowText/GetWindowText (which only retrieve remote captions).
+        // Paste through the edit control so the Shell receives its normal
+        // edit notifications; WM_SETTEXT alone can leave its filename model stale.
         IntPtr result;
-        if(SendText(field,0x000C,IntPtr.Zero,path,2,3000,out result)==IntPtr.Zero || result==IntPtr.Zero)return false;
+        if(EditMessage(field,0x00B1,IntPtr.Zero,new IntPtr(-1),2,3000,out result)==IntPtr.Zero)return false; // EM_SETSEL
+        if(EditMessage(field,0x0302,IntPtr.Zero,IntPtr.Zero,2,3000,out result)==IntPtr.Zero)return false; // WM_PASTE
         var text=new System.Text.StringBuilder(path.Length+2);
         return ReadText(field,0x000D,new IntPtr(text.Capacity),text,2,3000,out result)!=IntPtr.Zero && text.ToString()==path;
     }
@@ -221,6 +222,7 @@ function Open-Inkism([bool]$remembered = $false) {
     if (-not $remembered -and $env:INKISM_TEST_ENCRYPTED -ne '1') { $info.Arguments += ' --create-plaintext' }
     $info.WorkingDirectory = $root
     $info.UseShellExecute = $false
+    $info.EnvironmentVariables["INKISM_EXPORT_TRACE"] = "1"
     $info.RedirectStandardOutput = $true
     $info.RedirectStandardError = $true
     $info.StandardOutputEncoding = [System.Text.Encoding]::UTF8
@@ -826,7 +828,10 @@ function Complete-TestSave([string]$path, [bool]$cancel = $false) {
     } while ([DateTime]::UtcNow -lt $deadline)
     if ($action -eq [IntPtr]::Zero -or (-not $cancel -and $nameField -eq [IntPtr]::Zero)) { throw 'Native save controls did not become ready' }
     Save-Screenshot 'windows-ui-native-save-dialog' $pickerHandle
-    if (-not $cancel -and -not [InkismInput]::SetFilename($nameField, $path)) { throw 'Native save filename was not accepted' }
+    if (-not $cancel) {
+        Set-TestClipboard $path
+        if (-not [InkismInput]::SetFilename($nameField, $path)) { throw 'Native save filename was not accepted' }
+    }
     [InkismInput]::PostMessage($action, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null # BM_CLICK
     $deadline = [DateTime]::UtcNow.AddSeconds(10)
     do {

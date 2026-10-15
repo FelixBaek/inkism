@@ -40,6 +40,10 @@ pub async fn save_export(window: WebviewWindow, request: Request<'_>) -> Result<
             dialog = dialog.add_filter(extension.to_uppercase(), &[extension]);
         }
         let Some(path) = dialog.save_file() else { return Ok(false); };
+        // Opt-in diagnostics for native picker automation and support logs.
+        if std::env::var_os("INKISM_EXPORT_TRACE").as_deref() == Some(std::ffi::OsStr::new("1")) {
+            eprintln!("inkism-export: selected {}", path.display());
+        }
         write_export(&path, &bytes).map_err(|e| format!("파일을 저장하지 못했습니다: {e}"))?;
         Ok(true)
     }).await.map_err(|e| e.to_string())?

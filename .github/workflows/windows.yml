@@ -174,6 +174,7 @@ jobs:
           npm --prefix frontend run build
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Build Windows application
+        id: build_app
         run: |
           cargo build --locked --features encrypted-storage --release --manifest-path core/runtime-core/Cargo.toml
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -239,16 +240,16 @@ jobs:
         if: inputs.scope != 'backend' && inputs.scope != 'installer'
         run: ./tools/scripts/ensure-webview2.ps1
       - name: Real WebView2 editor and close-save
-        if: inputs.scope != 'backend' && inputs.scope != 'installer'
+        if: ${{ !cancelled() && steps.build_app.outcome == 'success' && inputs.scope != 'backend' && inputs.scope != 'installer' }}
         run: node frontend/scripts/windows-ui-test.ts
       - name: Encrypted WebView2 editor and close-save
-        if: inputs.scope != 'backend' && inputs.scope != 'installer'
+        if: ${{ !cancelled() && steps.build_app.outcome == 'success' && inputs.scope != 'backend' && inputs.scope != 'installer' }}
         env:
           INKISM_TEST_ENCRYPTED: '1'
           INKISM_TEST_SCREENSHOT_SUFFIX: '-encrypted'
         run: node frontend/scripts/windows-ui-test.ts
       - name: Register Korean input in disposable hosted runner
-        if: inputs.scope != 'backend' && inputs.scope != 'installer'
+        if: ${{ !cancelled() && steps.build_app.outcome == 'success' && inputs.scope != 'backend' && inputs.scope != 'installer' }}
         shell: powershell
         run: |
           $list = Get-WinUserLanguageList
@@ -259,7 +260,7 @@ jobs:
           Get-WinUserLanguageList | Format-List LanguageTag, InputMethodTips
           Get-ChildItem "$env:WINDIR/System32/IME/IMEKR" -ErrorAction SilentlyContinue | Select-Object Name
       - name: Encrypted native windowed selection typing and system IME
-        if: inputs.scope != 'backend' && inputs.scope != 'installer'
+        if: ${{ !cancelled() && steps.build_app.outcome == 'success' && inputs.scope != 'backend' && inputs.scope != 'installer' }}
         env:
           INKISM_TEST_ENCRYPTED: '1'
           INKISM_TEST_SCREENSHOT_SUFFIX: '-windowed-ime'
@@ -272,6 +273,7 @@ jobs:
           node frontend/scripts/windows-ui-test.ts 2>&1 | Tee-Object -FilePath dist/windows-native-windowed.log
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Build and validate Windows installer
+        if: ${{ !cancelled() && steps.build_app.outcome == 'success' }}
         run: |
           & "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe" tools/build/windows/installer.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
