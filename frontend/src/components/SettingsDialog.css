@@ -184,12 +184,13 @@
   padding-top: 0;
 }
 /* 제목·설명 없이 한 줄만 있는 카드(사용자 단축키·폰트 파일 행) */
-.settings-card:not(:has(> .settings-card__text)) {
+.settings-card:not(:has(> .settings-card__text)),
+.settings-content > section > .settings-card:not(:has(> .settings-card__text)) {
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 8px !important;
+  margin-bottom: 8px;
   font-size: var(--fs-caption);
 }
 .settings-content .settings-card:not(:has(> .settings-card__text)) > label {

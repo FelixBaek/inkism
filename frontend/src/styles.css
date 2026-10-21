@@ -2084,7 +2084,7 @@ kbd {
   html,
   body,
   #root {
-    min-width: 0 !important;
+    min-width: 0;
     height: 100%;
     height: 100dvh;
   }
@@ -2118,9 +2118,9 @@ kbd {
     display: none;
   }
   .note-list {
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: none !important;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
     border-right: 0;
     flex: 1;
   }
@@ -2175,18 +2175,10 @@ kbd {
   .editor-toolbar > * {
     flex-shrink: 0;
   }
-  .editor-title {
-    font-size: 25px !important;
-  }
-  .editor-body,
-  .title-area,
-  .tags-row {
-    padding-left: 16px !important;
-    padding-right: 16px !important;
-  }
-  .dialog {
-    width: calc(100vw - 24px) !important;
-    max-width: 100% !important;
+  /* body와 [class]로 한 단계 올려 .dialog-wide 같은 변형 크기보다 앞선다(.dialog는 div라 [open]이 없다). */
+  body .dialog[class] {
+    width: calc(100vw - 24px);
+    max-width: 100%;
   }
   .conn-banner {
     font-size: 12px;

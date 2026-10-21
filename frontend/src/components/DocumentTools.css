@@ -15,8 +15,8 @@
 .document-children [data-shadow]{box-shadow:0 4px 12px #0002}
 .document-children [data-tone=paper],.editor-pane[data-document-tone=paper] .editor-scroll {background:var(--canvas)}
 .document-children [data-tone=soft],.editor-pane[data-document-tone=soft] .editor-scroll {background:var(--raised)}
-.editor-pane[data-document-width=wide] .rich-editor {max-width:1240px!important}
-.editor-pane[data-document-width=full] .rich-editor {max-width:none!important}
+.editor-pane[data-document-width=wide] .rich-editor {max-width:1240px}
+.editor-pane[data-document-width=full] .rich-editor {max-width:none}
 .editor-pane[data-document-spacing=compact] .tiptap-prose p {margin-block:.25em}
 .editor-pane[data-document-spacing=relaxed] .tiptap-prose p {margin-block:1.25em}
 .property-choice {min-width:0;display:grid;gap:6px}.property-choice select {width:100%}.property-choice a {display:inline-block;margin:4px}
