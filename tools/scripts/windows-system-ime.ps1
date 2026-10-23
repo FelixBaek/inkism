@@ -33,13 +33,14 @@ foreach($format in @('text','html','markdown')) {
  Invoke-Element (Find-Element '새 노트 만들기 (Ctrl+N)')
  $imeTitle='inkism-native-'+$testID+'-system-ime-'+$format
  Paste-Text (Find-Element '노트 제목') $imeTitle
- if($format -ne 'text') {
+ if($format -eq 'markdown') {
+  # MARKDOWN alone is an HTML projection; choose the actual source format first.
+  Invoke-Element (Find-Element 'MARKDOWN 에디터로 변환' ([System.Windows.Automation.ControlType]::Button))
+  Find-Element 'HTML 에디터로 변환' | Out-Null
+  Invoke-Element (Find-Element 'MARKDOWN' ([System.Windows.Automation.ControlType]::Button))
+ } elseif($format -eq 'html') {
   Invoke-Element (Find-Element 'HTML' ([System.Windows.Automation.ControlType]::Button))
   Source-Field 'html' | Out-Null
-  if($format -eq 'markdown') {
-   Invoke-Element (Find-Element 'MARKDOWN' ([System.Windows.Automation.ControlType]::Button))
-   Invoke-Element (Find-Element '형식 변경' ([System.Windows.Automation.ControlType]::Button))
-  }
  }
  $label=switch($format){'text'{'노트 본문 (리치 텍스트 편집기)'}'html'{'노트 본문 (HTML 원문 편집기)'}'markdown'{'노트 본문 (Markdown 원문 편집기)'}}
  $field=Find-Element $label;Click-Element $field
@@ -68,7 +69,10 @@ foreach($format in @('text','html','markdown')) {
  }
  $content=if($format -eq 'text'){'<p>가나다 </p>'}else{'가나다 '}
  $storedFormat=if($format -eq 'text'){'html'}else{$format}
- $cases.Add([pscustomobject]@{title=$imeTitle;format=$storedFormat;content=$content})
+ # Rich edits create one persistent block identity; source formats stay byte-exact.
+ $expected=[ordered]@{title=$imeTitle;format=$storedFormat;content=$content}
+ if($format -eq 'text'){$expected.block_ids=1}
+ $cases.Add([pscustomobject]$expected)
  Close-Inkism;Verify-SourceData
  Open-Inkism;Wait-WindowText '가나다' $true 10 $label;Close-Inkism;Verify-SourceData
  Write-Output ('PASS: '+$format+' Windows Korean system IME via native virtual keys, committed Korean bytes, close/restart; not physical human typing')

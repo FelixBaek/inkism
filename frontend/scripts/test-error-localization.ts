@@ -29,6 +29,8 @@ try {
       const conflict='conflict: note n-1 revision 3 != current 4';
       const readonly='conflict: 읽기 전용 노트입니다. 읽기 전용을 해제한 뒤 편집하세요';
       const cases:{raw:string;code?:string;conflict:boolean;text:string;status?:number;budget?:boolean;duplicate?:boolean}[]=[
+        ...['internal: sqlite: database or disk is full','storage engine: internal: sqlite: database or disk is full'].map(raw=>({raw,code:'internal',conflict:false,status:500,text:translated('저장 공간이 부족합니다. 저장소가 있는 드라이브의 공간을 확보한 뒤 다시 시도해 주세요.')})),
+        {raw:'conflict: sqlite: database or disk is full',code:'conflict',conflict:true,text:translated('충돌: {error}',{error:'sqlite: database or disk is full'})},
         {raw:conflict,code:'conflict',conflict:true,text:translated('충돌: {error}',{error:translated('노트 {id}의 버전이 바뀌었습니다 (요청 {expected}, 현재 {current}). 다시 불러와 주세요.',{id:'n-1',expected:'3',current:'4'})})},
         {raw:'storage engine: '+readonly,code:'conflict',conflict:true,text:translated('저장소 오류: {error}',{error:translated('충돌: {error}',{error:translated('읽기 전용 노트입니다. 읽기 전용을 해제한 뒤 편집하세요')})})},
         {raw:'runtime config: 금고 비밀번호가 맞지 않습니다',code:'runtime_config',conflict:false,text:translated('앱 설정 오류: {error}',{error:translated('금고 비밀번호가 맞지 않습니다')})},

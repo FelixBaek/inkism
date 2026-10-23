@@ -94,6 +94,8 @@ export interface Notebook {
   description?: string;
   /** 표지 사진 (엔진 schema 15). 없으면 null. */
   cover?: NotebookCover | null;
+  /** 동기화되는 폴더 아이콘 이름. 없으면 기본 폴더. */
+  icon?: string | null;
 }
 
 /** 폴더 표지: Unsplash 사진(핫링크 + 작가 표기) 또는 이 기기에 올린 첨부 이미지. */
@@ -119,6 +121,8 @@ export interface Defaults {
 export interface TagCount {
   name: string;
   count: number;
+  /** 동기화되는 태그 색(#rrggbb). 없으면 null. */
+  color?: string | null;
 }
 
 export interface Stats {

@@ -261,19 +261,45 @@ struct Hit {
     end: i64,
 }
 
+/// The heap root is the worst retained hit. Scan order breaks ties so equal
+/// scores have exactly the same order as the previous stable full sort.
+struct RankedHit {
+    hit: Hit,
+    order: usize,
+}
+impl PartialEq for RankedHit {
+    fn eq(&self, other: &Self) -> bool { self.cmp(other).is_eq() }
+}
+impl Eq for RankedHit {}
+impl PartialOrd for RankedHit {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> { Some(self.cmp(other)) }
+}
+impl Ord for RankedHit {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.hit.score.total_cmp(&self.hit.score).then_with(|| self.order.cmp(&other.order))
+    }
+}
+
 fn rank(c: &Connection, model: &str, query: &[f32], limit: usize) -> Result<Vec<Hit>> {
     let norm = query.iter().map(|x| x * x).sum::<f32>().sqrt();
-    // shortcut: brute-force scan of every chunk; add an ANN index if libraries grow past ~100k chunks.
+    // Exact scan, retaining only K candidates: O(N log K) comparisons and O(K)
+    // hit storage. Vector comparison still visits every eligible chunk.
     let mut stmt = c.prepare(&format!("SELECT s.note_id,s.start,s.end,s.vector FROM semantic_chunks s JOIN notes_meta m ON m.id=s.note_id AND m.revision=s.revision WHERE {ELIGIBLE} AND m.archived=0 AND s.model=?1 AND s.dim=?2 AND s.ordinal>=0"))?;
     let mut rows = stmt.query(params![model, query.len() as i64])?;
-    let mut hits = Vec::new();
+    let mut hits: std::collections::BinaryHeap<RankedHit> = std::collections::BinaryHeap::with_capacity(limit);
+    let mut order = 0;
     while let Some(r) = rows.next()? {
         let blob: Vec<u8> = r.get(3)?;
-        hits.push(Hit { score: cosine(query, norm, &blob), id: r.get(0)?, start: r.get(1)?, end: r.get(2)? });
+        let score = cosine(query, norm, &blob);
+        if hits.len() < limit || hits.peek().is_some_and(|worst| score.total_cmp(&worst.hit.score).is_gt()) {
+            if hits.len() == limit { hits.pop(); }
+            hits.push(RankedHit { hit: Hit { score, id: r.get(0)?, start: r.get(1)?, end: r.get(2)? }, order });
+        }
+        order += 1;
     }
-    hits.sort_by(|a, b| b.score.total_cmp(&a.score));
-    hits.truncate(limit);
-    Ok(hits)
+    let mut hits = hits.into_vec();
+    hits.sort();
+    Ok(hits.into_iter().map(|h| h.hit).collect())
 }
 
 pub fn search(c: &Connection, args: &Value) -> Result<Value> {
@@ -369,6 +395,43 @@ mod tests {
 
     fn tail_hits(e: &crate::Engine) -> Vec<Value> {
         run(e, json!({"op":"semantic_search","model":"m","vector":[0.0,1.0],"limit":3}))["items"].as_array().unwrap().clone()
+    }
+
+    #[test]
+    fn bounded_ranking_matches_stable_full_sort_with_ties_and_hidden_rows() {
+        let (root, engine) = fixture();
+        let c = engine.connection();
+        setup(c).unwrap();
+        let mut expected = Vec::new();
+        let tx = c.unchecked_transaction().unwrap();
+        for i in 0..400 {
+            let id = format!("rank-{i:04}");
+            let hidden = i % 29;
+            let model = if hidden == 4 { "other" } else { "m" };
+            let revision = if hidden == 5 { 0 } else { 1 };
+            let vector = [((i * 17) % 19) as f32 - 9.0, ((i * 7) % 11) as f32 - 5.0, 1.0];
+            let blob: Vec<u8> = vector.iter().flat_map(|f| f.to_le_bytes()).collect();
+            tx.execute("INSERT INTO notes_meta(id,title,created_at,updated_at,locked,trashed,archived) VALUES(?1,'',0,0,?2,?3,?4)", params![id, hidden == 1, hidden == 2, hidden == 3]).unwrap();
+            tx.execute("INSERT INTO semantic_chunks VALUES(?1,?2,?3,0,0,1,'',3,?4)", params![id, revision, model, blob]).unwrap();
+            if !(1..=5).contains(&hidden) { expected.push((id, vector)); }
+        }
+        tx.commit().unwrap();
+        for query in [[1.0f32, 0.0, 0.0], [0.0, 0.0, 0.0], [-1.0, 1.0, 0.0]] {
+            let norm = query.iter().map(|x| x*x).sum::<f32>().sqrt();
+            let mut oracle: Vec<_> = expected.iter().map(|(id, vector)| {
+                let dot = query.iter().zip(vector).map(|(a,b)| a*b).sum::<f32>();
+                let magnitude = vector.iter().map(|x| x*x).sum::<f32>().sqrt();
+                (id.clone(), if norm == 0.0 { 0.0 } else { dot / (norm * magnitude) })
+            }).collect();
+            oracle.sort_by(|a,b| b.1.total_cmp(&a.1));
+            for limit in [0, 1, 3, 20, 100, 500] {
+                let actual = rank(c, "m", &query, limit).unwrap();
+                let actual: Vec<_> = actual.iter().map(|h| (h.id.clone(),h.score)).collect();
+                assert_eq!(actual, oracle.iter().take(limit).cloned().collect::<Vec<_>>(), "limit={limit}, query={query:?}");
+            }
+        }
+        drop(engine);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

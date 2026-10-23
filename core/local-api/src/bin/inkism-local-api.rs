@@ -6,8 +6,7 @@
 //!   [--experimental-windowed-editor[=bool]] [--experimental-lazy-editor[=bool]]
 //!   [--initialize-encrypted] [--assets DIR]
 
-use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
+use http_body_util::BodyExt;
 use hyper::body::Incoming;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
@@ -186,7 +185,7 @@ async fn respond(
     request: hyper::Request<Incoming>,
     handler: Arc<Handler>,
     assets: Arc<PathBuf>,
-) -> Result<hyper::Response<Full<Bytes>>, std::convert::Infallible> {
+) -> Result<hyper::Response<local_api::file_body::HttpBody>, std::convert::Infallible> {
     let (parts, body) = request.into_parts();
     let path = parts.uri.path().to_string();
     let method = parts.method.as_str().to_string();
@@ -231,13 +230,8 @@ async fn respond(
     Ok(build(response))
 }
 
-fn build(r: Response) -> hyper::Response<Full<Bytes>> {
-    let mut out = hyper::Response::builder().status(r.status);
-    for (name, value) in &r.headers {
-        out = out.header(name, value);
-    }
-    out.body(Full::new(Bytes::from(r.body)))
-        .unwrap_or_else(|_| hyper::Response::new(Full::new(Bytes::new())))
+fn build(r: Response) -> hyper::Response<local_api::file_body::HttpBody> {
+    local_api::file_body::into_http(r)
 }
 
 /// A minimal `http.FileServer`: GET/HEAD, `index.html` for directories, no
@@ -245,6 +239,7 @@ fn build(r: Response) -> hyper::Response<Full<Bytes>> {
 fn static_file(root: &Path, method: &str, path: &str) -> Response {
     if method != "GET" && method != "HEAD" {
         return Response {
+            file: None,
             status: 405,
             headers: vec![],
             body: b"405 method not allowed\n".to_vec(),
@@ -264,6 +259,7 @@ fn static_file(root: &Path, method: &str, path: &str) -> Response {
     }
     match std::fs::read(&file) {
         Ok(body) => Response {
+            file: None,
             status: 200,
             headers: vec![("content-type".into(), media_type(&file).into())],
             body,

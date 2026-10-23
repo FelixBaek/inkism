@@ -109,6 +109,14 @@ impl Attachments for BundleFake {
     }
 }
 
+// Small fixture assertions inspect ZIP bytes; production adapters stream the spool.
+fn materialize(mut response: Response) -> Response {
+    if let Some(mut file) = response.file.take() {
+        file.as_file_mut().read_to_end(&mut response.body).unwrap();
+    }
+    response
+}
+
 fn run_bundle(fake: BundleFake) -> (Response, Arc<BundleFake>) {
     let fake = Arc::new(fake);
     let h = Handler {
@@ -116,7 +124,7 @@ fn run_bundle(fake: BundleFake) -> (Response, Arc<BundleFake>) {
         ..Default::default()
     };
     (
-        export_bundle(&h, &request("GET", "/api/backup", vec![], vec![])),
+        materialize(export_bundle(&h, &request("GET", "/api/backup", vec![], vec![]))),
         fake,
     )
 }

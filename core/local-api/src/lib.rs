@@ -14,10 +14,11 @@ pub mod agent;
 pub mod engine;
 pub mod gate;
 
+mod ai_cli;
 mod attachments;
 mod backup;
+pub mod file_body;
 mod clipper;
-mod reader;
 mod export;
 mod markdown_export;
 mod fonts;
@@ -64,26 +65,39 @@ impl Request {
     }
 }
 
-// ponytail: whole bodies in memory, as the Wails asset handler and Tauri's
-// custom protocol both do. Stream file bodies if backups outgrow RAM.
+// Small replies stay in memory; large downloads own a verified temporary file.
 pub struct Response {
+    /// Owned spool, removed when delivery completes or is cancelled. `body` is empty.
+    pub file: Option<tempfile::NamedTempFile>,
     pub status: u16,
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
 }
 
 impl Response {
+    /// Compatibility bridge for adapters with a fixed small response limit.
+    pub fn into_buffered(mut self, limit: usize) -> std::io::Result<Self> {
+        use std::io::Read;
+        let too_large=||std::io::Error::new(std::io::ErrorKind::InvalidData,"response exceeds adapter limit");
+        if self.body.len()>limit { return Err(too_large()); }
+        if let Some(mut file)=self.file.take() {
+            if file.as_file().metadata()?.len()>limit as u64 { return Err(too_large()); }
+            file.as_file_mut().take(limit as u64 + 1).read_to_end(&mut self.body)?;
+            if self.body.len()>limit { return Err(too_large()); }
+        }
+        Ok(self)
+    }
     pub fn json(status: u16, value: &serde_json::Value) -> Self {
         let mut body = serde_json::to_vec(value).unwrap_or_default();
         body.push(b'\n'); // json.Encoder adds a newline
-        Response { status, headers: vec![("content-type".into(), "application/json".into())], body }
+        Response { file: None, status, headers: vec![("content-type".into(), "application/json".into())], body }
     }
     /// The Go `fail`: `{"ok":false,"error":...}`.
     pub fn fail(status: u16, message: impl std::fmt::Display) -> Self {
         Self::json(status, &serde_json::json!({"ok": false, "error": message.to_string()}))
     }
     pub fn not_found() -> Self {
-        Response { status: 404, headers: vec![("content-type".into(), "text/plain; charset=utf-8".into())], body: b"404 page not found\n".to_vec() }
+        Response { file: None, status: 404, headers: vec![("content-type".into(), "text/plain; charset=utf-8".into())], body: b"404 page not found\n".to_vec() }
     }
     pub fn with_header(mut self, name: &str, value: impl Into<String>) -> Self {
         self.headers.push((name.into(), value.into()));
@@ -203,12 +217,12 @@ impl Handler {
             (_, "/api/export/pdf") => export::formatted(self, r, true),
             (_, "/api/reminders/settings") => reminders::settings(self, r),
             (_, p) if p.starts_with("/api/unsplash/") => unsplash::serve(self, r, deadline),
-            (_, "/api/reader") => reader::serve(r),
             (_, "/api/clipper") => clipper::serve(self, r),
             (_, "/api/agent") => agent::settings(self, r),
             (_, "/api/publications") => publications::serve(self, r),
             ("GET" | "HEAD", p) if p.starts_with(attachments::PATH_PREFIX) => attachments::download(self, r),
             (_, p) if p.starts_with("/api/update/") => update::serve(self, r),
+            (_, "/api/ai/cli") => ai_cli::serve(self, r, deadline),
             ("GET", "/api/upload-access") => attachments::upload_access(self),
             ("GET", "/api/backup") => backup::export_bundle(self, r),
             ("POST", "/api/restore") => backup::restore_bundle(self, r),

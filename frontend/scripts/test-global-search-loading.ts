@@ -27,3 +27,17 @@ console.log('PASS paged candidates: 10,001st note, 51 bounded pages, metadata fi
 
 let limitedPages=0;const limitHits=await searchPages(async()=>{limitedPages++;return {items:[notes[0]],next_cursor:'later'};},'needle',async()=> 'needle',async()=>Array.from({length:5000},()=>({note:notes[0],index:0,line:1,snippet:'needle'})),{signal:new AbortController().signal,onProgress:()=>{}});assert.equal(limitHits.length,5000);assert.equal(limitedPages,1);
 console.log('PASS result bound stops candidate paging at 5,000 hits');
+
+// created:/updated: 날짜 조건(로컬 시각, 끝 날짜 포함)
+const {dateRange}=modules[1];
+const at=(y:number,m:number,d:number,h=12)=>new Date(y,m-1,d,h).getTime();
+assert.deepEqual(dateRange('2026-10-15'),[at(2026,10,15,0),at(2026,10,16,0)]);
+assert.deepEqual(dateRange('2026-10'),[at(2026,10,1,0),at(2026,11,1,0)]);
+assert.deepEqual(dateRange('2026-10-12..2026-10-15'),[at(2026,10,12,0),at(2026,10,16,0)]);
+assert.deepEqual(dateRange('..2026-10-15'),[-Infinity,at(2026,10,16,0)]);
+assert.throws(()=>dateRange('2026-02-30'),/created:/);assert.throws(()=>dateRange('어제'),/created:/);assert.throws(()=>dateRange('..'),/created:/);
+const dated=[{...notes[0],id:'old',created_at:at(2026,9,1),updated_at:at(2026,9,30)},{...notes[1],id:'new',created_at:at(2026,10,1),updated_at:at(2026,10,14)}];
+assert.deepEqual(searchText(dated,()=> 'x','updated:2026-10-12..2026-10-15').map((h:any)=>h.note.id),['new']);
+assert.deepEqual(searchText(dated,()=> 'x','created:2026-09').map((h:any)=>h.note.id),['old']);
+assert.equal(searchText(dated,()=> 'needle','needle created:2026-10').length,1);
+console.log('PASS date conditions: created:/updated: day, month, open ranges, invalid dates');

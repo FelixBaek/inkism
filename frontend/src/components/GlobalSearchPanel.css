@@ -15,3 +15,17 @@
 .note-answer-text{display:block;white-space:pre-wrap;font-size:var(--fs-caption);line-height:1.6;color:var(--text)}
 .note-answer-cite{padding:0 2px;border:0;background:none;color:var(--accent-text);font:inherit;font-size:var(--fs-small);vertical-align:super;cursor:pointer}
 .note-answer-sources summary{font-size:var(--fs-small);color:var(--muted);cursor:pointer}
+/* 기간 칩 (Figma 120:17259): 기간 · 전체 · 오늘 · 이번 주 · 이번 달 · 지난달 · 날짜 고르기… · 범위 */
+.global-search-period{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px;font-size:var(--fs-small);color:var(--muted)}
+.global-search-period>span:first-child{margin-right:2px}
+.search-chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;border:1px solid var(--border);border-radius:999px;background:transparent;color:var(--text);font:inherit;font-size:var(--fs-small);cursor:pointer}
+.search-chip:hover{background:var(--hover)}
+.search-chip[aria-pressed=true]{border-color:var(--accent-text);color:var(--accent-text);background:var(--hover)}
+.global-search-period input[type=date]{height:24px;padding:0 6px;border:1px solid var(--border);background:var(--hover);color:var(--text);font:inherit;font-size:var(--fs-small);color-scheme:inherit}
+.global-search-range{margin-left:6px;color:var(--muted);font-variant-numeric:tabular-nums}
+.global-search-filters,.global-search-presets{display:flex;flex-wrap:wrap;align-items:end;gap:8px;margin-top:12px;font-size:var(--fs-small)}
+.global-search-presets{border:1px solid var(--border);padding:10px}
+.global-search-filters label,.global-search-presets label{display:flex;flex-direction:column;gap:4px;min-width:0;max-width:100%;color:var(--muted)}
+.global-search-filters select,.global-search-presets select,.global-search-presets input{max-width:100%;min-height:32px;border:1px solid var(--border);background:var(--hover);color:var(--text);font:inherit;padding:4px 8px}
+.global-search-presets .search-preset-status{margin:0;flex-basis:100%;color:var(--muted)}
+.global-search-presets button{min-height:32px}

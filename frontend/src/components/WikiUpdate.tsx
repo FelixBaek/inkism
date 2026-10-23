@@ -185,7 +185,7 @@ export function WikiUpdate() {
             ×
           </button>
         </header>
-        <p className="writing-tools-hint">{t("연결된 노트(역링크·나가는 링크)의 내용을 근거로 AI가 이 노트의 갱신안을 씁니다. 잠긴 노트와 휴지통의 노트는 보내지 않습니다.")}</p>
+        <p className="writing-tools-hint">{t("연결된 노트(역링크·나가는 링크)의 내용을 근거로 AI가 이 노트의 갱신안을 씁니다. 잠긴 노트와 지운 노트는 보내지 않습니다.")}</p>
         <button type="button" className="btn" disabled={busy || !noteId} onClick={() => void run(id, async () => {
           const result = await propose(id);
           setProposal(result.proposal ?? null);

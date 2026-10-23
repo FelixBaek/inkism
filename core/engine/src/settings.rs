@@ -17,12 +17,25 @@ pub const DEFAULT_TAG: &str = "default_tag";
 /// `vault_key:<key_id>` holds one password-wrapped vault key (base64); NULL
 /// removes it. Envelopes are opaque here; the runtime seals and opens them.
 pub const VAULT_KEY_PREFIX: &str = "vault_key:";
+/// `tag_color:<tag name>` is a `#rrggbb` color; NULL means no color.
+pub const TAG_COLOR_PREFIX: &str = "tag_color:";
+/// `notebook_icon:<notebook id>` is an app icon name; NULL means the default.
+pub const NOTEBOOK_ICON_PREFIX: &str = "notebook_icon:";
+
+fn valid_color(c: &str) -> bool {
+    c.len() == 7 && c.starts_with('#') && c[1..].bytes().all(|b| b.is_ascii_hexdigit())
+}
+fn valid_icon(i: &str) -> bool {
+    (1..=32).contains(&i.len()) && i.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
 
 pub fn is_known_key(key: &str) -> bool {
     crate::workspace_tools::is_key(key) || crate::resources::is_key(key) || crate::knowledge::is_key(key)
         || key == DEFAULT_NOTEBOOK
         || key == DEFAULT_TAG
         || key.strip_prefix(VAULT_KEY_PREFIX).is_some_and(ids::valid_id)
+        || key.strip_prefix(TAG_COLOR_PREFIX).is_some_and(|tag| crate::ops_notes::check_tags(&[tag.to_string()]).is_ok())
+        || key.strip_prefix(NOTEBOOK_ICON_PREFIX).is_some_and(ids::valid_id)
 }
 
 /// Shape check per key. Existence of a notebook is checked only for local sets.
@@ -37,6 +50,8 @@ pub fn validate(key: &str, value: Option<&str>) -> Result<()> {
         (_, None) => Ok(()),
         (DEFAULT_NOTEBOOK, Some(id)) if ids::valid_id(id) => Ok(()),
         (DEFAULT_TAG, Some(tag)) => crate::ops_notes::check_tags(&[tag.to_string()]),
+        (_, Some(c)) if key.starts_with(TAG_COLOR_PREFIX) && valid_color(c) => Ok(()),
+        (_, Some(i)) if key.starts_with(NOTEBOOK_ICON_PREFIX) && valid_icon(i) => Ok(()),
         (_, Some(envelope))
             if key.starts_with(VAULT_KEY_PREFIX)
                 && !envelope.is_empty()
@@ -122,6 +137,56 @@ pub fn set(conn: &Connection, args: &Value) -> Result<Value> {
         }
     }
     get(conn)
+}
+
+fn set_one(conn: &Connection, key: &str, value: Option<String>) -> Result<Value> {
+    validate(key, value.as_deref())?;
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result = write_local(conn, key, value.as_deref());
+    crate::ops_notes::finish_tx(conn, result.map(|_| json!({ "value": value })))
+}
+
+/// `{name, color: "#rrggbb"|null}`. The color lives in synced settings, not on notes.
+pub fn set_tag_color(conn: &Connection, args: &Value) -> Result<Value> {
+    let name = args["name"].as_str().ok_or_else(|| EngineError::invalid("missing tag name"))?;
+    set_one(conn, &format!("{TAG_COLOR_PREFIX}{name}"), crate::model::opt_string(args, "color")?.flatten())
+}
+
+/// `{id, icon: name|null}`.
+pub fn set_notebook_icon(conn: &Connection, args: &Value) -> Result<Value> {
+    let id = args["id"].as_str().filter(|id| ids::valid_id(id)).ok_or_else(|| EngineError::invalid("bad id"))?;
+    set_one(conn, &format!("{NOTEBOOK_ICON_PREFIX}{id}"), crate::model::opt_string(args, "icon")?.flatten())
+}
+
+/// Caller owns the transaction. A renamed tag keeps its color unless the target
+/// already has one; a removed tag loses it. Returns `(moved color, target set)` for undo.
+pub fn move_tag_color(conn: &Connection, name: &str, replacement: Option<&str>) -> Result<(Option<String>, bool)> {
+    let key = |tag: &str| format!("{TAG_COLOR_PREFIX}{tag}");
+    let color = |tag: &str| -> Result<Option<String>> { Ok(stored(conn, &key(tag))?.and_then(|(v, _)| v)) };
+    if replacement == Some(name) {
+        return Ok((None, false));
+    }
+    let Some(moved) = color(name)? else { return Ok((None, false)) };
+    write_local(conn, &key(name), None)?;
+    let target = match replacement {
+        Some(r) if color(r)?.is_none() => {
+            write_local(conn, &key(r), Some(&moved))?;
+            true
+        }
+        _ => false,
+    };
+    Ok((Some(moved), target))
+}
+
+/// Caller owns the transaction. Reverses `move_tag_color`.
+pub fn restore_tag_color(conn: &Connection, name: &str, replacement: Option<&str>, moved: (Option<String>, bool)) -> Result<()> {
+    if let Some(color) = moved.0 {
+        write_local(conn, &format!("{TAG_COLOR_PREFIX}{name}"), Some(&color))?;
+    }
+    if let (true, Some(r)) = (moved.1, replacement) {
+        write_local(conn, &format!("{TAG_COLOR_PREFIX}{r}"), None)?;
+    }
+    Ok(())
 }
 
 fn upsert(conn: &Connection, key: &str, value: Option<&str>, at: i64) -> Result<()> {
