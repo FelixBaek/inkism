@@ -21,10 +21,10 @@ SECTIONS = {"Why": "why", "Task": "task", "Verified": "verified", "Limits": "lim
             "제목": "title_ko", "이유": "why_ko", "작업": "task", "검증": "verified_ko", "한계": "limits_ko",
             "연구": "research"}
 REQUIRED = ("Why", "Verified", "제목", "이유", "검증")
-NOT_RUN = re.compile(r"not[ _]run|미실행|skipped|못 ?[했함돌]", re.I)
+NOT_RUN = re.compile(r"not[ _]run|미실행|(?<!\d )\bskipped\b|못 ?[했함돌]", re.I)  # "2 skipped" is a runner count
 PASSED = re.compile(r"\bpass(ed)?\b|통과|\bok\b", re.I)
 CLAUSE = re.compile(r"[;,·]|\s/\s")  # one Verified line may list several checks
-PATH = re.compile(r"[\w.-]+(?:/[\w.-]+)+")  # checked per token, so no backtracking across a line
+PATH = re.compile(r"[\w.-]+(?:/[\w.-]+)+")  # needs a slash: bare "Node.js" or "e.g." is prose; per token, no backtracking
 
 
 GIT_FLAGS = {"-r", "--all", "--format=%(refname:short)", "--no-merges", "--reverse", "--end-of-options",

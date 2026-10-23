@@ -42,6 +42,8 @@ class CommitRecordTest(unittest.TestCase):
         self.assertEqual(w.verified_problems("go vet passed; node tests not run (no node)", exists()), [])
         self.assertEqual(w.verified_problems("go test 통과, 스크린샷 미실행", exists()), [])
         self.assertEqual(len(w.verified_problems("node tests not run · passed", exists())), 1)
+        self.assertEqual(w.verified_problems("go test ./... passed (2 skipped)", exists()), [])
+        self.assertEqual(len(w.verified_problems("screenshot skipped, passed", exists())), 1)
 
 
 class InputTest(unittest.TestCase):
