@@ -89,11 +89,11 @@ export function startSemanticIndexer(){
  window.addEventListener(KICK,kick);
  const timer=setInterval(poll,POLL_MS);
  poll();
- return()=>{alive=false;unsubscribe();clearInterval(timer);window.removeEventListener(KICK,kick);stopSemanticIndex();};
+ return()=>{alive=false;unsubscribe();clearInterval(timer);window.removeEventListener(KICK,kick);void stopSemanticIndex();};
 }
 
 export function rebuildSemanticIndex():Promise<void>{
- if(rebuilding)return rebuilding;
+ if(rebuilding!==null)return rebuilding;
  rebuilding=(async()=>{await stopSemanticIndex();dimensionsCache=null;await api.semanticReset();await beginIndex(true);})().finally(()=>{rebuilding=null;});
  return rebuilding;
 }

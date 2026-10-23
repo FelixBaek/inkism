@@ -22,11 +22,12 @@ export function QuickCapture(){
    if(!await latest.current.flushNow())throw new Error(t('저장을 완료한 뒤 다시 시도해 주세요.'));
    id.current??=crypto.randomUUID();
    const note={id:id.current,title:title.trim()||[...body.trim().split(/\r?\n/)[0]].slice(0,80).join(''),content:body,content_format:'text' as const,notebook_id:folder||null,tags:[...new Set(tags.split(',').map(x=>x.trim()).filter(Boolean))],require_absent:true};
-   try{await api.save(note);}catch(failure){
+   try{await api.save(note);}catch(error_){
     // An interrupted response can hide a successful commit. Reconcile this ID
     // only; never retry with a new ID or overwrite a different existing record.
-    let saved;try{saved=await api.get(note.id);}catch{throw failure;}
-    if(saved.title!==note.title||saved.content!==note.content||saved.content_format!=='text'||saved.notebook_id!==note.notebook_id||JSON.stringify([...saved.tags].sort())!==JSON.stringify([...note.tags].sort()))throw failure;
+    let saved;try{saved=await api.get(note.id);}catch{throw error_;}
+    const savedTags=new Set(saved.tags);
+    if(saved.title!==note.title||saved.content!==note.content||saved.content_format!=='text'||saved.notebook_id!==note.notebook_id||saved.tags.length!==note.tags.length||savedTags.size!==note.tags.length||!note.tags.every(tag=>savedTags.has(tag)))throw error_;
    }
    latest.current.refreshList();await latest.current.refreshMeta();
    setOpen(false);setTitle('');setBody('');setTags('');id.current=null;
@@ -50,7 +51,7 @@ export function QuickCapture(){
    <p className="dialog-message">{t('닫아도 입력은 앱을 종료할 때까지 남아 있습니다.')}</p>
    <label className="capture-option"><input type="checkbox" checked={connect} disabled={busy} onChange={e=>setConnect(e.target.checked)}/>{t('저장 후 속성과 노트 연결 열기')}</label>
    {error&&<p role="alert">{error}</p>}
-   <div className="dialog-actions"><button type="button" className="btn" disabled={busy} onClick={close}>{t('닫기')}</button><button className="btn btn-primary" disabled={busy||!body.trim()}>{busy?t('저장 중…'):t('저장하고 열기')}</button></div>
+   <div className="dialog-actions"><button type="button" className="btn" disabled={busy} onClick={close}>{t('닫기')}</button><button type="submit" className="btn btn-primary" disabled={busy||!body.trim()}>{busy?t('저장 중…'):t('저장하고 열기')}</button></div>
   </form>
  </dialog>;
 }
