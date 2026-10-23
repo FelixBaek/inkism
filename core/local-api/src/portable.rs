@@ -182,8 +182,8 @@ pub(crate) fn export(h: &Handler, r: &Request, deadline: Deadline) -> Response {
     if r.method != "POST" { return Response::fail(405,"POST required"); }
     let Some(req) = r.header("content-type").unwrap_or("").starts_with("application/json").then(|| serde_json::from_slice::<ExportRequest>(&r.body).ok()).flatten().filter(|_| r.body.len() <= LIMIT) else { return Response::fail(400,"내보내기 요청이 올바르지 않습니다"); };
     let Ok(_guard) = SLOT.try_lock() else { return Response::fail(409,"다른 내보내기가 진행 중입니다"); };
-    if req.sources { return match sources(h,deadline) { Ok(body) => Response {status:200,headers:vec![("content-type".into(),"application/json".into())],body}, Err(e) => Response::fail(400,e) }; }
-    match bundle(h,&req,deadline) { Ok((body,locked)) => Response {status:200,headers:vec![("content-type".into(),"application/zip".into()),("content-disposition".into(),"attachment; filename=inkism-folder.zip".into()),("x-inkism-locked-skipped".into(),locked.to_string())],body}, Err(e) => Response::fail(400,e) }
+    if req.sources { return match sources(h,deadline) { Ok(body) => Response {file: None,status:200,headers:vec![("content-type".into(),"application/json".into())],body}, Err(e) => Response::fail(400,e) }; }
+    match bundle(h,&req,deadline) { Ok((body,locked)) => Response {file: None,status:200,headers:vec![("content-type".into(),"application/zip".into()),("content-disposition".into(),"attachment; filename=inkism-folder.zip".into()),("x-inkism-locked-skipped".into(),locked.to_string())],body}, Err(e) => Response::fail(400,e) }
 }
 #[cfg(test)] mod tests { use super::*;
 struct Fake;

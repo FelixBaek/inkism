@@ -8,6 +8,11 @@ import { formatDateTime } from "../lib/date";
 import { diffLines, toLines, type DiffResult } from "../lib/version-diff";
 import { RemoteHistoryPanel } from "./RemoteHistoryPanel";
 import { CoverPicker } from "./NotebookCover";
+// AI 연결이 비어 있어 생긴 오류는 설정의 AI 연결로 바로 보낸다.
+const AI_SETUP_MESSAGES = () => [
+  t("설정의 AI 연결에서 서버와 모델을 등록해 주세요."),
+  t("설정의 AI 연결에서 임베딩 모델을 등록해 주세요."),
+];
 
 const NOTEBOOK_COLORS = ["#087f5b", "#0b7285", "#3b5bdb", "#7048e8", "#c2255c", "#d9480f", "#b08968", "#5c6f68"];
 
@@ -99,6 +104,18 @@ export function DialogHost() {
                 <button type="button" className="btn" onClick={() => store.closeDialog()}>
                   {d.options.cancelLabel ?? t("취소")}
                 </button>
+                {d.options.extraLabel && (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      d.resolve("extra");
+                      store.closeDialog();
+                    }}
+                  >
+                    {d.options.extraLabel}
+                  </button>
+                )}
                 <button
                   type="button"
                   className={`btn ${d.options.danger ? "btn-danger" : "btn-primary"}`}
@@ -123,9 +140,27 @@ export function DialogHost() {
               </DialogHead>
               <p className="dialog-message">{d.message}</p>
               <div className="dialog-actions">
-                <button type="button" className="btn btn-primary" onClick={() => store.closeDialog()}>
-                  {t("확인")}
-                </button>
+                {AI_SETUP_MESSAGES().includes(d.message) ? (
+                  <>
+                    <button type="button" className="btn" onClick={() => store.closeDialog()}>
+                      {t("닫기")}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        store.closeDialog();
+                        window.dispatchEvent(new CustomEvent("inkism-open-settings", { detail: "ai" }));
+                      }}
+                    >
+                      {t("등록하기")}
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className="btn btn-primary" onClick={() => store.closeDialog()}>
+                    {t("확인")}
+                  </button>
+                )}
               </div>
             </>
           )}

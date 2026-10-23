@@ -144,35 +144,18 @@ section.note-list {
 .note-list .note-row-preview.is-empty {
   color: var(--faint);
 }
-.note-list .list-pager {
-  height: 36px;
-  padding: 4px;
-  gap: 8px;
-  border-top: 0;
-}
-.note-list .pager-btn {
-  width: 64px;
-  height: 30px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  font: inherit;
+/* 무한 스크롤 (Figma "N개 · 스크롤해서 더 보기"): 목록 맨 아래 한 줄 */
+.note-list .list-more {
+  flex: none;
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--muted);
   font-size: var(--fs-caption);
-  font-weight: 500;
-  cursor: pointer;
-}
-.note-list .pager-btn:hover:not(:disabled) {
-  background: var(--hover);
-}
-.note-list .pager-btn:disabled {
-  color: var(--faint);
-  cursor: default;
-}
-.note-list .pager-info {
-  flex: 1;
   text-align: center;
-  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.note-list .list-sentinel {
+  height: 1px;
 }
 
 /* 보관함 탭과 지운 노트 자동 삭제 (Figma 08 "보관함 탭"): 1px 틀 + 선택 칸 --active */
@@ -261,4 +244,79 @@ section.note-list {
   background: var(--hover);
   color: var(--text);
   font-size: var(--fs-caption);
+}
+/* 날짜 옆 폴더: 사이드바와 같은 폴더 아이콘·색을 이름 앞에 */
+.note-list .note-row-place svg {
+  margin-right: 3px;
+  vertical-align: -1px;
+}
+/* 제목 없는 노트는 흐리게, 자동 복구 사본은 제목 끝 배지 (Figma 01 74:7294 · 74:7286) */
+.note-list .note-row:not(.is-selected) .note-row-title.is-untitled {
+  color: var(--muted);
+}
+.note-list .note-row-badge {
+  flex: none;
+  padding: 0 6px;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: var(--fs-small);
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* 좁은 화면 떠 있는 버튼 (Figma 65:8875): 새 노트 56px, 그 위 음성 메모 44px */
+.note-list .list-fab {
+  display: none;
+}
+@media (max-width: 760px) {
+  .note-list {
+    position: relative;
+  }
+  .note-list .list-fab {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    z-index: 5;
+  }
+  .note-list .list-fab button {
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+  .note-list .list-fab-voice {
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--border);
+    background: var(--raised);
+    color: var(--accent-text);
+  }
+  .note-list .list-fab-new {
+    width: 56px;
+    height: 56px;
+    border: 0;
+    background: var(--green);
+    color: var(--on-accent);
+  }
+  .note-list .list-body {
+    padding-bottom: 136px;
+  }
+}
+
+/* 모바일 도면 65:8875: 목록을 열 때부터 검색을 보여 준다. */
+@media (max-width: 760px) {
+  .note-list .list-search.is-collapsed {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    height: auto;
+    padding: 12px 14px;
+    overflow: visible;
+  }
 }

@@ -614,6 +614,33 @@ export const BLOCK_ITEMS: readonly BlockItem[] = [
 ];
 
 /** "/검색어" 거르기: 이름·id·키워드·힌트. */
+/** "/" 메뉴에서 이름 아래에 보이는 짧은 설명. */
+export const BLOCK_DESCRIPTIONS: Record<string, string> = {
+  paragraph: t("일반 글"),
+  heading1: t("큰 제목"),
+  heading2: t("중간 제목"),
+  heading3: t("작은 제목"),
+  taskList: t("체크할 수 있는 목록"),
+  bulletList: t("점으로 시작하는 목록"),
+  orderedList: t("번호가 붙는 목록"),
+  blockquote: t("다른 글을 옮겨 적기"),
+  details: t("눌러서 펼치는 블록"),
+  codeBlock: t("코드를 그대로 보이기"),
+  horizontalRule: t("구역 나누기"),
+  aiBlock: t("AI에게 글쓰기 맡기기"),
+  callout: t("눈에 띄는 안내 상자"),
+  table: t("행과 열로 정리"),
+  blockMath: t("LaTeX 수식"),
+  emoji: t("이모지 고르기"),
+  diagram: t("Mermaid 도식"),
+  image: t("사진 올리기 또는 링크"),
+  video: t("동영상 파일 또는 링크"),
+  audio: t("소리 파일 넣기"),
+  model3d: t("3D 파일 보기"),
+  attachment: t("파일 붙이기"),
+  embed: t("웹 페이지 넣기"),
+};
+
 export function filterBlockItems(query: string): BlockItem[] {
   const term = query.trim().toLowerCase();
   if (!term) return [...BLOCK_ITEMS];

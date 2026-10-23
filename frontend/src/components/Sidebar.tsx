@@ -1,5 +1,4 @@
 import { t } from "../i18n";
-import { WebReaderDialog } from "./WebReaderDialog";
 import { WebClipperDialog } from "./WebClipperDialog";
 import { SettingsDialog } from "./SettingsDialog";
 import React, { useEffect, useState } from "react";
@@ -16,7 +15,6 @@ import {
   RefreshCw,
   Files,
   Bell,
-  List,
   Link2,
   Hash,
   Search,
@@ -26,7 +24,7 @@ import {
 import { useStore, type StoreValue } from "../store";
 import type { Notebook, View } from "../types";
 import { Menu } from "./Menu";
-import { CalendarBlankIcon, FolderIcon } from "@phosphor-icons/react";
+import { CalendarBlankIcon } from "@phosphor-icons/react";
 import { KNOWLEDGE_EVENT } from "./KnowledgeTools";
 import { SyncIndicator } from "./SyncSettings";
 import { WRITING_TOOL_EVENT } from "./WritingTools";
@@ -34,6 +32,7 @@ import type { ShellPanel } from "./ShellLists";
 import { useNarrow } from "../lib/narrow";
 import { api } from "../api";
 import { IconButton } from "./IconButton";
+import { colorMenu, iconMenu, NotebookGlyph } from "./LibraryStyle";
 import "./Sidebar.css";
 
 type SideTab = "menu" | "notebooks" | "tags";
@@ -117,7 +116,7 @@ export function Sidebar({
       live = false;
     };
   }, [tab, s.stats, s.notebooks]);
-  const openKnowledge = (panel: "graph" | "views") =>
+  const openKnowledge = (panel: "graph") =>
     window.dispatchEvent(new CustomEvent(KNOWLEDGE_EVENT, { detail: panel }));
 
   return (
@@ -139,6 +138,7 @@ export function Sidebar({
       <button type="button" className="side-new-note" onClick={() => s.newNote()}>
         {t("새 노트")}
       </button>
+      <button type="button" className="side-search" onClick={() => window.dispatchEvent(new Event("inkism-quick-capture"))}>{t("빠른 기록")}</button>
       <div className="side-tabs">
         <div role="tablist" aria-label={t("탐색 구분")} className="side-tablist">
           {tabs.map((tag) => (
@@ -171,7 +171,6 @@ export function Sidebar({
             {toolItem(t("템플릿"), <Files size={16} />, () =>
               window.dispatchEvent(new CustomEvent(WRITING_TOOL_EVENT, { detail: "templates" })),
             )}
-            {toolItem(t("노트 모아보기"), <List size={16} />, () => openKnowledge("views"))}
             {toolItem(t("관계 그래프"), <Link2 size={16} />, () => openKnowledge("graph"))}
           </div>
         )}
@@ -205,7 +204,7 @@ export function Sidebar({
                   onClick={() => s.setView({ type: "tag", name: tag.name })}
                   aria-current={isActive(s.view, { type: "tag", name: tag.name }) ? "page" : undefined}
                 >
-                  <span className="side-icon" aria-hidden>
+                  <span className="side-icon" aria-hidden style={tag.color ? { color: tag.color } : undefined}>
                     <Hash size={16} />
                   </span>
                   <span className="side-label">{tag.name}</span>
@@ -225,6 +224,7 @@ export function Sidebar({
                       icon: <TagIcon size={14} aria-hidden />,
                       onSelect: () => s.toggleDefaultTag(tag.name),
                     },
+                    colorMenu(tag.color, (color) => void s.setTagColor(tag.name, color)),
                     {
                       label: t("태그 제거"),
                       icon: <Trash2 size={14} aria-hidden />,
@@ -241,7 +241,6 @@ export function Sidebar({
 
       <div className="side-footer">
         {toolItem(t("알림"), <Bell size={16} />, () => onPanel("reminders"), panel === "reminders")}
-        <WebReaderDialog />
         <WebClipperDialog />
         <SettingsDialog />
         <hr className="side-divider" />
@@ -349,8 +348,8 @@ function NotebookRow({
         onClick={() => store.setView({ type: "notebook", id: nb.id })}
         aria-current={active ? "page" : undefined}
       >
-        <span className="side-icon" aria-hidden style={nb.color ? { color: nb.color } : undefined}>
-          <FolderIcon size={16} />
+        <span className="side-icon" aria-hidden>
+          <NotebookGlyph nb={nb} />
         </span>
         <span className="side-label">{nb.name}</span>
         {!!count && <span className="side-count">{count}</span>}
@@ -374,6 +373,8 @@ function NotebookRow({
             icon: <Folder size={14} aria-hidden />,
             onSelect: () => store.toggleDefaultNotebook(nb),
           },
+          colorMenu(nb.color, (color) => void store.styleNotebook(nb, { color })),
+          iconMenu(nb, (icon) => void store.styleNotebook(nb, { icon })),
           {
             label: t("삭제"),
             icon: <Trash2 size={14} aria-hidden />,

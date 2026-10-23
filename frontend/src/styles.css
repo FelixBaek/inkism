@@ -630,13 +630,19 @@ textarea {
   align-items: flex-start;
   gap: 4px;
   padding: 18px 32px 0 0;
+  border: 0;
+  background: transparent;
 }
 .editor-pane:not(.editor-empty):has(> .csv-file-tools) > .note-classification {
   grid-column: 1 / 3;
 }
 .csv-file-tools > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 30px;
   padding: 0 10px;
+  border-radius: 0;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text);
@@ -644,6 +650,9 @@ textarea {
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
+}
+.csv-file-tools > button svg {
+  color: var(--muted);
 }
 .csv-file-tools > button:hover:not(:disabled) {
   background: var(--hover);
@@ -676,11 +685,12 @@ textarea {
 .editor-pane:not(.editor-empty) > :last-child {
   grid-row: 11;
 }
+/* 제목 아래 왼쪽에 HTML·MD 변환 칩 (Figma 09 편집기 변환): 오른쪽 끝에 떠 보이지 않게 한 열로 쌓는다. */
 .editor-meta-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
   padding: 32px 32px 0;
 }
 .meta-left {
@@ -690,16 +700,63 @@ textarea {
   gap: 8px;
   min-width: 0;
 }
-.meta-select {
-  max-width: 180px;
+.meta-select-chip {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  max-width: min(200px, 45%);
   height: 30px;
-  padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 0;
   background: var(--hover);
+  color: var(--text);
+}
+.meta-select-chip:hover {
+  background: var(--active);
+}
+.meta-select-chip:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+.meta-select-icon {
+  display: inline-flex;
+  align-items: center;
+  padding-left: 10px;
+  color: var(--muted);
+}
+/* 기본 select 화살표 대신 Phosphor 캐럿을 그린다. 고르는 동작은 기본 select 그대로. */
+.meta-select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 26px 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   font-size: var(--fs-caption);
   font-weight: 500;
   color: var(--text);
+  text-overflow: ellipsis;
+  cursor: pointer;
+  /* 고른 폴더 이름 폭만큼만: 기본 폭 계산은 캐럿 여백을 빼먹어 글자가 잘린다. */
+  field-sizing: content;
+}
+.meta-select-icon + .meta-select {
+  padding-left: 6px;
+}
+.meta-select:focus-visible {
+  outline: none;
+}
+.meta-select option {
+  background: var(--raised);
+}
+.meta-select-caret {
+  position: absolute;
+  right: 9px;
+  color: var(--muted);
+  pointer-events: none;
 }
 .large-badge {
   font-size: var(--fs-small);
@@ -746,9 +803,15 @@ textarea {
 }
 .editor-compatibility-switch {
   flex: none;
-  height: 26px;
+  align-self: flex-start;
+  height: 24px;
+  margin-left: -6px;
+  padding: 0 6px;
   color: var(--muted);
   font-size: var(--fs-small);
+}
+.editor-compatibility-switch:hover:not(:disabled) {
+  color: var(--text);
 }
 .title-input {
   flex: 1;
@@ -781,10 +844,6 @@ textarea {
   padding: 18px 32px 0;
   min-width: 0;
 }
-.note-classification .meta-select {
-  flex: none;
-  max-width: min(180px, 40%);
-}
 .classification-divider {
   display: none;
 }
@@ -811,6 +870,20 @@ textarea {
   font-weight: 500;
   color: var(--text);
   white-space: nowrap;
+}
+/* 색 있는 태그: 점과 옅은 바탕만 칠하고 글자는 기본 색으로 둔다. */
+.tag-chip[style*="--tag-color"] {
+  border-color: color-mix(in srgb, var(--tag-color) 50%, var(--border));
+  background: color-mix(in srgb, var(--tag-color) 14%, var(--hover));
+}
+.tag-chip[style*="--tag-color"]::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--tag-color);
 }
 .tag-chip-label {
   overflow: hidden;
@@ -980,6 +1053,31 @@ textarea {
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+}
+/* 노트 링크(클립)와 용어 설명(물음표)을 구별하는 작은 위첨자 아이콘(Phosphor Regular). 글자색을 따르고, 선택·복사·내보내기에는 들어가지 않는다(CSS 그림). */
+.tiptap-prose a[href^="note://"]::after,
+.knowledge-embed a[href^="note://"]::after,
+.tiptap-prose [data-term-id]::after,
+.knowledge-embed [data-term-id]::after {
+  content: "";
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-left: 0.12em;
+  vertical-align: 0.45em;
+  background: currentColor;
+  -webkit-mask: var(--mark-icon) center / contain no-repeat;
+  mask: var(--mark-icon) center / contain no-repeat;
+  user-select: none;
+  pointer-events: none;
+}
+.tiptap-prose a[href^="note://"],
+.knowledge-embed a[href^="note://"] {
+  --mark-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M209.66,122.34a8,8,0,0,1,0,11.32l-82.05,82a56,56,0,0,1-79.2-79.21L147.67,35.73a40,40,0,1,1,56.61,56.55L105,193A24,24,0,1,1,71,159L154.3,74.38A8,8,0,1,1,165.7,85.6L82.39,170.31a8,8,0,1,0,11.27,11.36L192.93,81A24,24,0,1,0,159,47L59.76,147.68a40,40,0,1,0,56.53,56.62l82.06-82A8,8,0,0,1,209.66,122.34Z'/%3E%3C/svg%3E");
+}
+.tiptap-prose [data-term-id],
+.knowledge-embed [data-term-id] {
+  --mark-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M140,180a12,12,0,1,1-12-12A12,12,0,0,1,140,180ZM128,72c-22.06,0-40,16.15-40,36v4a8,8,0,0,0,16,0v-4c0-11,10.77-20,24-20s24,9,24,20-10.77,20-24,20a8,8,0,0,0-8,8v8a8,8,0,0,0,16,0v-.72c18.24-3.35,32-17.9,32-35.28C168,88.15,150.06,72,128,72Zm104,56A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z'/%3E%3C/svg%3E");
 }
 .tiptap-prose blockquote {
   margin: 0 0 18px;
@@ -1229,7 +1327,7 @@ textarea {
   background: var(--hover);
   text-decoration: underline;
 }
-.inkism-link-preview{position:fixed;z-index:90;max-width:min(360px,calc(100vw - 16px));padding:10px 12px;border:1px solid var(--border-strong);border-radius:0;background:var(--raised);color:var(--text);pointer-events:none}.inkism-link-preview strong{display:block;margin-bottom:4px}.inkism-link-preview p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}
+.inkism-link-preview{position:fixed;z-index:90;max-width:min(360px,calc(100vw - 16px));padding:10px 12px;border:1px solid var(--border-strong);border-radius:0;background:var(--raised);color:var(--text);pointer-events:none}.inkism-link-preview strong{display:block;margin-bottom:4px}.inkism-link-preview p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}.inkism-link-preview small{display:block;margin-top:6px;color:var(--muted);font-size:11px}
 
 /* 상태 표시줄 */
 .status-bar {
@@ -1420,7 +1518,7 @@ textarea.text-field {
   margin: 12px 0 5px;
 }
 /* 체크박스(각진 16px)·라디오(원형 16px). 본문 할 일 상자는 편집기 쪽 규칙을 따른다. */
-input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *),
+input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *, .inspector-toggle *, .document-switch *),
 input[type="radio"] {
   appearance: none;
   flex: none;
@@ -1436,11 +1534,11 @@ input[type="radio"] {
 input[type="radio"] {
   border-radius: 50%;
 }
-input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *):checked {
+input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *, .inspector-toggle *, .document-switch *):checked {
   background: var(--green);
   border-color: var(--green);
 }
-input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *):checked::after {
+input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *, .inspector-toggle *, .document-switch *):checked::after {
   content: "";
   position: absolute;
   left: 4px;
@@ -1455,7 +1553,7 @@ input[type="radio"]:checked {
   border-color: var(--green);
   background: radial-gradient(circle, var(--on-accent) 0 3px, var(--green) 3.5px);
 }
-input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *):disabled,
+input[type="checkbox"]:not(.tiptap-prose *, .settings-switch, .toggle, .portable-switch *, .inspector-toggle *, .document-switch *):disabled,
 input[type="radio"]:disabled {
   opacity: 0.45;
   cursor: default;
@@ -1678,6 +1776,10 @@ kbd {
   gap: 8px;
   margin-top: 16px;
 }
+/* 지우기 같은 위험 동작은 왼쪽 끝으로 떼어 주 버튼과 헷갈리지 않게 */
+.dialog-actions > .dialog-actions__start {
+  margin-right: auto;
+}
 /* 푸터 왼쪽 보조 동작과 오른쪽 주요 동작 사이 여백 */
 .dialog-actions-gap {
   flex: 1;
@@ -1867,6 +1969,10 @@ kbd {
   background-clip: content-box;
 }
 ::-webkit-scrollbar-track {
+  background: transparent;
+}
+/* 가로·세로 스크롤바가 만나는 모서리가 흰 네모로 보이지 않게 */
+::-webkit-scrollbar-corner {
   background: transparent;
 }
 

@@ -25,6 +25,7 @@ export function createSlashMenuRenderer() {
         }}
         editor={props.editor}
         items={props.items}
+        described
         onChoose={(item, options) => props.command({ item, options })}
       />,
     );

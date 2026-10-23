@@ -105,3 +105,67 @@ assert.deepEqual(calls, ['load https://api.example.test', 'save https://api.exam
 delete (globalThis as any).__TAURI__;
 console.log('PASS ai-provider: key restored from the host store, memory-only without it, cleared on disconnect, dropped on server change');
 console.log('PASS ai-provider: models URL derivation, failure classification with status, model listing, key never in errors');
+
+// A delayed desktop key load must not restore an old server's key after switching
+// servers or disconnecting. No real credentials or network are used here.
+async function delayedRestore(action: 'switch' | 'clear' | 'replace' | 'keep' | 'cli') {
+ store.set('inkism.ai.config', JSON.stringify({ endpoint: ep, model: 'm', enabled: true }));
+ let release!: (key: string) => void;
+ const writes: { action: string; origin: string; key: string }[] = [];
+ (globalThis as any).__TAURI__ = { core: { invoke: (_: string, args: any) => {
+  if (args.action === 'load') return new Promise<string>(resolve => { release = resolve; });
+  writes.push(args); return Promise.resolve('');
+ } } };
+ const ai = fresh();
+ const loading = ai.restoreAIKey();
+ const changed = action === 'clear' ? ai.clearAI() : ai.configureAI({
+  endpoint: action === 'switch' ? 'https://other.example.test/v1/chat/completions' : ep,
+  model: 'm2', enabled: true, cli: action === 'cli' ? 'codex' : undefined,
+ }, action === 'replace' ? 'sk-replacement' : '');
+ release('sk-old-origin');
+ await loading; await changed;
+ if (action === 'clear' || action === 'cli') {
+  assert.deepEqual(await ai.aiKeyState(), { kept: true, saved: false }, 'disconnect wins over a late key restore');
+ } else {
+  assert.equal(await bearerSent(ai), action === 'switch' ? undefined : action === 'replace' ? 'Bearer sk-replacement' : 'Bearer sk-old-origin', 'key stays bound to its original server');
+ }
+ assert.equal(writes.length, 1, 'settings change is persisted even while host availability is still loading');
+ assert.equal(writes[0].action, action === 'switch' || action === 'clear' || action === 'cli' ? 'clear' : 'save');
+}
+for (const action of ['switch', 'clear', 'replace', 'keep', 'cli'] as const) await delayedRestore(action);
+delete (globalThis as any).__TAURI__;
+console.log('PASS delayed AI key restore: server switch, disconnect, replacement and same-server retention');
+
+await configureAI({ endpoint: ep, model: 'm', enabled: true, embedModel: 'e5' }, '');
+for (const data of [
+ [{ index: 0, embedding: [1, 0] }, { index: 0, embedding: [0, 1] }],
+ [{ index: -1, embedding: [1, 0] }, { index: 1, embedding: [0, 1] }],
+ [{ index: 0, embedding: [1, 0] }, { index: 2, embedding: [0, 1] }],
+ [{ index: 0, embedding: [1, 0] }, { index: 1, embedding: [0] }],
+ [{ index: 0.5, embedding: [1, 0] }, { index: 1, embedding: [0, 1] }],
+ [{ embedding: [1, 0] }, { embedding: [0, 1] }],
+]) {
+ respond(() => new Response(JSON.stringify({ data })));
+ await assert.rejects(embedTexts(['first', 'second']), /응답 형식/, 'malformed indices or dimensions must not assign vectors to the wrong passages');
+}
+console.log('PASS embeddings reject duplicate, missing, fractional, out-of-range indices and mixed dimensions');
+
+await configureAI({ endpoint: '', model: '', cli: 'codex', enabled: true }, '');
+let requests = 0;
+globalThis.fetch = (async (_url: unknown, init: RequestInit) => {
+ requests++;
+ return new Promise((_, reject) => {
+  const abort = () => reject(new DOMException('Aborted', 'AbortError'));
+  if (init.signal?.aborted) abort(); else init.signal?.addEventListener('abort', abort, { once: true });
+ });
+}) as typeof fetch;
+const cliCancel = new AbortController(); cliCancel.abort();
+await assert.rejects(completeAI('x', 'y', cliCancel.signal), { name: 'AbortError' });
+assert.equal(requests, 0, 'already cancelled CLI calls never reach the host');
+const cliRunning = new AbortController();
+const cliReply = completeAI('x', 'y', cliRunning.signal); cliRunning.abort();
+await assert.rejects(cliReply, { name: 'AbortError' });
+await assert.rejects(completeAI('x', 'y', undefined, 10), { name: 'AbortError' });
+respond(() => new Response(JSON.stringify({ ok: true, data: { text: 'CLI result' } })));
+assert.equal(await completeAI('x', 'y'), 'CLI result');
+console.log('PASS CLI: late key restore invalidated, no dispatch after cancellation, active HTTP cancelled, timeout, success');

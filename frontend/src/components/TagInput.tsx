@@ -1,6 +1,7 @@
 import React, { useId, useState } from "react";
 import { useStore } from "../store";
 import "./TagInput.css";
+import { tagColor } from "./LibraryStyle";
 import { t } from "../i18n";
 
 /** Next highlighted suggestion; ArrowUp from none or the first wraps to the last. */
@@ -99,7 +100,8 @@ export function TagInput({
               }}
               onMouseEnter={() => setActive(i)}
             >
-              #{tag}
+              <span style={{ color: tagColor(s.tags, tag) }}>#</span>
+              {tag}
             </li>
           ))}
         </ul>

@@ -52,7 +52,8 @@ export function registerAiNotice(notice: Notice | null) {
 }
 
 /** Existing preview UI remains the acceptance boundary; no automatic replacement. */
-export async function requestAi(action: AiAction, input: AiInput, notice?: Notice): Promise<AiResult | null> {
-  try {const text=await completeAI(AI_LABELS[action]+(input.prompt?'\n'+input.prompt:''),input.selection??'');return {action,title:AI_LABELS[action],text,input};}
-  catch(error){await (notice??registeredNotice)?.(AI_LABELS[action],error instanceof Error?error.message:String(error));return null;}
+/** `signal`: 취소하면 안내 없이 null — 늦게 온 결과도 버린다. */
+export async function requestAi(action: AiAction, input: AiInput, notice?: Notice, signal?: AbortSignal): Promise<AiResult | null> {
+  try {const text=await completeAI(AI_LABELS[action]+(input.prompt?'\n'+input.prompt:''),input.selection??'',signal);return signal?.aborted?null:{action,title:AI_LABELS[action],text,input};}
+  catch(error){if(signal?.aborted)return null;await (notice??registeredNotice)?.(AI_LABELS[action],error instanceof Error?error.message:String(error));return null;}
 }

@@ -331,3 +331,39 @@ fn preview_is_bounded_and_index_jobs_share_the_note_transaction() {
         101
     );
 }
+
+fn tag_color(e: &Engine, name: &str) -> Value {
+    let tags = ok(e.execute(json!({"op":"tags"})));
+    tags.as_array().unwrap().iter().find(|t| t["name"] == name).map(|t| t["color"].clone()).unwrap_or(Value::Null)
+}
+#[test]
+fn tag_color_follows_rename_undo_and_removal_and_notebook_icon() {
+    let db = Db::new();
+    let e = db.open();
+    note(&e, "A", json!(["old", "other"]));
+    assert_eq!(e.execute(json!({"op":"tag_color_set","name":"old","color":"red"}))["ok"], false);
+    ok(e.execute(json!({"op":"tag_color_set","name":"old","color":"#e91e63"})));
+    assert_eq!(tag_color(&e, "old"), "#e91e63");
+    let p = preview(&e);
+    apply(&e, &p);
+    assert_eq!(tag_color(&e, "new"), "#e91e63", "rename keeps the color");
+    ok(e.execute(json!({"op":"tag_change_undo","id":p["id"]})));
+    assert_eq!(tag_color(&e, "old"), "#e91e63");
+    assert_eq!(tag_color(&e, "new"), Value::Null);
+    // Merging into a colored tag keeps the target's color.
+    ok(e.execute(json!({"op":"tag_color_set","name":"other","color":"#2196f3"})));
+    ok(e.execute(json!({"op":"change_tag","name":"old","replacement":"other"})));
+    assert_eq!(tag_color(&e, "other"), "#2196f3");
+    let removed = ok(e.execute(json!({"op":"tag_change_preview","name":"other","replacement":null})));
+    apply(&e, &removed);
+    note(&e, "B", json!(["other"]));
+    assert_eq!(tag_color(&e, "other"), Value::Null, "removal drops the color");
+
+    let nb = ok(e.execute(json!({"op":"save_notebook","name":"N"})))["id"].clone();
+    assert_eq!(e.execute(json!({"op":"notebook_icon_set","id":nb,"icon":"Bad Icon"}))["ok"], false);
+    ok(e.execute(json!({"op":"notebook_icon_set","id":nb,"icon":"briefcase"})));
+    let icon = |e: &Engine| ok(e.execute(json!({"op":"notebooks"})))[0]["icon"].clone();
+    assert_eq!(icon(&e), "briefcase");
+    ok(e.execute(json!({"op":"notebook_icon_set","id":nb,"icon":null})));
+    assert_eq!(icon(&e), Value::Null);
+}
