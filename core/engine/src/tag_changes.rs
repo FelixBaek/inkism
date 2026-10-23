@@ -36,6 +36,10 @@ struct Receipt {
     default_before: Option<(Option<String>, i64)>,
     default_after: Option<(Option<String>, i64)>,
     default_changed: bool,
+    /// Color moved off `name` and whether it was given to `replacement` (see
+    /// `settings::move_tag_color`). Older receipts have none.
+    #[serde(default)]
+    color_moved: (Option<String>, bool),
 }
 fn transaction<T>(conn: &Connection, f: impl FnOnce() -> Result<T>) -> Result<T> {
     conn.execute_batch("BEGIN IMMEDIATE")?;
@@ -209,6 +213,7 @@ pub fn preview(conn: &Connection, args: &Value) -> Result<Value> {
             default_before,
             default_after: None,
             default_changed,
+            color_moved: (None, false),
         };
         write(conn, &r)?;
         Ok(preview_data(&r, args))
@@ -265,6 +270,7 @@ pub fn apply(conn: &Connection, args: &Value) -> Result<Value> {
             settings::write_local(conn, settings::DEFAULT_TAG, r.replacement.as_deref())?;
         }
         r.default_after = settings::stored(conn, settings::DEFAULT_TAG)?;
+        r.color_moved = settings::move_tag_color(conn, &r.name, r.replacement.as_deref())?;
         r.status = "applied".into();
         r.applied_at = Some(ids::now_ms());
         write(conn, &r)?;
@@ -308,6 +314,7 @@ pub fn undo(conn: &Connection, args: &Value) -> Result<Value> {
                 default_value(&r.default_before).as_deref(),
             )?;
         }
+        settings::restore_tag_color(conn, &r.name, r.replacement.as_deref(), r.color_moved.clone())?;
         r.status = "undone".into();
         r.undone_at = Some(ids::now_ms());
         write(conn, &r)?;

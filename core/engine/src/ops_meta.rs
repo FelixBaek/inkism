@@ -9,7 +9,8 @@ use serde_json::{json, Value};
 /// Live notebooks for screens; trashed ones are listed by `trashed_notebooks`.
 pub fn notebooks(conn: &Connection) -> Result<Value> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, color, parent_id, description, cover FROM notebooks WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE, id",
+        "SELECT id, name, color, parent_id, description, cover, (SELECT value FROM settings WHERE key='notebook_icon:'||notebooks.id)
+         FROM notebooks WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE, id",
     )?;
     let rows = stmt.query_map([], |r| {
         Ok(json!({
@@ -19,6 +20,7 @@ pub fn notebooks(conn: &Connection) -> Result<Value> {
             "parent_id": r.get::<_, Option<String>>(3)?,
             "description": r.get::<_, String>(4)?,
             "cover": crate::notebook_cover::to_value(r.get(5)?),
+            "icon": r.get::<_, Option<String>>(6)?,
         }))
     })?;
     let mut out = Vec::new();
@@ -222,7 +224,8 @@ pub fn delete_notebook(conn: &Connection, args: &Value) -> Result<Value> {
 
 pub fn tags(conn: &Connection) -> Result<Value> {
     let mut stmt = conn.prepare(
-        "SELECT je.value, COUNT(*) FROM notes_meta m, json_each(m.tags) je
+        "SELECT je.value, COUNT(*), (SELECT value FROM settings WHERE key='tag_color:'||je.value)
+         FROM notes_meta m, json_each(m.tags) je
          WHERE m.trashed = 0
          GROUP BY je.value ORDER BY COUNT(*) DESC, je.value",
     )?;
@@ -230,6 +233,7 @@ pub fn tags(conn: &Connection) -> Result<Value> {
         Ok(json!({
             "name": r.get::<_, String>(0)?,
             "count": r.get::<_, i64>(1)?,
+            "color": r.get::<_, Option<String>>(2)?,
         }))
     })?;
     let mut out = Vec::new();
@@ -363,6 +367,7 @@ pub fn change_tag(conn: &Connection, args: &Value) -> Result<Value> {
         if crate::settings::default_tag(conn)?.as_deref() == Some(name) {
             crate::settings::write_local(conn, crate::settings::DEFAULT_TAG, replacement)?;
         }
+        crate::settings::move_tag_color(conn, name, replacement)?;
         let summary = current
             .map(|(id, _)| crate::ops_notes::load_summary(conn, id))
             .transpose()?;

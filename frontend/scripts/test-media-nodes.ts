@@ -22,6 +22,7 @@ const cases={
  model3d:`<div data-type="inkism-model3d" data-src="/api/attachments/${id}" data-title="의자 시안.glb"><a href="/api/attachments/${id}" class="media-fallback-link">의자 시안.glb</a></div>`,
  embed:'<div data-type="inkism-embed" data-src="https://www.example.com/page"><a href="https://www.example.com/page" class="media-fallback-link">https://www.example.com/page</a></div>',
  aiEmpty:'<div data-type="inkism-ai" data-prompt="" data-status="empty"></div>',
+ aiChat:'<div data-type="inkism-ai" data-prompt="요점 3개로 정리해 줘" data-status="open" data-chat="[{&quot;role&quot;:&quot;user&quot;,&quot;text&quot;:&quot;요점 3개로 &lt;b&gt;정리&lt;/b&gt;해 줘&quot;},{&quot;role&quot;:&quot;ai&quot;,&quot;text&quot;:&quot;정리했어요.&quot;}]"><p>1. 시안</p></div>',
  aiDone:'<div data-type="inkism-ai" data-prompt="요점 3개로 정리해 줘" data-status="done"><h3>회의 요점</h3><p>1. 시안 2개</p><p>2. <strong>금요일</strong> 배포</p></div>',
 };
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
@@ -42,6 +43,9 @@ try{
  assert.equal(unsafe.editable,false);
  const unsafeEmbed=await page.evaluate(()=>(window as any).check.inspectRichHTML('<div data-type="inkism-embed" data-src="/api/attachments/x"></div>'));
  assert.equal(unsafeEmbed.editable,false);assert.doesNotMatch(unsafe.content,/javascript:/);
+ // The chat survives sanitizing even when a message quotes HTML.
+ const chat=await page.evaluate(html=>(window as any).check.inspectRichHTML(html).content,cases.aiChat);
+ assert.match(chat,/data-chat="[^"]*&lt;b&gt;정리/);
  assert.deepEqual(errors,[]);
  console.log('PASS media nodes: video/audio/diagram/model3d/aiBlock/embed HTML round-trip, editable admission, Markdown fallback, unsafe src rejected');
 }finally{await browser.close()}

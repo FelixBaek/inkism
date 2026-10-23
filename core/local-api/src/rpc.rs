@@ -37,6 +37,8 @@ const RENDERER_OPS: &[&str] = &[
     "link_resolve", "graph_get", "relations", "daily_note", "template_create", "type_preset_apply", "page_create",
     "defaults_get",
     "defaults_set",
+    "tag_color_set",
+    "notebook_icon_set",
     "vault_status",
     "vault_create",
     "vault_unlock",
@@ -130,6 +132,7 @@ pub(crate) fn forward(h: &Handler, raw: &[u8], deadline: Deadline) -> Response {
             Ok(body) => {
                 let status = if crate::success(&body) { 200 } else { 400 };
                 Response {
+                    file: None,
                     status,
                     headers: vec![("content-type".into(), "application/json".into())],
                     body,

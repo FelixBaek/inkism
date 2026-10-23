@@ -4,6 +4,7 @@
 #else
 #define NoteProtocol "note"
 #endif
+#define BuildVersion GetVersionNumbersString("..\..\..\dist\windows\Inkism.exe")
 [Setup]
 #ifdef ValidationBuild
 AppId=Inkism-Isolated-Validation
@@ -17,7 +18,7 @@ AppId={{D419A536-8962-4FC0-9109-906B5964808E}
 CloseApplications=yes
 #endif
 AppName=inkism
-AppVersion=0.1.0
+AppVersion={#BuildVersion}
 AppPublisher=Felix
 DefaultDirName={localappdata}\Programs\Inkism
 DefaultGroupName=inkism

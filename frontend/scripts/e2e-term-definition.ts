@@ -10,7 +10,7 @@ const dialog=page.getByRole('dialog',{name:'용어 설명',exact:true});
 async function until(fn:()=>Promise<boolean>){for(let i=0;i<100;i++){if(await fn())return;await page.waitForTimeout(80);}throw Error('condition timed out');}
 async function select(word:string){await page.locator('.tiptap[contenteditable=true]').first().evaluate((root,word)=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let n;while(n=walker.nextNode()){const at=n.textContent?.indexOf(word)??-1;if(at>=0){(root as HTMLElement).focus();const range=document.createRange();range.setStart(n,at);range.setEnd(n,at+word.length);const selection=getSelection()!;selection.removeAllRanges();selection.addRange(range);document.dispatchEvent(new Event('selectionchange'));return;}}throw Error('Missing term '+word);},word);await page.waitForTimeout(100);}
 async function open(word:string){await select(word);await page.keyboard.press('Control+g');await dialog.waitFor();}
-async function save(){await dialog.getByRole('button',{name:'설명 저장',exact:true}).click();await dialog.waitFor({state:'hidden'});}
+async function save(){await dialog.getByRole('button',{name:'저장',exact:true}).click();await dialog.waitFor({state:'hidden'});}
 async function edit(){await page.locator('.tiptap [data-term-id]').first().click();await dialog.getByRole('button',{name:'설명 수정',exact:true}).click();}
 try{
  const note=await rpc('save',{note:{title:'Term definition integration',content:'<p>에이전트는 도구를 선택한다. cache는 임시 저장소다.</p>',content_format:'html'}});
@@ -35,7 +35,7 @@ try{
  await open('cache');await dialog.getByRole('button',{name:'AI로 설명',exact:true}).click();await dialog.getByText('AI 초안입니다. 확인한 뒤 저장하세요.',{exact:true}).waitFor();await save();
  await until(async()=>/cache: 재사용/.test((await rpc('get',{id:note.id})).content));
  // Unlink/remove the annotation only; the promoted note and glossary remain.
- await edit();await dialog.getByRole('button',{name:'본문 설명 제거',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ await edit();await dialog.getByRole('button',{name:'설명 제거',exact:true}).click();await dialog.waitFor({state:'hidden'});
  await until(async()=>!new RegExp('data-term-note-id="'+linked+'"').test((await rpc('get',{id:note.id})).content));
  assert.equal((await rpc('get',{id:linked})).title,'에이전트');assert.equal((await rpc('knowledge_settings_get')).glossary.length,1);
  // Mobile popup stays on screen, including the expanded glossary area.
@@ -44,6 +44,14 @@ try{
  await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
  // Without a selection, Ctrl+G must leave the editor alone.
  await page.mouse.move(0,0);await select('에이전트');await page.keyboard.press('ArrowRight');await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});await page.keyboard.press('Control+g');assert.equal(await dialog.count(),0);
+ // Hover card: shows on hover without a title, hides after the pointer leaves; the eraser removes the mark undoably.
+ const term=page.locator('.tiptap [data-term-id]').first();
+ await term.hover();await dialog.waitFor();assert.equal(await dialog.getByText('용어 설명',{exact:true}).count(),0);
+ assert.ok((await dialog.boundingBox())!.width<=280,'hover card stays small');
+ await page.mouse.move(2,2);await dialog.waitFor({state:'hidden'});
+ await term.hover();await dialog.getByRole('button',{name:'설명 제거',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ assert.equal(await page.locator('.tiptap [data-term-id]').count(),0);
+ await page.locator('.tiptap[contenteditable=true]').first().focus();await page.keyboard.press('Control+z');await page.locator('.tiptap [data-term-id]').first().waitFor();
  // A read-only document still exposes saved definitions, but never edit controls.
  const saved=await rpc('get',{id:note.id});await rpc('patch',{id:note.id,revision:saved.revision,changes:{readonly:true},summary_only:true});
  await page.reload();await page.locator('.tiptap [data-term-id]').first().click();await dialog.waitFor();assert.equal(await dialog.getByRole('button',{name:'설명 수정',exact:true}).count(),0);await page.keyboard.press('Escape');

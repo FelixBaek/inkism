@@ -24,7 +24,7 @@ try{
   }
   await route.continue();
  });
- const open=async()=>{await page.getByRole('button',{name:'설정 열기',exact:true}).click();await page.locator('.settings-nav').getByRole('button',{name:'동기화',exact:true}).click();await page.locator('.sync-settings').waitFor();};
+ const open=async()=>{await page.getByRole('button',{name:'설정 열기',exact:true}).click();await page.locator('.settings-nav').getByRole('button',{name:'동기화',exact:true}).click();await page.locator('.sync-settings--sync').waitFor();};
  await page.goto(base);await open();
  const deadline=Date.now()+10000;
  while(requests<4){assert.ok(Date.now()<deadline,'preview requests began');await page.waitForTimeout(20);}

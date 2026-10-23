@@ -191,9 +191,9 @@ impl Clipper {
 
 fn preflight(r: &Request) -> Response {
     if r.header("access-control-request-method") != Some("POST") {
-        return Response { status: 405, headers: vec![], body: vec![] };
+        return Response { file: None, status: 405, headers: vec![], body: vec![] };
     }
-    Response { status: 204, headers: vec![], body: vec![] }
+    Response { file: None, status: 204, headers: vec![], body: vec![] }
         .with_header("access-control-allow-methods", "POST")
         .with_header("access-control-allow-headers", "Authorization, Content-Type")
 }
@@ -316,7 +316,7 @@ pub(crate) fn serve(h: &Handler, r: &Request) -> Response {
         return Response::json(200, &json!({"data": c.lock().pending, "ok": true}));
     }
     if r.method != "POST" {
-        return Response { status: 405, headers: vec![], body: vec![] };
+        return Response { file: None, status: 405, headers: vec![], body: vec![] };
     }
     let mut values = serde_json::Deserializer::from_slice(&r.body).into_iter::<Command>();
     let input = match values.next() {
@@ -366,7 +366,7 @@ fn accept_clip(h: &Handler, s: &mut State, id: &str) -> Response {
         }
     }
     s.pending = None;
-    Response { status: 200, headers: vec![("content-type".into(), "application/json".into())], body: data }
+    Response { file: None, status: 200, headers: vec![("content-type".into(), "application/json".into())], body: data }
 }
 
 /// Checks whether a failed-looking save actually landed: a previous save

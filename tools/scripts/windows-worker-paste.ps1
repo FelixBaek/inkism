@@ -85,13 +85,16 @@ try {
     $focus=Focus-WorkerHistoryInput;Save-Screenshot 'windows-ui-worker-restored'
     [InkismIme]::SendMessage($focus,0x50,[IntPtr]::Zero,$english.Handle)|Out-Null
     [InkismInput]::Shortcut(0x5A);Wait-WindowText '_native_follow' $false 30
-    Wait-WholeSelectionDone;Close-Inkism
+    # Undo restores the original document selection as part of history. The
+    # selection badge may remain; it is not a pending edit. Closing flushes,
+    # and the verifier below requires exact original or paste-only bytes.
+    Close-Inkism
     $undo=@(Verify-WorkerPaste 'undo');$undoSteps=1
     if($undo -contains 'STATE=paste'){
         Open-Inkism;$focus=Focus-WorkerHistoryInput
         [InkismIme]::SendMessage($focus,0x50,[IntPtr]::Zero,$english.Handle)|Out-Null
         [InkismInput]::Shortcut(0x5A);Wait-WindowText 'nativeimeblock00000' $true 30
-        Wait-WholeSelectionDone;Close-Inkism;$undoSteps=2
+        Close-Inkism;$undoSteps=2
     }elseif($undo -notcontains 'STATE=original'){throw 'Native clipboard undo verifier returned no exact state'}
     Verify-WorkerPaste 'original'|Write-Output
     Open-Inkism;Wait-WindowText 'nativeimeblock00000' $true

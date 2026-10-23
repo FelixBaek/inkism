@@ -166,7 +166,7 @@ pub(crate) fn formatted(h: &Handler, r: &Request, pdf: bool) -> Response {
         },
         None => (document, "text/html; charset=utf-8", ".html"),
     };
-    Response { status: 200, headers: vec![("content-type".into(), media.into())], body }
+    Response { file: None, status: 200, headers: vec![("content-type".into(), media.into())], body }
         .with_header("content-disposition", content_disposition(&export_filename(&data.title, extension)))
         .with_header(
             "x-inkism-export-policy",

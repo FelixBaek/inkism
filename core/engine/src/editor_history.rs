@@ -136,7 +136,27 @@ pub fn split_get(conn: &Connection) -> Result<Value> {
     } else {
         id.iter().cloned().collect()
     };
-    let positions = state.get("locations").cloned().unwrap_or(json!({}));
+    let mut first = resolve_split_pane(conn, id, ids, state.get("locations"))?;
+    // Extra panes (multi-pane split) live in the same state row; old rows have none.
+    let mut panes = Vec::new();
+    for pane in state["panes"].as_array().into_iter().flatten() {
+        let ids = serde_json::from_value(pane["ids"].clone())?;
+        let id = pane["id"].as_str().map(str::to_owned);
+        panes.push(resolve_split_pane(conn, id, ids, pane.get("locations"))?);
+    }
+    first["mode"] = json!(mode);
+    first["panes"] = Value::Array(panes);
+    first["tree"] = state.get("tree").cloned().unwrap_or(Value::Null);
+    Ok(first)
+}
+/** Drops trashed notes and positions saved for an older revision. */
+fn resolve_split_pane(
+    conn: &Connection,
+    id: Option<String>,
+    ids: Vec<String>,
+    positions: Option<&Value>,
+) -> Result<Value> {
+    let positions = positions.cloned().unwrap_or(json!({}));
     let seen = ids.iter().map(String::as_str).collect();
     crate::workspace::validate_locations(&positions, &seen)?;
     let mut tabs = Vec::new();
@@ -163,34 +183,58 @@ pub fn split_get(conn: &Connection) -> Result<Value> {
             tabs.push(json!({"id":item,"title":title}));
         }
     }
-    Ok(json!({"id":active,"mode":mode,"tabs":tabs,"locations":locations}))
+    Ok(json!({"id":active,"tabs":tabs,"locations":locations}))
 }
-pub fn split_set(conn: &Connection, args: &Value) -> Result<Value> {
+/** Validates one pane's active note, tab ids and positions; returns its stored state. */
+fn split_pane_state(args: &Value) -> Result<(Option<String>, Value)> {
     let id = match &args["id"] {
         Value::Null => None,
-        Value::String(id) if crate::ids::valid_id(id) => Some(id),
+        Value::String(id) if crate::ids::valid_id(id) => Some(id.clone()),
         _ => return Err(EngineError::invalid("bad split note")),
     };
-    let mode = args["mode"]
-        .as_str()
-        .filter(|m| ["rich", "source"].contains(m))
-        .ok_or_else(|| EngineError::invalid("bad split mode"))?;
     let ids: Vec<String> = if let Some(ids) = args.get("ids") {
         serde_json::from_value(ids.clone())?
     } else {
-        id.into_iter().cloned().collect()
+        id.iter().cloned().collect()
     };
     let seen: std::collections::HashSet<&str> = ids.iter().map(String::as_str).collect();
     if ids.len() > 32
         || seen.len() != ids.len()
         || ids.iter().any(|id| !crate::ids::valid_id(id))
-        || id.is_some_and(|id| !seen.contains(id.as_str()))
+        || id.as_ref().is_some_and(|id| !seen.contains(id.as_str()))
     {
         return Err(EngineError::invalid("bad split tabs"));
     }
     let locations = args.get("locations").cloned().unwrap_or(json!({}));
     crate::workspace::validate_locations(&locations, &seen)?;
-    let state = serde_json::to_string(&json!({"ids":ids,"locations":locations}))?;
+    Ok((id.clone(), json!({"id":id,"ids":ids,"locations":locations})))
+}
+pub fn split_set(conn: &Connection, args: &Value) -> Result<Value> {
+    let mode = args["mode"]
+        .as_str()
+        .filter(|m| ["rich", "source"].contains(m))
+        .ok_or_else(|| EngineError::invalid("bad split mode"))?;
+    let (id, mut state) = split_pane_state(args)?;
+    state.as_object_mut().unwrap().remove("id");
+    // Up to 8 panes: the main editor, this first split pane and 6 more.
+    let panes = match &args["panes"] {
+        Value::Null => vec![],
+        Value::Array(panes) if panes.len() <= 6 => panes
+            .iter()
+            .map(|pane| split_pane_state(pane).map(|(_, state)| state))
+            .collect::<Result<_>>()?,
+        _ => return Err(EngineError::invalid("bad split panes")),
+    };
+    // The pane tree is the frontend's layout; the engine only bounds its size.
+    let tree = &args["tree"];
+    if !(tree.is_null() || tree.is_object()) || tree.to_string().len() > 4096 {
+        return Err(EngineError::invalid("bad split tree"));
+    }
+    if !panes.is_empty() || !tree.is_null() {
+        state["panes"] = Value::Array(panes);
+        state["tree"] = tree.clone();
+    }
+    let state = serde_json::to_string(&state)?;
     conn.execute("INSERT INTO split_layout(slot,note_id,mode,state) VALUES(0,?1,?2,?3) ON CONFLICT(slot) DO UPDATE SET note_id=excluded.note_id,mode=excluded.mode,state=excluded.state",params![id,mode,state])?;
     Ok(json!({"saved":true}))
 }
@@ -248,6 +292,28 @@ mod tests {
             split_get(&conn).unwrap()["tabs"].as_array().unwrap().len(),
             1
         );
+    }
+    #[test]
+    fn split_layout_keeps_extra_panes_and_tree() {
+        let conn = connection();
+        let args = json!({"id":"note-a","mode":"source","ids":["note-a"],
+            "panes":[{"id":"note-b","ids":["note-b"],"locations":{}}],
+            "tree":{"dir":"row","ratio":0.5,"a":0,"b":{"dir":"column","ratio":0.5,"a":1,"b":2}}});
+        split_set(&conn, &args).unwrap();
+        let got = split_get(&conn).unwrap();
+        assert_eq!(got["id"], "note-a");
+        assert_eq!(got["panes"][0]["id"], "note-b");
+        assert_eq!(got["panes"][0]["tabs"][0]["title"], "B");
+        assert_eq!(got["tree"]["b"]["b"], 2);
+        let mut bad = args.clone();
+        bad["panes"] = json!([{"id":"note-b","ids":[]}]);
+        assert!(split_set(&conn, &bad).is_err());
+        bad["panes"] = json!(vec![json!({"id":null}); 7]);
+        assert!(split_set(&conn, &bad).is_err());
+        // A single-pane write (older frontend) drops the extra panes.
+        split_set(&conn, &json!({"id":"note-a","mode":"source"})).unwrap();
+        assert!(split_get(&conn).unwrap()["panes"].as_array().unwrap().is_empty());
+        assert!(split_get(&conn).unwrap()["tree"].is_null());
     }
     #[test]
     fn aggregate_history_response_stays_below_jsonl_budget() {

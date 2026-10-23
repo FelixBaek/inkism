@@ -18,13 +18,18 @@ export function NoteRelations({ id, revision, onClose }: Readonly<{ id: string; 
   const [items, setItems] = useState<RelationEdge[] | null>(null);
   const [property, setProperty] = useState("");
   const [error, setError] = useState("");
+  const [generation,setGeneration]=useState(0);
+  useEffect(()=>{const changed=()=>setGeneration(n=>n+1);window.addEventListener('inkism-knowledge-changed',changed);return()=>window.removeEventListener('inkism-knowledge-changed',changed);},[]);
+  useEffect(()=>setProperty(''),[id]);
   useEffect(() => {
+    setError('');
+    setItems(null);
     const controller = new AbortController();
-    knowledge.relations({ id, limit: 200 }, controller.signal).then(r => setItems(r.items), e => {
+    knowledge.relations({ id, limit: 200 }, controller.signal).then(r => { if(!controller.signal.aborted)setItems(r.items); }, e => {
       if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e));
     });
     return () => controller.abort();
-  }, [id, revision]);
+  }, [id, revision, generation]);
   const open = async (edge: RelationEdge) => {
     const target = other(edge);
     setError("");

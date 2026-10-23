@@ -1,6 +1,10 @@
-param([switch]$SkipUI, [string]$PreviousValidationSetup = '')
+param([switch]$SkipUI, [switch]$NativeJourney, [string]$PreviousValidationSetup = '')
+if ($SkipUI -and $NativeJourney) { throw 'NativeJourney cannot skip UI' }
 # Compile with /DValidationBuild. The test scheme is separate from the installed note:// handler.
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'windows-acceptance-lock.ps1')
+$acceptanceLock = Enter-InkismAcceptance
+try {
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $target = Join-Path $env:TEMP ('inkism-install-' + [guid]::NewGuid())
 $setup = Join-Path $root 'dist/Inkism-validation-setup.exe'
@@ -43,13 +47,35 @@ function Run-Checked([string]$binary, [string]$arguments) {
         throw
     } finally { $process.Dispose() }
 }
+function Assert-TestCleanupPath([string]$path) {
+    $full = [System.IO.Path]::GetFullPath($path)
+    $temp = [System.IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
+    if (-not $full.StartsWith($temp, [System.StringComparison]::OrdinalIgnoreCase)) { throw "Cleanup outside test temp root: $full" }
+    $relative = $full.Substring($temp.Length)
+    if ($relative -notmatch '^inkism-install-(?:(?:optout|upgrade-optout)-)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\\|$)') { throw "Cleanup outside generated installer fixture: $full" }
+    Write-Output ("Verified test-only cleanup path: $full")
+}
+function Remove-TestItem([string]$path) {
+    Assert-TestCleanupPath $path
+    Remove-Item -LiteralPath $path
+}
+function Test-UninstallFilePending([string]$path) {
+    try { return Test-Path -LiteralPath $path -ErrorAction Stop }
+    catch [System.UnauthorizedAccessException] {
+        # Windows can deny attributes while Inno's clone deletes its original.
+        # Treat this as still pending, never as successful removal. The caller's
+        # deadline still fails persistently inaccessible files.
+        return $true
+    }
+}
 function Run-Uninstall([string]$binary, [string]$logPath) {
+    Assert-TestCleanupPath (Split-Path $binary -Parent)
     Run-Checked $binary ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="' + $logPath + '"')
     # Inno's clone can still be deleting the original EXE after exit 0. Observe
     # only this fixture's uninstall files; never launch the uninstaller twice.
     $data = [System.IO.Path]::ChangeExtension($binary, '.dat')
     $deadline = [DateTime]::UtcNow.AddSeconds(10)
-    while ((Test-Path -LiteralPath $binary) -or (Test-Path -LiteralPath $data)) {
+    while ((Test-UninstallFilePending $binary) -or (Test-UninstallFilePending $data)) {
         if ([DateTime]::UtcNow -ge $deadline) {
             Write-InstallerLogDiagnostic ('/LOG="' + $logPath + '"')
             throw "Uninstaller exited successfully but its owned EXE/DAT did not disappear: $binary"
@@ -82,13 +108,14 @@ function Run-Fixture([string]$mode, [string]$engine) {
     Run-Checked 'node.exe' ('"' + $fixtureScript + '" ' + $mode + ' "' + $engine + '" "' + $fixture + '"')
 }
 $payloadNames = @('Inkism.exe', 'inkism-engine.exe', 'README.md', 'BUILD.txt')
+if (Test-Path -LiteralPath (Join-Path $root 'dist/windows/WebView2Loader.dll')) { $payloadNames += 'WebView2Loader.dll' }
 function Assert-InstalledPayload([string]$source, [string]$destination = $target) {
     foreach ($name in $payloadNames) {
         $expected = Get-FileHash -LiteralPath (Join-Path $source $name) -Algorithm SHA256
         $actual = Get-FileHash -LiteralPath (Join-Path $destination $name) -Algorithm SHA256
         if ($expected.Hash -ne $actual.Hash) { throw "Installed payload differs from candidate: $name" }
     }
-    Write-Output 'PASS: all four installed payload files match their candidate SHA256'
+    Write-Output ("PASS: all $($payloadNames.Count) installed payload files match their candidate SHA256")
 }
 $testProtocol = 'Software\Classes\inkism-validation-note'
 $testProtocolKey = 'HKCU:\' + $testProtocol
@@ -130,15 +157,20 @@ Invoke-InstallerCase {
     if (-not $PreviousValidationSetup) { Assert-InstalledProtocol }
     Set-Content $sentinel 'preserve'
     Run-Fixture 'seed' (Join-Path $target 'inkism-engine.exe')
-    Run-Checked $setup ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="notelinks" /DIR="' + $target + '" /LOG="' + $updateLog + '"')
-    Assert-InstalledPayload (Join-Path $root 'dist/windows')
-    Assert-InstalledProtocol
-    if ((Get-Content $sentinel) -ne 'preserve') { throw 'Update changed unowned file' }
-    Run-Fixture 'verify' (Join-Path $target 'inkism-engine.exe')
+    $upgradeInstalled = {
+        Run-Checked $setup ('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="notelinks" /DIR="' + $target + '" /LOG="' + $updateLog + '"')
+        Assert-InstalledPayload (Join-Path $root 'dist/windows')
+        Assert-InstalledProtocol
+        if ((Get-Content $sentinel) -ne 'preserve') { throw 'Update changed unowned file' }
+        Run-Fixture 'verify' (Join-Path $target 'inkism-engine.exe')
+    }
+    if (-not $NativeJourney) { & $upgradeInstalled }
     $env:INKISM_TEST_BINARY = Join-Path $target 'Inkism.exe'
     $env:INKISM_TEST_SCREENSHOT_SUFFIX = '-installed'
     $env:INKISM_TEST_ENCRYPTED = '1'
-    if (-not $SkipUI) {
+    if ($NativeJourney) {
+        & (Join-Path $PSScriptRoot 'test-windows-source-ui.ps1') -InstalledUpgrade $upgradeInstalled
+    } elseif (-not $SkipUI) {
         node (Join-Path $root 'frontend/scripts/windows-ui-test.ts')
         if ($LASTEXITCODE) { throw 'Installed application UI test failed' }
     }
@@ -169,7 +201,7 @@ Invoke-InstallerCase {
 } {
     # This scheme did not exist before this test. Remove only our sentinel handler.
     if ((Read-ProtocolCommand 'inkism-validation-note') -ceq $foreignProtocolCommand) {
-        [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($testProtocol, $false)
+        Write-Output ("Test-only registry cleanup: HKCU:\$testProtocol"); [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($testProtocol, $false)
     }
 }
 Write-Output 'PASS: optional HKCU URL protocol, quoted link argument, owned cleanup, later-handler preservation and installed note:// handler preserved'
@@ -248,10 +280,10 @@ foreach ($withForeign in @($false, $true)) {
             $owned = $false
             try { if ($null -ne $key) { $owned = $key.GetValue('InkismValidationSentinel') -ceq $optOutMarker } }
             finally { if ($null -ne $key) { $key.Dispose() } }
-            if ($owned) { [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($testProtocol, $false) }
+            if ($owned) { Write-Output ("Test-only registry cleanup: HKCU:\$testProtocol"); [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($testProtocol, $false) }
         }
-        if ((Test-Path -LiteralPath $optOutSentinel) -and (Get-Content -LiteralPath $optOutSentinel) -ceq 'preserve-optout') { Remove-Item -LiteralPath $optOutSentinel }
-        if ((Test-Path -LiteralPath $optOutTarget) -and -not (Get-ChildItem -LiteralPath $optOutTarget -Force)) { Remove-Item -LiteralPath $optOutTarget }
+        if ((Test-Path -LiteralPath $optOutSentinel) -and (Get-Content -LiteralPath $optOutSentinel) -ceq 'preserve-optout') { Remove-TestItem $optOutSentinel }
+        if ((Test-Path -LiteralPath $optOutTarget) -and -not (Get-ChildItem -LiteralPath $optOutTarget -Force)) { Remove-TestItem $optOutTarget }
     }
 }
 # Upgrading after opt-in must apply the newly unchecked task. A later foreign
@@ -293,18 +325,21 @@ foreach ($withForeign in @($false, $true)) {
             $owned = $false
             try { if ($null -ne $key) { $owned = $key.GetValue('InkismValidationSentinel') -ceq $optOutMarker } }
             finally { if ($null -ne $key) { $key.Dispose() } }
-            if ($owned) { [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($testProtocol, $false) }
+            if ($owned) { Write-Output ("Test-only registry cleanup: HKCU:\$testProtocol"); [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($testProtocol, $false) }
         }
-        if ((Test-Path -LiteralPath $upgradeSentinel) -and (Get-Content -LiteralPath $upgradeSentinel) -ceq 'preserve-upgrade') { Remove-Item -LiteralPath $upgradeSentinel }
-        if ((Test-Path -LiteralPath $upgradeTarget) -and -not (Get-ChildItem -LiteralPath $upgradeTarget -Force)) { Remove-Item -LiteralPath $upgradeTarget }
+        if ((Test-Path -LiteralPath $upgradeSentinel) -and (Get-Content -LiteralPath $upgradeSentinel) -ceq 'preserve-upgrade') { Remove-TestItem $upgradeSentinel }
+        if ((Test-Path -LiteralPath $upgradeTarget) -and -not (Get-ChildItem -LiteralPath $upgradeTarget -Force)) { Remove-TestItem $upgradeTarget }
     }
 }
 if (-not (Test-Path $sentinel)) { throw 'Uninstall removed user data' }
 Run-Fixture 'verify' (Join-Path $root 'dist/windows/inkism-engine.exe')
 Write-Output ('Preserved synthetic library for inspection: ' + $fixture)
 # Delete only this test-created sentinel and empty directory. Preserve unexpected files.
-Remove-Item -LiteralPath $sentinel
-if (-not (Get-ChildItem -LiteralPath $target -Force)) { Remove-Item -LiteralPath $target }
+Remove-TestItem $sentinel
+if (-not (Get-ChildItem -LiteralPath $target -Force)) { Remove-TestItem $target }
 $upgrade = if ($PreviousValidationSetup) { 'previous-candidate upgrade' } else { 'same-candidate reinstall' }
 if ($SkipUI) { Write-Output ("PASS: isolated install/$upgrade/uninstall, exact payload hashes, synthetic note/attachment bytes and unowned file preservation; UI NOT RUN") }
+elseif ($NativeJourney) { Write-Output ("PASS: isolated install/$upgrade/uninstall with native capture, encrypted attachment preservation, restart and backup restore in one installed path") }
 else { Write-Output ("PASS: isolated install/$upgrade/uninstall, exact payload hashes, default encrypted native editor, synthetic note/attachment bytes and unowned data preserved") }
+
+} finally { Exit-InkismAcceptance $acceptanceLock }

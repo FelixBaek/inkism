@@ -12,7 +12,7 @@ use serde_json::value::RawValue;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::io::{self, Cursor, Read, Write};
+use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
@@ -73,6 +73,7 @@ fn hex(digest: impl AsRef<[u8]>) -> String {
 /// The engine's own `{"ok":false,...}` (or final reply) passed through unchanged.
 fn passthrough(status: u16, body: Vec<u8>) -> Response {
     Response {
+        file: None,
         status,
         headers: vec![("content-type".into(), "application/json".into())],
         body,
@@ -136,7 +137,8 @@ pub(crate) fn export_bundle(h: &Handler, _r: &Request) -> Response {
         return passthrough(400, response);
     }
     match build_bundle(deadline, assets, &notes_path) {
-        Ok(body) => Response {
+        Ok(file) => Response {
+            file: Some(file),
             status: 200,
             headers: vec![
                 ("content-type".into(), "application/zip".into()),
@@ -145,7 +147,7 @@ pub(crate) fn export_bundle(h: &Handler, _r: &Request) -> Response {
                     "attachment; filename=inkism-backup.zip".into(),
                 ),
             ],
-            body,
+            body: Vec::new(),
         },
         Err(e) => Response::fail(500, e),
     }
@@ -174,14 +176,15 @@ fn build_bundle(
     deadline: Deadline,
     assets: &dyn Attachments,
     notes_path: &Path,
-) -> Result<Vec<u8>> {
+) -> Result<tempfile::NamedTempFile> {
     let mut notes = std::fs::File::open(notes_path)?;
     if notes.metadata()?.len() > MAX_BACKUP_NOTES_BYTES {
         return Err("노트 백업 크기 초과".into());
     }
     let deflate = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
     let store = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
-    let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
+    let mut file = tempfile::Builder::new().prefix("inkism-backup-").suffix(".zip").tempfile()?;
+    let mut archive = ZipWriter::new(file.as_file_mut());
     archive.start_file(NOTES_ENTRY, deflate)?;
     io::copy(&mut notes, &mut archive)?;
     drop(notes);
@@ -222,12 +225,13 @@ fn build_bundle(
     })?;
     archive.start_file(MANIFEST_ENTRY, deflate)?;
     archive.write_all(&manifest)?;
-    let bytes = archive.finish()?.into_inner();
-    verify_bundle(deadline, &bytes)?;
-    if bytes.len() as u64 > MAX_BUNDLE_BYTES {
+    archive.finish()?.flush()?;
+    if file.as_file().metadata()?.len() > MAX_BUNDLE_BYTES {
         return Err("백업 전체 크기 초과".into());
     }
-    Ok(bytes)
+    verify_reader(deadline, file.reopen()?)?;
+    file.as_file_mut().rewind()?;
+    Ok(file)
 }
 
 fn validate_bundle_meta(meta: &AttachmentMetadata, seen: &HashSet<String>) -> Result<()> {
@@ -248,11 +252,11 @@ fn validate_bundle_meta(meta: &AttachmentMetadata, seen: &HashSet<String>) -> Re
 
 // ---------------------------------------------------------------- verify
 
-struct Bundle<'a> {
+struct Bundle<R: Read + Seek> {
     notes: BTreeMap<String, Box<RawValue>>,
     rows: Option<Vec<Row>>,
     assets: Vec<AttachmentMetadata>,
-    archive: ZipArchive<Cursor<&'a [u8]>>,
+    archive: ZipArchive<R>,
 }
 
 struct DeadlineReader<R> {
@@ -275,25 +279,24 @@ impl<R: Read> Read for DeadlineReader<R> {
 /// Entry count from the end-of-central-directory record. The zip crate keys
 /// entries by name and silently keeps one of two duplicates; comparing the
 /// counts turns that into a rejection, as Go's reader sees every entry.
-fn central_directory_entries(data: &[u8]) -> Option<u64> {
-    let last = data.len().checked_sub(22)?;
-    let first = data.len().saturating_sub(22 + 0xFFFF);
-    let at = (first..=last)
-        .rev()
-        .find(|&i| data[i..i + 4] == [0x50, 0x4b, 0x05, 0x06])?;
-    let count = u16::from_le_bytes([data[at + 10], data[at + 11]]);
-    if count != 0xFFFF {
-        return Some(count.into());
-    }
-    let locator = data.get(at.checked_sub(20)?..at)?;
-    if locator[..4] != [0x50, 0x4b, 0x06, 0x07] {
-        return Some(count.into()); // exactly 65535 entries, no zip64 record
-    }
-    let offset = usize::try_from(u64::from_le_bytes(locator[8..16].try_into().ok()?)).ok()?;
-    let record = data.get(offset..offset.checked_add(40)?)?;
-    if record[..4] != [0x50, 0x4b, 0x06, 0x06] {
-        return None;
-    }
+fn central_directory_entries(reader: &mut (impl Read + Seek)) -> Option<u64> {
+    let len = reader.seek(SeekFrom::End(0)).ok()?;
+    let tail_start = len.saturating_sub(22 + 0xFFFF + 20);
+    reader.seek(SeekFrom::Start(tail_start)).ok()?;
+    let mut tail = vec![0; (len - tail_start) as usize];
+    reader.read_exact(&mut tail).ok()?;
+    let last = tail.len().checked_sub(22)?;
+    let at = (0..=last).rev().find(|&i| tail[i..i+4] == [0x50,0x4b,0x05,0x06] && i + 22 + u16::from_le_bytes([tail[i+20],tail[i+21]]) as usize == tail.len())?;
+    let count = u16::from_le_bytes([tail[at+10],tail[at+11]]);
+    if count != 0xFFFF { return Some(count.into()); }
+    let locator = tail.get(at.checked_sub(20)?..at)?;
+    if locator[..4] != [0x50,0x4b,0x06,0x07] { return Some(count.into()); }
+    let offset = u64::from_le_bytes(locator[8..16].try_into().ok()?);
+    if offset.checked_add(40)? > len { return None; }
+    reader.seek(SeekFrom::Start(offset)).ok()?;
+    let mut record = [0; 40];
+    reader.read_exact(&mut record).ok()?;
+    if record[..4] != [0x50,0x4b,0x06,0x06] { return None; }
     Some(u64::from_le_bytes(record[32..40].try_into().ok()?))
 }
 
@@ -303,10 +306,15 @@ fn allowed_entry(name: &str) -> bool {
         || name.strip_prefix(ATTACHMENTS_DIR).is_some_and(is_asset_id)
 }
 
-fn verify_bundle(deadline: Deadline, data: &[u8]) -> Result<Bundle<'_>> {
+fn verify_bundle(deadline: Deadline, data: &[u8]) -> Result<Bundle<Cursor<&[u8]>>> {
+    verify_reader(deadline, Cursor::new(data))
+}
+
+fn verify_reader<R: Read + Seek>(deadline: Deadline, mut reader: R) -> Result<Bundle<R>> {
     check(deadline)?;
-    let mut archive = ZipArchive::new(Cursor::new(data))?;
-    let declared = central_directory_entries(data).ok_or("백업 목록을 읽을 수 없습니다")?;
+    let declared = central_directory_entries(&mut reader).ok_or("백업 목록을 읽을 수 없습니다")?;
+    reader.rewind()?;
+    let mut archive = ZipArchive::new(reader)?;
     if declared > (MAX_ENTRIES + 2) as u64 {
         return Err("백업 항목 수 초과".into());
     }
@@ -358,7 +366,7 @@ fn verify_bundle(deadline: Deadline, data: &[u8]) -> Result<Bundle<'_>> {
 }
 
 fn read_limited(
-    archive: &mut ZipArchive<Cursor<&[u8]>>,
+    archive: &mut ZipArchive<impl Read + Seek>,
     name: &str,
     limit: u64,
 ) -> Result<Vec<u8>> {
@@ -374,7 +382,7 @@ fn read_limited(
     Ok(data)
 }
 
-impl Bundle<'_> {
+impl<R: Read + Seek> Bundle<R> {
     /// Checks every listed attachment against its bundle bytes; returns the verified ids.
     fn verify_manifest(&mut self, deadline: Deadline, manifest: &[u8]) -> Result<HashSet<String>> {
         let mut seen = HashSet::new();
@@ -532,7 +540,7 @@ fn raw(value: &impl serde::Serialize) -> Result<Box<RawValue>> {
     Ok(serde_json::value::to_raw_value(value)?)
 }
 
-impl Bundle<'_> {
+impl<R: Read + Seek> Bundle<R> {
     fn write_notes(&mut self, path: &Path, ids: Option<&HashMap<String, String>>) -> Result<()> {
         if let Some(ids) = ids {
             for note in self.rows.iter_mut().flatten() {
@@ -677,7 +685,7 @@ pub(crate) fn restore_bundle(h: &Handler, r: &Request) -> Response {
 
 /// Imports every bundled asset; maps old attachment ids to the new ones.
 fn publish_assets(
-    bundle: &mut Bundle,
+    bundle: &mut Bundle<impl Read + Seek>,
     assets: &dyn Attachments,
     deadline: Deadline,
 ) -> std::result::Result<HashMap<String, String>, Response> {

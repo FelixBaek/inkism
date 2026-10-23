@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Files, List, Search, X } from "../icons";
 import { CalendarBlankIcon as CalendarDays } from "@phosphor-icons/react";
-import { api, rpc, hasRpcDiagnostic } from "../api";
+import { api, rpc, hasRpcDiagnostic, RpcError } from "../api";
 import { useStore } from "../store";
 import type { Note, Summary } from "../types";
 import { t } from "../i18n";
@@ -188,8 +188,9 @@ export function WritingTools() {
             try {
               const note = await api.get(id);
               return note.trashed ? null : { ...note, preview: "" };
-            } catch {
-              return null;
+            } catch (error) {
+              if (error instanceof RpcError && error.code === "not_found") return null;
+              throw error;
             }
           }),
         );
@@ -554,7 +555,7 @@ export function WritingTools() {
                   onMouseMove={() => setActive(i)}
                   onClick={() => void run(() => openNote(note.id))}
                 >
-                  {note.title || t("제목 없는 노트")}
+                  {note.title || t("제목 없음")}
                 </button>
               ))}
             </div>
@@ -578,7 +579,7 @@ export function WritingTools() {
                 <option value="">{t("빈 노트")}</option>
                 {templates.map((note) => (
                   <option key={note.id} value={note.id}>
-                    {note.title || t("제목 없는 노트")}
+                    {note.title || t("제목 없음")}
                   </option>
                 ))}
               </select>
@@ -594,13 +595,13 @@ export function WritingTools() {
             <div className="writing-tools-list">
               {templates.map((note) => (
                 <div key={note.id} className="writing-template-row">
-                  <span title={note.title}>{note.title || t("제목 없는 노트")}</span>
+                  <span title={note.title}>{note.title || t("제목 없음")}</span>
                   <span>
                     <button
                       type="button"
                       className="writing-link"
                       disabled={busy}
-                      aria-label={t("템플릿으로 새 노트") + ": " + (note.title || t("제목 없는 노트"))}
+                      aria-label={t("템플릿으로 새 노트") + ": " + (note.title || t("제목 없음"))}
                       onClick={() => createTemplate(note)}
                     >
                       {t("새 노트 만들기")}
@@ -681,7 +682,7 @@ export function WritingTools() {
                 <option value="">{t("노트 선택")}</option>
                 {notes.map((note) => (
                   <option key={note.id} value={note.id}>
-                    {note.title || t("제목 없는 노트")}
+                    {note.title || t("제목 없음")}
                   </option>
                 ))}
               </select>
@@ -699,7 +700,7 @@ export function WritingTools() {
                 <option value="">{t("노트 선택")}</option>
                 {notes.map((note) => (
                   <option key={note.id} value={note.id}>
-                    {note.title || t("제목 없는 노트")}
+                    {note.title || t("제목 없음")}
                   </option>
                 ))}
               </select>

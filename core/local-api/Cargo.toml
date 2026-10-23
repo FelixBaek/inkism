@@ -27,7 +27,7 @@ hyper = { version = "1", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 subtle = "2"
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "sync", "time", "macros"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "sync", "time", "macros", "fs", "io-util"] }
 uuid = { version = "1", features = ["v4"] }
 # backups
 regex = { version = "1", default-features = false, features = ["std"] }

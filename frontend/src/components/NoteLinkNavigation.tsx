@@ -20,7 +20,7 @@ export function NoteLinkNavigation(){
     const ref=parseReference(target.getAttribute('href')!),resolved=await knowledge.resolve(ref.target);if(resolved.items.length!==1||active!==target||request!==generation)return;
     const note=await api.notePreview(resolved.items[0].id);if(active!==target||request!==generation)return;
     popup=document.createElement('div');popup.className='inkism-link-preview';popup.setAttribute('role','tooltip');
-    const title=document.createElement('strong');title.textContent=note.title||t('제목 없음');const body=document.createElement('p');body.textContent=note.preview;popup.append(title,body);document.body.appendChild(popup);
+    const title=document.createElement('strong');title.textContent=note.title||t('제목 없음');const body=document.createElement('p');body.textContent=note.preview;popup.append(title,body);if(target.closest('[contenteditable="true"]')){const hint=document.createElement('small');hint.textContent=t('{key}+클릭으로 열기',{key:/Mac|iP/.test(navigator.platform)?'⌘':'Ctrl'});popup.append(hint);}document.body.appendChild(popup);
     const rect=target.getBoundingClientRect();popup.style.left=`${Math.max(8,Math.min(window.innerWidth-popup.offsetWidth-8,rect.left))}px`;popup.style.top=`${Math.min(window.innerHeight-popup.offsetHeight-8,rect.bottom+8)}px`;
   }catch{/* Preview failures never interrupt editing. */}})();},280);};
   const out=(event:MouseEvent|FocusEvent)=>{if(active&&(!event.relatedTarget||!(event.relatedTarget instanceof Node)||!active.contains(event.relatedTarget)))removePreview();};

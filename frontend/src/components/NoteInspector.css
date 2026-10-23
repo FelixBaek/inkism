@@ -196,34 +196,61 @@
   font-weight: 400;
   color: var(--muted);
 }
+/* 폴더는 입력칸이 아니라 누르면 편집기의 폴더 선택으로 가는 칩 (Figma 09 폴더/inkism) */
 .inspector-notebook {
-  display: flex;
+  display: inline-flex;
+  align-self: flex-start;
   align-items: center;
-  height: 32px;
-  padding: 0 14px;
+  gap: 6px;
+  max-width: 100%;
+  height: 26px;
+  padding: 0 8px;
   border: 1px solid var(--border);
   background: var(--hover);
   color: var(--text);
-  font-size: var(--fs-caption);
+  font-size: var(--fs-small);
   text-align: left;
   cursor: pointer;
+}
+.inspector-notebook span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inspector-notebook svg {
+  flex: none;
+  color: var(--muted);
+}
+.inspector-notebook:hover {
+  background: var(--active);
+}
+.inspector-notebook.is-empty {
+  border-style: dashed;
+  background: transparent;
+  color: var(--muted);
 }
 .inspector-times {
   margin: 0;
   font-size: var(--fs-small);
 }
 .inspector-times div {
-  display: grid;
-  grid-template-columns: 1fr 1.4fr;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
   gap: 10px;
-  padding: 4px 0;
+  padding: 2px 0;
 }
 .inspector-times dt {
   color: var(--muted);
 }
+.inspector-times dt {
+  flex: none;
+}
 .inspector-times dd {
   margin: 0;
-  overflow-wrap: anywhere;
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .inspector-hint {
   color: var(--faint);
@@ -346,11 +373,34 @@
   padding: 0;
   color: var(--danger);
 }
+/* 속성 추가는 가벼운 글자 버튼, 저장은 오른쪽 작은 버튼 (Figma 09 속성 동작) */
 .inspector-properties .knowledge-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
   margin: 0;
+}
+.inspector-properties .knowledge-row > .btn {
+  min-height: 26px;
+  font-size: var(--fs-small);
+}
+.inspector-properties .knowledge-row > .btn:first-child {
+  margin-right: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.inspector-properties .knowledge-row > .btn:first-child::before {
+  content: "+";
+  margin-right: 4px;
+  font-size: 14px;
+  font-weight: 400;
+}
+.inspector-properties .knowledge-row > .btn:first-child:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
 }
 .inspector-properties .knowledge-row output,
 .inspector-properties .knowledge-property output,
@@ -471,6 +521,28 @@
   background: var(--hover);
   color: var(--text);
   font-size: var(--fs-caption);
+}
+/* 노트 링크 고르기 (Figma 25 속성과 연결 198:29255): 기본 화살표 대신 다른 select와 같은 캐럿 */
+.note-connections-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.note-connections-form label .note-connections-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 30px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.note-connections-select svg {
+  position: absolute;
+  right: 9px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.note-connections-select option {
+  background: var(--raised);
 }
 .note-connections-form .btn[aria-pressed="true"] {
   background: var(--active);

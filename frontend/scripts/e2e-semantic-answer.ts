@@ -1,5 +1,7 @@
 import {chromium} from './browser-env.ts';import {libraryTool} from './library-tools.ts';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+const space='semantic-v1:'+createHash('sha256').update(JSON.stringify(['http://127.0.0.1:49999/v1/embeddings','emb',4])).digest('hex');
 const base=process.env.INKISM_URL||'http://127.0.0.1:48289';
 const rpc=async(op:string,args={})=>{const v=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...args})})).json();assert.equal(v.ok,true,JSON.stringify(v));return v.data;};
 const u=Date.now().toString(36).replace(/\d/g,c=>'abcdefghij'[+c]);
@@ -32,12 +34,12 @@ try{
  });
  await p.goto(base);await p.locator('.ProseMirror').first().waitFor();
  // Indexing starts with the app; locked notes are not eligible, so three notes complete it.
- for(let i=0;i<200;i++){const s=await rpc('semantic_status',{model:'emb'});if(s.indexed===3&&s.pending===0)break;await p.waitForTimeout(100);}
- assert.deepEqual(await rpc('semantic_status',{model:'emb'}),{indexed:3,pending:0});
+ for(let i=0;i<200;i++){const s=await rpc('semantic_status',{model:space});if(s.indexed===3&&s.pending===0)break;await p.waitForTimeout(100);}
+ assert.deepEqual(await rpc('semantic_status',{model:space}),{indexed:3,pending:0});
  assert.ok(embedded.some(s=>s.includes('N'+u+' 반려묘')),'note chunks were embedded');
  assert.ok(!embedded.some(s=>s.includes('lockedsecret')),'locked note text never sent');
- const stored=(await rpc('semantic_search',{model:'emb',vector:[1,0,0.01,0],limit:50})).items;
- const tail=(await rpc('semantic_search',{model:'emb',vector:[0,0,0.01,1],limit:1})).items[0];
+ const stored=(await rpc('semantic_search',{model:space,vector:[1,0,0.01,0],limit:50})).items;
+ const tail=(await rpc('semantic_search',{model:space,vector:[0,0,0.01,1],limit:1})).items[0];
  assert.equal(tail.note.id,long.id);assert.ok(tail.snippet.includes(`T${u} final conclusion`),'tail of a long note is indexed');
  assert.equal(stored[0].note.id,note.id);assert.ok(stored.every((h:any)=>h.note.id!==secret.id),'locked note never stored');
  await libraryTool(p,'전체 검색');

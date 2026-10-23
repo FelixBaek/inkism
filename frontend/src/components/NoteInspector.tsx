@@ -1,7 +1,7 @@
 import { openBacklinkLocation, readBacklinkLocation, type BacklinkLocation } from "../lib/backlink-location";
 import { knowledge } from "../lib/knowledge";
 import React, { useEffect, useRef, useState } from "react";
-import { X, Pin, Star, Archive, PencilOff, FileText } from "../icons";
+import { X, Pin, Star, Archive, PencilOff, FileText, Folder, Plus } from "../icons";
 import { KNOWLEDGE_EVENT, PropertyEditor } from "./KnowledgeTools";
 import { NoteConnections } from "./NoteConnections";
 import { api } from "../api";
@@ -14,6 +14,11 @@ type DragState = { x: number; width: number; current: number };
 type Store = ReturnType<typeof useStore>;
 
 const timestamp = (value?: number) => (value ? new Date(value).toLocaleString(lang) : t("저장 후 표시"));
+// 패널 날짜는 초를 빼고 읽는다. 초까지 든 전체 시각은 title로 남긴다.
+const minuteTime = (value?: number) =>
+  value
+    ? new Date(value).toLocaleString(lang, { year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : t("저장 후 표시");
 const shortTime = (value: number) =>
   new Date(value).toLocaleString(lang, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
@@ -469,7 +474,7 @@ export function NoteInspector({ open, onClose }: Readonly<{ open: boolean; onClo
         ) : (
           <div className="inspector-scroll">
             <p className="inspector-note-title" title={s.draft.title}>
-              {s.draft.title || t("제목 없는 노트")}
+              {s.draft.title || t("제목 없음")}
             </p>
             <section aria-labelledby="inspector-properties">
               <h3 id="inspector-properties">{t("속성")}</h3>
@@ -522,26 +527,40 @@ export function NoteInspector({ open, onClose }: Readonly<{ open: boolean; onClo
                 />
               </label>
               <h3 className="inspector-notebooks-heading">{t("폴더")}</h3>
-              <button
-                className="inspector-notebook"
-                onClick={() => document.getElementById("notebook-select")?.focus()}
-              >
-                {s.notebooks.find((n) => n.id === s.draft?.notebook_id)?.name || t("+ 추가")}
-              </button>
+              {(() => {
+                const notebook = s.notebooks.find((n) => n.id === s.draft?.notebook_id);
+                return (
+                  <button
+                    type="button"
+                    className={`inspector-notebook${notebook ? "" : " is-empty"}`}
+                    title={notebook?.name}
+                    onClick={() => document.getElementById("notebook-select")?.focus()}
+                  >
+                    {notebook ? <Folder size={13} aria-hidden /> : <Plus size={13} aria-hidden />}
+                    <span>{notebook?.name ?? t("폴더 지정")}</span>
+                  </button>
+                );
+              })()}
               <dl className="inspector-times">
                 <div>
                   <dt>{t("만든 날짜")}</dt>
                   <dd>
-                    <time dateTime={s.note ? new Date(s.note.created_at).toISOString() : undefined}>
-                      {timestamp(s.note?.created_at)}
+                    <time
+                      dateTime={s.note ? new Date(s.note.created_at).toISOString() : undefined}
+                      title={s.note ? timestamp(s.note.created_at) : undefined}
+                    >
+                      {minuteTime(s.note?.created_at)}
                     </time>
                   </dd>
                 </div>
                 <div>
                   <dt>{t("수정한 날짜")}</dt>
                   <dd>
-                    <time dateTime={s.note ? new Date(s.note.updated_at).toISOString() : undefined}>
-                      {timestamp(s.note?.updated_at)}
+                    <time
+                      dateTime={s.note ? new Date(s.note.updated_at).toISOString() : undefined}
+                      title={s.note ? timestamp(s.note.updated_at) : undefined}
+                    >
+                      {minuteTime(s.note?.updated_at)}
                     </time>
                   </dd>
                 </div>
@@ -572,7 +591,9 @@ export function NoteInspector({ open, onClose }: Readonly<{ open: boolean; onClo
                 retry={() => setAttempt((value) => value + 1)}
                 restore={restore}
               />
-              <p className="inspector-note">{t("복원 전에 현재 내용이 버전으로 보관됩니다.")}</p>
+              {Boolean(history?.length) && (
+                <p className="inspector-note">{t("복원 전에 현재 내용이 버전으로 보관됩니다.")}</p>
+              )}
               {persisted && !historyError && (
                 <div className="inspector-links">
                   <button type="button" className="btn btn-ghost" onClick={() => setAttempt((value) => value + 1)}>

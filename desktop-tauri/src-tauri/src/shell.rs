@@ -111,12 +111,13 @@ pub fn run(session: Session) -> local_api::Result<Option<PathBuf>> {
     let note_link_server = Arc::new(Mutex::new(None));
     let result = (|| {
         let app = tauri::Builder::default()
+            .manage(handler.clone())
             .manage(crate::ai_key::KeyStore::new(session.config_root.join("Inkism").join("ai-key.dpapi")))
-            .invoke_handler(tauri::generate_handler![crate::web_viewer::web_viewer, crate::ai_key::ai_key])
+            .invoke_handler(tauri::generate_handler![crate::ai_key::ai_key, crate::file_export::save_export, crate::file_export::save_backup])
             .register_asynchronous_uri_scheme_protocol(SCHEME, {
                 let handler = handler.clone();
                 move |ctx, request, responder| {
-                    if !crate::web_viewer::allow_app_protocol(ctx.webview_label()) {
+                    if !crate::window_trust::allow_app_protocol(ctx.webview_label()) {
                         responder.respond(http::Response::builder().status(403).body(Vec::<u8>::new()).unwrap());
                         return;
                     }
@@ -133,8 +134,8 @@ pub fn run(session: Session) -> local_api::Result<Option<PathBuf>> {
                     let _ = app_cell.set(app.handle().clone());
                     let url = start_url().parse().expect("static URL");
                     let builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::CustomProtocol(url))
+                        .initialization_script("window.__inkismNativeSave = true;")
                         .title("inkism")
-                        .initialization_script("window.__inkismNativeWebViewer=true;")
                         .inner_size(1360.0, 900.0)
                         .min_inner_size(900.0, 600.0)
                         .decorations(false);
@@ -211,9 +212,6 @@ fn start_note_link_server(
 
 fn on_window_event(window: &tauri::Window, event: &WindowEvent, state: &CloseState, security: Option<&Controller>) {
     if window.label() != LABEL { return; }
-    if matches!(event, WindowEvent::Destroyed) {
-        if let Some(viewer) = window.app_handle().get_webview_window("web-viewer") { let _ = viewer.close(); }
-    }
     let WindowEvent::CloseRequested { api, .. } = event else { return };
     let decision = before_close(state.copying.load(Ordering::SeqCst), state.ready.load(Ordering::SeqCst), || {
         security::cancel_for_locked_close(security)
@@ -343,7 +341,7 @@ fn serve(handler: &Handler, app: &AppHandle, request: http::Request<Vec<u8>>) ->
 fn asset(app: &AppHandle, path: &str) -> Response {
     match app.asset_resolver().get(path.to_string()) {
         Some(asset) => {
-            let mut response = Response { status: 200, headers: vec![("content-type".into(), asset.mime_type)], body: asset.bytes };
+            let mut response = Response { file: None, status: 200, headers: vec![("content-type".into(), asset.mime_type)], body: asset.bytes };
             if let Some(csp) = asset.csp_header {
                 response.headers.push(("content-security-policy".into(), csp));
             }
@@ -371,6 +369,9 @@ fn to_local(request: http::Request<Vec<u8>>) -> Request {
 }
 
 fn to_http(response: Response) -> http::Response<Vec<u8>> {
+    if response.file.is_some() {
+        return to_http(Response::fail(409, "Use the native backup save command for file downloads"));
+    }
     let mut builder = http::Response::builder().status(response.status);
     for (name, value) in &response.headers {
         builder = builder.header(name, value);

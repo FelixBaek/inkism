@@ -1,3 +1,4 @@
+import { saveFile } from "../lib/save-file";
 import React, { useEffect, useRef, useState } from "react";
 import { Download, X } from "../icons";
 import { printNote } from "../lib/print-note";
@@ -49,14 +50,7 @@ async function requestExport(kind: SavedKind, note: Draft, signal: AbortSignal) 
   }
   return response.blob();
 }
-function download(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob),
-    a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+
 
 export const PREVIEW_EVENT = "inkism-open-preview";
 type ExportFormat = "pdf" | "source" | "html" | "markdown";
@@ -114,7 +108,7 @@ export function PreviewExport({
     const name = filename(raw.title, sourceExtension(format));
     const content = raw.paged ? await readPagedBody(raw.id, raw.paged) : raw.content;
     if (ticket !== generation.current || signal.aborted || store.readDraft()?.id !== raw.id) return;
-    download(new Blob([content], { type: "text/plain;charset=utf-8" }), name);
+    await saveFile(new Blob([content], { type: "text/plain;charset=utf-8" }), name);
   };
   const exportSaved = async (kind: SavedKind, before: Draft, ticket: number, signal: AbortSignal) => {
     if (!(await store.flushNow())) throw new Error(t("저장하지 못했습니다. 원문을 확인한 뒤 다시 시도해 주세요."));
@@ -124,7 +118,7 @@ export function PreviewExport({
     if (ticket !== generation.current || !sameSaved(store.readDraft(), note))
       throw new Error(t("내용이 변경되어 이전 결과를 사용하지 않았습니다. 다시 시도해 주세요."));
     if (kind !== "preview") {
-      download(blob, filename(note.title, kind === "markdown" ? "zip" : kind));
+      await saveFile(blob, filename(note.title, kind === "markdown" ? "zip" : kind));
       return;
     }
     const document = await blob.text(),

@@ -1,0 +1,47 @@
+/* 지운 직후 알림 (Figma 10d "알림/지운 직후 실행취소"): 높이 48, 아래쪽 가운데 */
+.deleted-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 48px;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 11px 10px 17px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--raised);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: var(--fs-caption);
+}
+.deleted-toast-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deleted-toast-undo {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--accent-text);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent-text);
+  font: inherit;
+  cursor: pointer;
+}
+.deleted-toast-undo:hover {
+  background: var(--hover);
+}
+.deleted-toast-undo kbd {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

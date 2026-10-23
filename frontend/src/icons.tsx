@@ -16,26 +16,32 @@ const customIcon = (paths: string[]) =>
       </svg>
     );
   };
+/** 아래·위 첨자: 큰 A 옆에 작은 A를 아래나 위에 그린다(x₂ 대신 글자로 알아보기 쉽게). */
+const scriptIcon = (small: string) =>
+  function ScriptIcon({ size = 16, ...rest }: IconProps) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.25} strokeLinecap="round" strokeLinejoin="round" {...(rest as SVGProps<SVGSVGElement>)}>
+        <path d="M1.5 13 5.5 3l4 10M3 9.5h5" />
+        <path d={small} />
+      </svg>
+    );
+  };
+export const SubscriptIcon = scriptIcon("M10.5 14.5 12.5 9.5l2 5M11.25 12.75h2.5");
+export const SuperscriptIcon = scriptIcon("M10.5 6.5 12.5 1.5l2 5M11.25 4.75h2.5");
 /** Figma Icon/sparkles-ai (40:6845): 큰 4각 별 + 작은 별 둘. */
 export const SparklesAi = customIcon([
   "M6 3.4C6.448 6.685 8.315 8.552 11.6 9 8.315 9.448 6.448 11.315 6 14.6 5.552 11.315 3.685 9.448.4 9 3.685 8.552 5.552 6.685 6 3.4Z",
   "M12.2 1.5c.232 1.701 1.199 2.668 2.9 2.9-1.701.232-2.668 1.199-2.9 2.9-.232-1.701-1.199-2.668-2.9-2.9 1.701-.232 2.668-1.199 2.9-2.9Z",
   "M12.2 9.7c.232 1.701 1.199 2.668 2.9 2.9-1.701.232-2.668 1.199-2.9 2.9-.232-1.701-1.199-2.668-2.9-2.9 1.701-.232 2.668-1.199 2.9-2.9Z",
 ]);
-const pilcrow =
-  "M11.86 2.3H6.82a2.88 2.88 0 0 0 0 5.76h1.8v1.8a.36.36 0 0 0 .72 0V3.02h1.08v6.84a.36.36 0 0 0 .72 0V3.02h.72a.36.36 0 0 0 0-.72Zm-3.24 5.04h-1.8a2.16 2.16 0 0 1 0-4.32h1.8Z";
-/** Figma Icon/paragraph-ltr · paragraph-rtl (23:3829, 23:3835). viewBox 16x17 → 16x16로 0.5 위로 맞춤. */
-export const DirectionLtr = customIcon([
-  pilcrow,
-  "M2.5 12.75h9.793l-1.147-1.146a.5.5 0 0 1 .708-.708l2 2a.5.5 0 0 1 0 .708l-2 2a.5.5 0 0 1-.708-.708l1.147-1.146H2.5a.5.5 0 0 1 0-1Z",
-]);
-export const DirectionRtl = customIcon([
-  pilcrow,
-  "M13.5 12.75H3.707l1.147-1.146a.5.5 0 0 0-.708-.708l-2 2a.5.5 0 0 0 0 .708l2 2a.5.5 0 0 0 .708-.708L3.707 13.75H13.5a.5.5 0 0 0 0-1Z",
-]);
 
 export {
   ArrowSquareOutIcon as ExternalLink,
+  ClipboardTextIcon as ClipboardText,
+  ClipboardIcon as Clipboard,
+  SelectionAllIcon as SelectAll,
+  BookOpenTextIcon as BookOpenText,
+  NotePencilIcon as NotePencil,
   SlidersHorizontalIcon as SlidersHorizontal,
   PencilSimpleSlashIcon as PencilOff,
   ExportIcon as ShareExport,
@@ -115,6 +121,7 @@ export {
   PaletteIcon as Palette,
   PaperclipIcon as Paperclip,
   PencilSimpleIcon as Pencil,
+  EraserIcon as Eraser,
   PushPinIcon as Pin,
   PlusIcon as Plus,
   QuotesIcon as Quote,
@@ -149,15 +156,16 @@ export {
   FilesIcon as NoteLink,
   SmileyIcon as Smile,
   CodeSimpleIcon as InlineCode,
-  TextSubscriptIcon as SubscriptIcon,
-  TextSuperscriptIcon as SuperscriptIcon,
   TextAUnderlineIcon as TextColor,
   DropSlashIcon as NoColor,
+  ProhibitIcon as Prohibit,
   MagicWandIcon as MagicWand,
   ArrowsInSimpleIcon as Shorter,
   ArrowsOutSimpleIcon as Longer,
   TranslateIcon as Translate,
   ListDashesIcon as ListDashes,
+  ColumnsIcon as Columns,
+  CalendarBlankIcon as CalendarBlank,
   ClockIcon as Clock,
   CheckIcon as Check,
   ListChecksIcon as TaskList,

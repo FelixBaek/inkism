@@ -4,7 +4,7 @@ import { SyncIndicator } from "./SyncSettings";
 import { EditorZoom } from "./EditorZoom";
 import React, { useState, useMemo, useRef, lazy, Suspense } from "react";
 import { editorLocation, rememberLocation } from "../lib/editor-location";
-import { Type, FileCode2, X, Loader2, CheckCircle2, AlertTriangle, CloudUpload, RefreshCw, List, Settings, PanelRight, Eye } from "../icons";
+import { Type, FileCode2, X, Loader2, CheckCircle2, AlertTriangle, Prohibit, CloudUpload, RefreshCw, List, Settings, PanelRight, Eye, ChevronDown } from "../icons";
 import { PREVIEW_EVENT } from "./PreviewExport";
 import { IconButton } from "./IconButton";
 import { CoverBanner } from "./NotebookCover";
@@ -18,6 +18,7 @@ import { TrashedNoteBanner } from "./TrashedNoteBanner";
 import { NoteInspector } from "./NoteInspector";
 import { SourceEditor } from "./SourceEditor";
 import { TagInput } from "./TagInput";
+import { NotebookGlyph, tagChipStyle, tagColor } from "./LibraryStyle";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { usePref } from "../lib/pref";
 import { lang, t } from "../i18n";
@@ -85,14 +86,12 @@ export function EditorPane({
             </button>
           </fieldset>
         </div>
-        {s.mode !== "text" && (
-          /* 원문 화면(Figma 29)의 도구줄: 서식 도구 대신 미리보기 */
-          <div className="editor-source-actions" role="group" aria-label={t("원문 편집 도구")}>
-            <IconButton label={t("미리보기")} onClick={() => window.dispatchEvent(new Event(PREVIEW_EVENT))}>
-              <Eye size={16} aria-hidden />
-            </IconButton>
-          </div>
-        )}
+        {/* 서식 도구는 글자를 고르면 뜨므로 미리보기는 모든 모드에서 여기 둔다 */}
+        <div className="editor-source-actions" role="group" aria-label={t("원문 편집 도구")}>
+          <IconButton label={t("미리보기")} onClick={() => window.dispatchEvent(new Event(PREVIEW_EVENT))}>
+            <Eye size={16} aria-hidden />
+          </IconButton>
+        </div>
         {/* Figma 01 도구줄 오른쪽: 목차 · 문서 설정 · 노트 정보 */}
         <div className="editor-doc-actions" role="group" aria-label={t("문서 동작")}>
           <IconButton label={t("목차")} onClick={() => window.dispatchEvent(new Event("inkism-open-outline"))}>
@@ -126,7 +125,7 @@ export function EditorPane({
               className="title-input"
               type="text"
               value={d.title}
-              placeholder={t("제목 없는 노트")}
+              placeholder={t("제목 없음")}
               aria-label={t("노트 제목")}
               readOnly={Boolean(d.readonly) || s.editorConverting}
               onChange={(e) => s.updateDraft({ title: e.target.value })}
@@ -152,6 +151,12 @@ export function EditorPane({
           <label className="visually-hidden" htmlFor="notebook-select">
             {t("폴더 지정")}
           </label>
+          <span className="meta-select-chip">
+          {d.notebook_id && (
+            <span className="meta-select-icon">
+              <NotebookGlyph nb={s.notebooks.find((n) => n.id === d.notebook_id)} />
+            </span>
+          )}
           <select
             id="notebook-select"
             className="meta-select"
@@ -167,6 +172,8 @@ export function EditorPane({
               </option>
             ))}
           </select>
+          <ChevronDown size={12} className="meta-select-caret" aria-hidden />
+          </span>
           <span className="classification-divider" aria-hidden>
             |
           </span>
@@ -264,7 +271,7 @@ function TagEditor() {
   return (
     <div className="tag-editor" aria-label={t("태그 편집")}>
       {d.tags.map((tag) => (
-        <span key={tag} className="tag-chip">
+        <span key={tag} className="tag-chip" style={tagChipStyle(tagColor(s.tags, tag))}>
           <span className="tag-chip-label" title={tag}>
             #{tag}
           </span>
@@ -367,6 +374,15 @@ export function StatusBar() {
       status = <>{idleStatus(d)}</>;
       statusClass = "muted";
   }
+  // 엔진 연결이 끊기면 "저장된 상태"를 띄우지 않는다. 다시 연결되면 store가 남은 변경을 저장한다.
+  if (s.connError && d && s.saveState !== "conflict") {
+    status = (
+      <>
+        {t("저장 안 됨 · 연결되면 다시 저장")} <Prohibit size={13} aria-hidden />
+      </>
+    );
+    statusClass = "bad";
+  }
 
   return (
     <footer className="status-bar" aria-label={t("노트 상태")}>
@@ -466,18 +482,18 @@ function WordCount({
         onClick={() => setOpen((v) => !v)}
         aria-label={stats ? t("단어 {n}개 — 글자 통계 보기", { n: stats.words }) : t("글자 통계 보기")}
       >
-        {stats ? `${n(stats.words)} words` : t("원문 {size}", { size })}
+        {stats ? t("단어 {n}개", { n: n(stats.words) }) : t("원문 {size}", { size })}
       </button>
       {open && (
         <div className="word-count-pop" role="dialog" aria-label={t("글자 통계")}>
           <dl>
-            <dt>Words</dt>
+            <dt>{t("단어")}</dt>
             <dd>{n(stats?.words ?? null)}</dd>
-            <dt>Characters</dt>
+            <dt>{t("글자")}</dt>
             <dd>{n(stats?.chars ?? null)}</dd>
-            <dt>Paragraphs</dt>
+            <dt>{t("문단")}</dt>
             <dd>{n(stats?.paragraphs ?? null)}</dd>
-            <dt>Spaces</dt>
+            <dt>{t("공백")}</dt>
             <dd>{n(stats?.spaces ?? null)}</dd>
           </dl>
           <button

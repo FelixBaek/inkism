@@ -288,6 +288,7 @@ fn action(
 pub(crate) fn serve(h: &Handler, r: &Request) -> Response {
     if r.method != "POST" {
         return Response {
+            file: None,
             status: 405,
             headers: vec![],
             body: vec![],

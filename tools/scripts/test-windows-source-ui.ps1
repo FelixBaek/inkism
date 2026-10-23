@@ -1,5 +1,9 @@
-﻿# Real Win32 input + UI Automation, without browser flags or a test-only application.
+﻿param([scriptblock]$InstalledUpgrade, [string]$DiskFullDirectory, [scriptblock]$FillStorage, [scriptblock]$ReleaseStorage, [scriptblock]$OfflineCheck)
+# Real Win32 input + UI Automation, without browser flags or a test-only application.
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'windows-acceptance-lock.ps1')
+$acceptanceLock = Enter-InkismAcceptance
+try {
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms, System.Drawing
 Add-Type @'
 using System;
@@ -135,6 +139,34 @@ public static class InkismInput {
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr window, int command);
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr window, uint message, IntPtr wparam, IntPtr lparam);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr window, IntPtr dc, uint flags);
+    delegate bool EnumChildProc(IntPtr window, IntPtr data);
+    [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumChildProc callback, IntPtr data);
+    [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr window);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr window, System.Text.StringBuilder text, int count);
+    [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
+    [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr window);
+    [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW")] static extern IntPtr EditMessage(IntPtr window, uint message, IntPtr wparam, IntPtr lparam, uint flags, uint timeout, out IntPtr result);
+    [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)] static extern IntPtr ReadText(IntPtr window, uint message, IntPtr size, System.Text.StringBuilder text, uint flags, uint timeout, out IntPtr result);
+    public static IntPtr DialogControl(IntPtr dialog, int id, string className) {
+        IntPtr found=IntPtr.Zero;int process=WindowProcessId(dialog);
+        EnumChildWindows(dialog,(window,data)=>{
+            if(GetDlgCtrlID(window)!=id || WindowProcessId(window)!=process)return true;
+            var name=new System.Text.StringBuilder(256);GetClassName(window,name,name.Capacity);
+            if(name.ToString()!=className)return true;
+            found=window;return false;
+        },IntPtr.Zero);
+        return found;
+    }
+    public static bool SetFilename(IntPtr field, string path) {
+        // Paste through the edit control so the Shell receives its normal
+        // edit notifications; WM_SETTEXT alone can leave its filename model stale.
+        IntPtr result;
+        if(EditMessage(field,0x00B1,IntPtr.Zero,new IntPtr(-1),2,3000,out result)==IntPtr.Zero)return false; // EM_SETSEL
+        if(EditMessage(field,0x0302,IntPtr.Zero,IntPtr.Zero,2,3000,out result)==IntPtr.Zero)return false; // WM_PASTE
+        var text=new System.Text.StringBuilder(path.Length+2);
+        return ReadText(field,0x000D,new IntPtr(text.Capacity),text,2,3000,out result)!=IntPtr.Zero && text.ToString()==path;
+    }
+
 }
 '@
 # UIA bounds are physical pixels. Keep pointer coordinates in the same space
@@ -144,6 +176,7 @@ $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $binary = Join-Path $root 'dist/windows/Inkism.exe'
 if ($env:INKISM_TEST_BINARY) { $binary = $env:INKISM_TEST_BINARY }
 $scratch = Join-Path $env:TEMP ('inkism-ui-' + [guid]::NewGuid())
+Write-Output ("Isolated UI test profile: $scratch")
 New-Item -ItemType Directory $scratch | Out-Null
 # All default-launch and library-recovery paths must stay in this test profile.
 # --db alone does not isolate the remembered library preference.
@@ -194,6 +227,7 @@ function Open-Inkism([bool]$remembered = $false) {
     if (-not $remembered -and $env:INKISM_TEST_ENCRYPTED -ne '1') { $info.Arguments += ' --create-plaintext' }
     $info.WorkingDirectory = $root
     $info.UseShellExecute = $false
+    $info.EnvironmentVariables["INKISM_EXPORT_TRACE"] = "1"
     $info.RedirectStandardOutput = $true
     $info.RedirectStandardError = $true
     $info.StandardOutputEncoding = [System.Text.Encoding]::UTF8
@@ -220,6 +254,7 @@ function Open-Inkism([bool]$remembered = $false) {
             [InkismInput]::ShowWindow($app.MainWindowHandle, 9) | Out-Null
             [InkismInput]::SetForegroundWindow($app.MainWindowHandle) | Out-Null
             if (-not $script:uiLanguageReady) { Set-KoreanTestLanguage }
+            if ($null -ne $OfflineCheck) { & $OfflineCheck $app.Id }
             return
         }
         Start-Sleep -Milliseconds 100
@@ -241,7 +276,7 @@ function Find-AnyElement([string[]]$names, $controlType = $null) {
     $deadline = [DateTime]::UtcNow.AddSeconds(20)
     while ([DateTime]::UtcNow -lt $deadline) {
         $app.Refresh()
-        if ($app.HasExited) { throw "Inkism exited while finding $($names -join ', ')" }
+        if ($app.HasExited) { throw "Inkism exited ($($app.ExitCode)) while finding $($names -join ', ')" }
         try {
             $window = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
             $element = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
@@ -302,14 +337,21 @@ function Wait-BlockNumber([string]$expected) {
 function Wait-WindowText([string]$text, [bool]$present, [int]$timeoutSeconds = 10, [string]$editorName = '노트 본문 (리치 텍스트 편집기)') {
     $deadline = [DateTime]::UtcNow.AddSeconds($timeoutSeconds)
     do {
-        $field = Find-Element $editorName
-        $pattern = $null
-        if ($field.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) {
-            $value = $pattern.Current.Value
-        } else {
-            $value = $field.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern).DocumentRange.GetText(-1)
+        # History remounts the editor. Its UIA name can appear before either
+        # text pattern is available; missing observation never proves absence.
+        $value = $null
+        try {
+            $field = Find-Element $editorName
+            $pattern = $null
+            if ($field.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) {
+                $value = $pattern.Current.Value
+            } elseif ($field.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern, [ref]$pattern)) {
+                $value = $pattern.DocumentRange.GetText(-1)
+            }
+        } catch [System.Windows.Automation.ElementNotAvailableException] {
+            # Reacquire the replaced element on the next bounded iteration.
         }
-        if ($value.Contains($text) -eq $present) { return }
+        if ($null -ne $value -and $value.Contains($text) -eq $present) { return }
         Start-Sleep -Milliseconds 50
     } while ([DateTime]::UtcNow -lt $deadline)
     throw "Window text state mismatch: $text expected presence $present"
@@ -412,9 +454,47 @@ function Invoke-Element($element) {
         Click-Element $element
     }
 }
+function New-TestNote {
+    Invoke-Element (Find-Element '새 노트 만들기')
+    # newNote awaits the previous draft flush. The old title field can remain
+    # mounted meanwhile; typing into it races the new draft's focus effect.
+    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    do {
+        $field = Find-Element '노트 제목'
+        if ((Read-Field $field) -ceq '') { return }
+        Start-Sleep -Milliseconds 20
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw 'New note did not expose an empty title before input'
+}
+function Open-CommandPalette {
+    # Figma's top bar puts this action inside the note menu.
+    Invoke-Element (Find-Element '노트 메뉴' ([System.Windows.Automation.ControlType]::Button))
+    Invoke-Element (Find-Element '명령창 열기' ([System.Windows.Automation.ControlType]::MenuItem))
+    Find-Element '노트 명령' ([System.Windows.Automation.ControlType]::List) | Out-Null
+}
 function Invoke-NoteCommand([string[]]$path) {
-    Invoke-Element (Find-Element '명령창 열기' ([System.Windows.Automation.ControlType]::Button))
+    Open-CommandPalette
     foreach ($label in $path) {
+        # Filter first: a long palette can expose offscreen UIA options whose
+        # raw bounds would otherwise click unrelated content behind it.
+        $search = Find-Element '명령 검색어'
+        # aria-activedescendant exposes the selected option as UIA focus;
+        # HasKeyboardFocus on the combobox is therefore not a caret check.
+        Click-Element $search
+        if ([InkismInput]::GetForegroundWindow() -ne $app.MainWindowHandle) { throw 'Command search lost the app foreground' }
+        Set-TestClipboard $label
+        [InkismInput]::Shortcut(0x41)
+        # TSF can consume Ctrl+V after a fixed-delay key release. Keep the
+        # modifier down until this exact query is acknowledged, like source input.
+        [InkismInput]::Shortcut(0x56, [Action]{
+            $queryDeadline = [DateTime]::UtcNow.AddSeconds(5)
+            while ((Read-Field $search) -cne $label) {
+                if ([DateTime]::UtcNow -ge $queryDeadline) {
+                    throw ('Native command query was not accepted: expected=' + $label + ' actual=' + (Read-Field $search))
+                }
+                Start-Sleep -Milliseconds 20
+            }
+        })
         # CommandPalette exposes role=listbox/option, mapped to UIA List and
         # ListItem. Search inside the command list, never a hidden toolbar
         # trigger or a similarly named text node elsewhere in the app.
@@ -469,7 +549,7 @@ function Select-NativeFile([string]$path, [string]$dialogTitle = 'Open') {
         $foreground = [InkismInput]::GetForegroundWindow()
         if ($foreground -ne [IntPtr]::Zero) {
             $candidate = [System.Windows.Automation.AutomationElement]::FromHandle($foreground)
-            if ($candidate.Current.ClassName -eq '#32770' -and $candidate.Current.Name -eq $dialogTitle) {
+            if ($candidate.Current.ClassName -eq '#32770' -and ($dialogTitle -eq '' -or $candidate.Current.Name -eq $dialogTitle) -and [InkismInput]::IsProcessInAppTree([InkismInput]::WindowProcessId($foreground), $app.Id)) {
                 $fileDialog = $candidate
                 break
             }
@@ -570,9 +650,11 @@ function Paste-Text($element, [string]$text, [bool]$replaceAll = $true) {
     Trace-PasteState 'paste-timeout' $element
     throw "Native paste was not accepted by the focused field: [$actual]"
 }
-function Save-Screenshot([string]$name) {
+function Save-Screenshot([string]$name, [IntPtr]$captureHandle = [IntPtr]::Zero) {
     if ($null -eq $app -or $app.HasExited -or $app.MainWindowHandle -eq [IntPtr]::Zero) { return }
-    $window = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+    if ($captureHandle -eq [IntPtr]::Zero) { $captureHandle = $app.MainWindowHandle }
+    if ([InkismInput]::WindowProcessId($captureHandle) -ne $app.Id) { throw 'Screenshot target is outside the owned app' }
+    $window = [System.Windows.Automation.AutomationElement]::FromHandle($captureHandle)
     $rect = $window.Current.BoundingRectangle
     if ($rect.Width -le 0 -or $rect.Height -le 0) { return }
     $image = New-Object System.Drawing.Bitmap([int]$rect.Width, [int]$rect.Height)
@@ -582,7 +664,7 @@ function Save-Screenshot([string]$name) {
         # unrelated window even when cropped to the app's bounding rectangle.
         $dc = $graphics.GetHdc()
         try {
-            if (-not [InkismInput]::PrintWindow($app.MainWindowHandle, $dc, 2)) {
+            if (-not [InkismInput]::PrintWindow($captureHandle, $dc, 2)) {
                 throw 'App-only PrintWindow capture failed; no screen fallback'
             }
         } finally { $graphics.ReleaseHdc($dc) }
@@ -632,8 +714,42 @@ function Paste-Source([string]$format,[string]$text,[string]$marker) {
 }
 function Verify-SourceData {
     [System.IO.File]::WriteAllText($expectedPath,(ConvertTo-Json -InputObject $cases.ToArray() -Depth 5),[System.Text.UTF8Encoding]::new($false))
-    node (Join-Path $root 'tools/scripts/verify-source-ui.ts') (Join-Path (Split-Path $binary) 'inkism-engine.exe') $db $expectedPath
-    if($LASTEXITCODE){throw 'Source bytes/format/restart verification failed'}
+    $verify = New-Object System.Diagnostics.ProcessStartInfo
+    $verify.FileName = (Get-Command node.exe -ErrorAction Stop).Source
+    $verify.Arguments = '"' + (Join-Path $root 'tools/scripts/verify-source-ui.ts') + '" "' + (Join-Path (Split-Path $binary) 'inkism-engine.exe') + '" "' + $db + '" "' + $expectedPath + '"'
+    $verify.UseShellExecute = $false
+    $verify.RedirectStandardOutput = $true
+    $verify.RedirectStandardError = $true
+    $verify.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $verify.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+    $process = [System.Diagnostics.Process]::Start($verify)
+    $output = $process.StandardOutput.ReadToEndAsync()
+    $errors = $process.StandardError.ReadToEndAsync()
+    try {
+        if (-not $process.WaitForExit(180000)) { $process.Kill(); throw 'Source verifier timed out' }
+        if ($output.Result) { Write-Output $output.Result }
+        if ($errors.Result) { Write-Output $errors.Result }
+        if ($process.ExitCode -ne 0) { throw ('Source bytes/format/restart verification failed: ' + $process.ExitCode) }
+    } finally { $process.Dispose() }
+}
+function Verify-NativeBackup([string]$mode) {
+    $info = New-Object System.Diagnostics.ProcessStartInfo
+    $info.FileName = (Get-Command node.exe -ErrorAction Stop).Source
+    $info.Arguments = '"' + (Join-Path $PSScriptRoot 'verify-native-backup.ts') + '" ' + $mode + ' "' + (Join-Path (Split-Path $binary) 'inkism-engine.exe') + '" "' + $db + '"'
+    $info.UseShellExecute = $false
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    $info.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $info.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+    $process = [System.Diagnostics.Process]::Start($info)
+    $output = $process.StandardOutput.ReadToEndAsync()
+    $errors = $process.StandardError.ReadToEndAsync()
+    try {
+        if (-not $process.WaitForExit(180000)) { $process.Kill(); throw 'Native backup verifier timed out' }
+        if ($output.Result) { Write-Output $output.Result }
+        if ($errors.Result) { Write-Output $errors.Result }
+        if ($process.ExitCode -ne 0) { throw "Native backup $mode failed: $($process.ExitCode)" }
+    } finally { $process.Dispose() }
 }
 function Confirm-TestDownloadPermission([ref]$attempts) {
     $app.Refresh()
@@ -730,13 +846,64 @@ function Confirm-TestDownloadPermission([ref]$attempts) {
         if ($_.Exception.GetBaseException() -isnot [System.Windows.Automation.ElementNotAvailableException]) { throw }
     }
 }
-# The preview opens from the command palette; the editor toolbar no longer has a preview button.
+# Exercise the command route as well as the editor's preview trigger.
 function Open-Preview {
-    Invoke-Element (Find-Element '명령창 열기' ([System.Windows.Automation.ControlType]::Button))
-    Invoke-Element (Find-Element '미리보기' ([System.Windows.Automation.ControlType]::ListItem))
+    Invoke-NoteCommand @('미리보기')
 }
 # Blocks edited in the rich editor gain a random ink-block id; every other byte must match.
 function Remove-BlockIds([string]$text) { $text -creplace ' id="ink-block-[0-9a-f-]{36}"','' }
+function Complete-TestSave([string]$path, [bool]$cancel = $false, [string[]]$returnButtons = @('원문 내보내기', '서식 HTML 내보내기', 'PDF 내보내기', 'Markdown + 첨부 ZIP 내보내기')) {
+    $deadline = [DateTime]::UtcNow.AddSeconds(30)
+    $picker = $null
+    do {
+        $foreground = [InkismInput]::GetForegroundWindow()
+        if ($foreground -ne [IntPtr]::Zero -and [InkismInput]::WindowProcessId($foreground) -eq $app.Id) {
+            $candidate = [System.Windows.Automation.AutomationElement]::FromHandle($foreground)
+            if ($candidate.Current.ClassName -eq '#32770' -and $candidate.Current.Name -eq '다른 이름으로 저장') {
+                $picker = $candidate
+                break
+            }
+        }
+        Start-Sleep -Milliseconds 50
+    } while ([DateTime]::UtcNow -lt $deadline)
+    if ($null -eq $picker) { throw 'Owned native Save As dialog did not open' }
+    # Shell controls initialize after the HWND. Native Win32 control IDs avoid
+    # traversing unrelated Shell UIA providers (which may deny token access).
+    $pickerHandle = [IntPtr]$picker.Current.NativeWindowHandle
+    $deadline = [DateTime]::UtcNow.AddSeconds(20)
+    $actionId = if ($cancel) { 2 } else { 1 }
+    do {
+        $action = [InkismInput]::DialogControl($pickerHandle, $actionId, 'Button')
+        $nameField = [InkismInput]::DialogControl($pickerHandle, 1001, 'Edit')
+        if ($action -ne [IntPtr]::Zero -and [InkismInput]::IsWindowEnabled($action) -and ($cancel -or $nameField -ne [IntPtr]::Zero)) { break }
+        Start-Sleep -Milliseconds 50
+    } while ([DateTime]::UtcNow -lt $deadline)
+    if ($action -eq [IntPtr]::Zero -or (-not $cancel -and $nameField -eq [IntPtr]::Zero)) { throw 'Native save controls did not become ready' }
+    Save-Screenshot 'windows-ui-native-save-dialog' $pickerHandle
+    if (-not $cancel) {
+        Set-TestClipboard $path
+        if (-not [InkismInput]::SetFilename($nameField, $path)) { throw 'Native save filename was not accepted' }
+    }
+    [InkismInput]::PostMessage($action, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null # BM_CLICK
+    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    do {
+        if (-not [InkismInput]::IsWindow($pickerHandle) -and
+            ($cancel -or [System.IO.File]::Exists($path))) {
+            $action = Find-AnyElement $returnButtons ([System.Windows.Automation.ControlType]::Button)
+            if ($action.Current.IsEnabled) { return }
+        }
+        Start-Sleep -Milliseconds 50
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw ("Native save did not finish: pickerOpen=" + [InkismInput]::IsWindow($pickerHandle) + "; fileExists=" + [System.IO.File]::Exists($path) + "; cancel=" + $cancel)
+}
+function Wait-TestExport([string]$path, [scriptblock]$ready) {
+    $deadline = [DateTime]::UtcNow.AddSeconds(30)
+    do {
+        try { if (& $ready ([System.IO.File]::ReadAllBytes($path))) { return $path } } catch {}
+        Start-Sleep -Milliseconds 50
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw "Native export bytes did not match: $path"
+}
 function Wait-TestDownload([string]$title,[string]$extension,[DateTime]$since,[scriptblock]$ready = $null) {
     $deadline=[DateTime]::UtcNow.AddSeconds(30)
     $permissionAttempts = 0
@@ -759,6 +926,48 @@ $cases = New-Object System.Collections.Generic.List[object]
 $expectedPath=Join-Path $scratch 'expected-source.json'
 $testID=[guid]::NewGuid().ToString('N').Substring(0,10)
 try {
+    if ($null -ne $OfflineCheck) {
+        . (Join-Path $PSScriptRoot 'windows-capture-extra.ps1')
+        . (Join-Path $PSScriptRoot 'windows-backup-extra.ps1')
+        return
+    }
+    if ($DiskFullDirectory) {
+        if ($null -eq $FillStorage -or $null -eq $ReleaseStorage) { throw 'Disk-full UI requires verified VHD callbacks' }
+        if (Test-Path -LiteralPath $DiskFullDirectory) { throw 'Disk-full UI library must be new' }
+        New-Item -ItemType Directory $DiskFullDirectory | Out-Null
+        $db=Join-Path $DiskFullDirectory 'notes.db'
+        . (Join-Path $PSScriptRoot 'windows-disk-full-extra.ps1')
+        return
+    }
+    if ($null -ne $InstalledUpgrade) {
+        # One profile and installed executable path span input, update and restore.
+        . (Join-Path $PSScriptRoot 'windows-capture-extra.ps1')
+        Verify-NativeBackup 'seed'
+        & $InstalledUpgrade
+        Verify-SourceData
+        Verify-NativeBackup 'verify'
+        Open-Inkism
+        if (-not (Wait-TabActivated ('노트 탭: '+$captureTitle) 10000)) { throw 'Installed update did not restore captured tab' }
+        Close-Inkism
+        . (Join-Path $PSScriptRoot 'windows-backup-extra.ps1')
+        Write-Output 'PASS: installed input, attachment, shutdown, update, restart and native backup restore in one journey'
+        return
+    }
+    if ($env:INKISM_TEST_CAPTURE_ONLY -eq 'APPROVED_SYNTHETIC_PROFILE_ONLY') {
+        . (Join-Path $PSScriptRoot 'windows-capture-extra.ps1')
+        return
+    }
+    if ($env:INKISM_TEST_BACKUP_ONLY -eq 'APPROVED_SYNTHETIC_PROFILE_ONLY') {
+        Open-Inkism
+        Find-Element '새 노트 만들기 (Ctrl+N)' | Out-Null
+        Close-Inkism
+        . (Join-Path $PSScriptRoot 'windows-backup-extra.ps1')
+        return
+    }
+    if ($env:INKISM_TEST_SYSTEM_IME_ONLY -eq 'APPROVED_SYNTHETIC_PROFILE_ONLY') {
+        . (Join-Path $PSScriptRoot 'windows-system-ime.ps1')
+        return
+    }
     if ($env:INKISM_TEST_EDGE_ONLY -eq 'APPROVED_SYNTHETIC_PROFILE_ONLY') {
         . (Join-Path $PSScriptRoot 'windows-edge-input.ps1')
         return
@@ -788,7 +997,7 @@ try {
     # The shared isolated profile/clipboard/WM_CLOSE harness now covers the
     # default rich note before the two source formats. This is not physical IME.
     Open-Inkism
-    Invoke-Element (Find-Element '새 노트 만들기')
+    New-TestNote
     $richTitle='inkism-native-'+$testID+'-rich'
     $richBody='리치검증-'+$testID+' 한글 😀 블록 편집'
     Paste-Text (Find-Element '노트 제목') $richTitle
@@ -811,6 +1020,14 @@ try {
     $noteLinkData = Get-Content -Raw -Encoding UTF8 -LiteralPath $noteLinkFixture | ConvertFrom-Json
     Open-Inkism
     if (-not (Wait-TabActivated ('노트 탭: ' + $noteLinkData.source.title))) { throw 'Source note did not finish restoring before warm note-link test' }
+    # Scheduled runners may reopen the app behind another window. Establish
+    # the foreground precondition before testing that warm links preserve it.
+    [InkismInput]::ActivateWindow($app.MainWindowHandle)
+    $foregroundDeadline = [DateTime]::UtcNow.AddSeconds(3)
+    while ([InkismInput]::GetForegroundWindow() -ne $app.MainWindowHandle) {
+        if ([DateTime]::UtcNow -ge $foregroundDeadline) { throw 'Warm note-link precondition: test window is not foreground' }
+        Start-Sleep -Milliseconds 25
+    }
     foreach ($destination in @($noteLinkData.target, $noteLinkData.source)) {
         $linkInfo = New-Object System.Diagnostics.ProcessStartInfo
         $linkInfo.FileName = $binary
@@ -826,7 +1043,14 @@ try {
             if ($linkProcess.ExitCode -ne 0) { throw ('Warm note-link process failed: ' + $linkError.Result) }
             if ($app.HasExited) { throw 'Warm note-link forwarding closed the original app' }
             if (-not (Wait-TabActivated ('노트 탭: ' + $destination.title))) { throw 'Warm note-link did not select the target note in the existing window' }
-            if ([InkismInput]::GetForegroundWindow() -ne $app.MainWindowHandle) { throw 'Warm note-link did not activate the existing window' }
+            # Observe the app's own asynchronous focus request; do not activate it here.
+            $foregroundDeadline = [DateTime]::UtcNow.AddSeconds(3)
+            while ([InkismInput]::GetForegroundWindow() -ne $app.MainWindowHandle) {
+                if ([DateTime]::UtcNow -ge $foregroundDeadline) {
+                    throw ('Warm note-link did not activate the existing window: expected=' + $app.MainWindowHandle + ' actual=' + [InkismInput]::GetForegroundWindow())
+                }
+                Start-Sleep -Milliseconds 25
+            }
         } finally { $linkProcess.Dispose() }
     }
     Write-Output 'PASS: two warm note:// launches exit without a second window, select each target in the original app and preserve its foreground'
@@ -850,21 +1074,19 @@ try {
             $stream=[System.IO.File]::Open($db,[System.IO.FileMode]::Open,[System.IO.FileAccess]::Read,[System.IO.FileShare]::ReadWrite)
             try{$header=New-Object byte[] 16;if($stream.Read($header,0,16)-ne 16 -or [System.Text.Encoding]::ASCII.GetString($header).StartsWith('SQLite format 3')){throw 'Encrypted source fixture has plaintext/missing header'}}finally{$stream.Dispose()}
         }
-        Invoke-Element (Find-Element '새 노트 만들기')
+        New-TestNote
         $title='inkism-native-'+$testID+'-'+$format
         Paste-Text (Find-Element '노트 제목') $title
-        # HTML is a view of the new HTML note; only Markdown designates a
-        # different source format and therefore asks for explicit confirmation.
-        Invoke-Element (Find-Element 'HTML' ([System.Windows.Automation.ControlType]::Button))
-        Source-Field 'html' | Out-Null
+        # The MARKDOWN tab is now a view of HTML, not a format conversion.
+        # Use the explicit editor conversion before testing raw Markdown bytes.
         if($format -eq 'markdown') {
+            Invoke-Element (Find-Element 'MARKDOWN 에디터로 변환' ([System.Windows.Automation.ControlType]::Button))
+            Find-Element 'HTML 에디터로 변환' | Out-Null
             Invoke-Element (Find-Element 'MARKDOWN' ([System.Windows.Automation.ControlType]::Button))
-            Find-Element '원문 형식 변경' | Out-Null
-            Invoke-Element (Find-Element '취소' ([System.Windows.Automation.ControlType]::Button))
-            Source-Field 'html' | Out-Null
-            Invoke-Element (Find-Element 'MARKDOWN' ([System.Windows.Automation.ControlType]::Button))
-            Invoke-Element (Find-Element '형식 변경' ([System.Windows.Automation.ControlType]::Button))
+        } else {
+            Invoke-Element (Find-Element 'HTML' ([System.Windows.Automation.ControlType]::Button))
         }
+        Source-Field $format | Out-Null
         $marker='원문검증-'+$format
         $content=switch($format){
             'html' { "<h2>$marker</h2>`n<p data-unused=`"preserve`">한글 &amp; &lt;원문&gt;</p>`n<!-- 그대로 보존 -->" }
@@ -891,18 +1113,27 @@ try {
         Find-Element ('노트 탭: '+$title) | Out-Null
         if((Read-Field (Find-Element '노트 제목')) -ne $title){throw 'Active source tab did not restore'}
         Wait-SourceMarker $format 'native_typed'
-        $before=[DateTime]::UtcNow
-        Invoke-NoteCommand @('Export as', '원문')
+        Invoke-NoteCommand @('Export as')
+        Invoke-Element (Find-Element '원문' ([System.Windows.Automation.ControlType]::RadioButton))
+        $filesBefore = @(Get-ChildItem -LiteralPath $scratch -File).Count
+        Invoke-Element (Find-Element '원문 내보내기' ([System.Windows.Automation.ControlType]::Button))
+        Complete-TestSave '' $true
+        if (@(Get-ChildItem -LiteralPath $scratch -File).Count -ne $filesBefore) { throw 'Cancelled export created a file' }
+        Invoke-Element (Find-Element '원문 내보내기' ([System.Windows.Automation.ControlType]::Button))
         $extension=switch($format){'html'{'html'}'markdown'{'md'}default{'txt'}}
-        $download=Wait-TestDownload $title $extension $before {param([byte[]]$data) (Remove-BlockIds ([System.Text.Encoding]::UTF8.GetString($data))) -ceq $content}
+        $download = Join-Path $scratch ('원문-' + $title + '.' + $extension)
+        Complete-TestSave $download
+        $download=Wait-TestExport $download {param([byte[]]$data) (Remove-BlockIds ([System.Text.Encoding]::UTF8.GetString($data))) -ceq $content}
         if((Remove-BlockIds ([System.IO.File]::ReadAllText($download,[System.Text.Encoding]::UTF8))) -cne $content){throw 'Downloaded source differs from canonical content'}
-        # Observe preview open/close without silently reinterpreting the source.
-        Invoke-NoteCommand @('미리보기')
-        Find-Element '미리보기 · 내보내기' | Out-Null
+        # Export opens the Figma format chooser; preview is requested explicitly.
+        Invoke-Element (Find-Element '미리보기' ([System.Windows.Automation.ControlType]::Button))
         Find-Element '저장된 원문의 미리보기' | Out-Null
+        Invoke-Element (Find-Element '서식 HTML' ([System.Windows.Automation.ControlType]::RadioButton))
         $before=[DateTime]::UtcNow
         Invoke-Element (Find-Element '서식 HTML 내보내기' ([System.Windows.Automation.ControlType]::Button))
-        $rendered=Wait-TestDownload $title 'html' $before {param([byte[]]$data)
+        $rendered = Join-Path $scratch ('서식-' + $title + '.html')
+        Complete-TestSave $rendered
+        $rendered=Wait-TestExport $rendered {param([byte[]]$data)
             $text=[System.Text.Encoding]::UTF8.GetString($data)
             $text.Contains($marker) -and $text -match '(?i)<!doctype html|<html' -and $text.TrimEnd().EndsWith('</html>')
         }
@@ -910,10 +1141,30 @@ try {
         if(-not $renderedText.Contains($marker) -or $renderedText -notmatch '(?i)<!doctype html|<html'){throw 'Rendered HTML export missing source snapshot'}
         if($format -eq 'html') {
             $before=[DateTime]::UtcNow
+            Invoke-Element (Find-Element 'PDF' ([System.Windows.Automation.ControlType]::RadioButton))
             Invoke-Element (Find-Element 'PDF 내보내기' ([System.Windows.Automation.ControlType]::Button))
-            $pdf=Wait-TestDownload $title 'pdf' $before {param([byte[]]$data) $data.Length -ge 8 -and [System.Text.Encoding]::ASCII.GetString($data,0,5) -eq '%PDF-'}
+            $pdf = Join-Path $scratch ($title + '.pdf')
+            Complete-TestSave $pdf
+            $pdf=Wait-TestExport $pdf {param([byte[]]$data) $data.Length -ge 8 -and [System.Text.Encoding]::ASCII.GetString($data,0,5) -eq '%PDF-'}
             $bytes=[System.IO.File]::ReadAllBytes($pdf)
             if($bytes.Length -lt 8 -or [System.Text.Encoding]::ASCII.GetString($bytes,0,5) -ne '%PDF-'){throw 'Native PDF download is invalid'}
+        }
+        if($format -eq 'markdown') {
+            Invoke-Element (Find-Element 'Markdown + 첨부 ZIP' ([System.Windows.Automation.ControlType]::RadioButton))
+            Invoke-Element (Find-Element 'Markdown + 첨부 ZIP 내보내기' ([System.Windows.Automation.ControlType]::Button))
+            $zip = Join-Path $scratch ($title + '.zip')
+            Complete-TestSave $zip
+            $zip = Wait-TestExport $zip {param([byte[]]$data) $data.Length -gt 4 -and $data[0] -eq 80 -and $data[1] -eq 75}
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+            try {
+                $entry = @($archive.Entries | Where-Object { $_.FullName -ceq 'note.md' })
+                if ($entry.Count -ne 1) { throw 'Native Markdown ZIP must contain one note' }
+                $reader = New-Object System.IO.StreamReader($entry[0].Open(), [System.Text.Encoding]::UTF8)
+                try { $markdown = $reader.ReadToEnd() } finally { $reader.Dispose() }
+                if (-not $markdown.Contains($marker) -or -not $markdown.Contains('native_typed')) { throw 'Native Markdown ZIP lost note content' }
+            } finally { $archive.Dispose() }
+
         }
         Invoke-Element (Find-Element '미리보기 닫기' ([System.Windows.Automation.ControlType]::Button))
         Wait-SourceMarker $format 'native_typed'
@@ -927,6 +1178,7 @@ try {
         Verify-SourceData
         Write-Output ('PASS: '+$format+' native paste/type/undo/redo, close-save/restart, raw/rendered export and preview cancel preserve bytes')
     }
+    . (Join-Path $PSScriptRoot 'windows-backup-extra.ps1')
     if ($env:INKISM_TEST_EXTENDED_NATIVE -eq 'APPROVED_SYNTHETIC_PROFILE_ONLY') {
         . (Join-Path $PSScriptRoot 'windows-source-extra.ps1')
     }
@@ -975,8 +1227,11 @@ try {
         [System.IO.Path]::GetFileName($resolvedScratch) -notlike 'inkism-ui-*') {
         throw 'Refusing cleanup outside the isolated UI test directory'
     }
+    Write-Output ("Removing verified test-only profile: $resolvedScratch")
     for ($i = 0; $i -lt 10; $i++) {
         try { Remove-Item -LiteralPath $scratch -Recurse -Force; break }
         catch { Start-Sleep -Milliseconds 200 }
     }
 }
+
+} finally { Exit-InkismAcceptance $acceptanceLock }

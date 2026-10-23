@@ -287,11 +287,11 @@ fn serve_content(r: &Request, mut headers: Vec<(String, String)>, data: &[u8]) -
     let size = data.len() as u64;
     let lists_star = |v: &str| v.split(',').any(|t| t.trim() == "*");
     if r.header("if-match").is_some_and(|v| !v.is_empty() && !lists_star(v)) {
-        return Response { status: 412, headers, body: Vec::new() };
+        return Response { file: None, status: 412, headers, body: Vec::new() };
     }
     if r.header("if-none-match").is_some_and(lists_star) {
         headers.retain(|(k, _)| k != "content-type");
-        return Response { status: 304, headers, body: Vec::new() };
+        return Response { file: None, status: 304, headers, body: Vec::new() };
     }
     // Without an ETag or modtime If-Range never matches: send the whole file.
     let range = r.header("range").filter(|_| r.header("if-range").is_none_or(str::is_empty)).unwrap_or("");
@@ -321,7 +321,7 @@ fn serve_content(r: &Request, mut headers: Vec<(String, String)>, data: &[u8]) -
     if r.method == "HEAD" {
         body.clear();
     }
-    Response { status, headers, body }
+    Response { file: None, status, headers, body }
 }
 
 fn range_not_satisfiable(mut headers: Vec<(String, String)>, size: u64, no_overlap: bool) -> Response {
@@ -331,7 +331,7 @@ fn range_not_satisfiable(mut headers: Vec<(String, String)>, size: u64, no_overl
     let message = if no_overlap { "invalid range: failed to overlap" } else { "invalid range" };
     headers.retain(|(k, _)| k != "content-type");
     headers.push(("content-type".into(), "text/plain; charset=utf-8".into()));
-    Response { status: 416, headers, body: format!("{message}\n").into_bytes() }
+    Response { file: None, status: 416, headers, body: format!("{message}\n").into_bytes() }
 }
 
 fn multipart_ranges(data: &[u8], ranges: &[(u64, u64)], boundary: &str, content_type: &str) -> Vec<u8> {

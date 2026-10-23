@@ -254,6 +254,7 @@ pub(crate) fn serve(h: &Handler, r: &Request, deadline: Deadline) -> Response {
     };
     match bundle(h, &req, deadline) {
         Ok(body) => Response {
+            file: None,
             status: 200,
             headers: vec![
                 ("content-type".into(), "application/zip".into()),

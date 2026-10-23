@@ -29,7 +29,23 @@ try{
   }
   await route.continue();
  });
- await page.getByRole('tab',{name:'태그',exact:true}).click();await page.getByRole('button',{name:'태그 '+old+' 옵션',exact:true}).click();
+ await page.getByRole('tab',{name:'태그',exact:true}).click();
+ // 색 변경: 메뉴 팔레트에서 고르면 사이드바 # 아이콘과 편집기 칩에 같은 색이 보이고 이름 변경 뒤에도 남는다.
+ const shots=process.env.INKISM_SHOTS;
+ await page.getByRole('button',{name:'태그 '+old+' 옵션',exact:true}).click();
+ await page.getByRole('menuitem',{name:'색 변경',exact:true}).click();
+ await page.getByRole('menuitemcheckbox',{name:'색 없음',exact:true}).waitFor();
+ if(shots)await page.screenshot({path:shots+'/tag-color-menu.png'});
+ await page.getByRole('menuitemcheckbox',{name:'분홍',exact:true}).click();
+ const pink='rgb(224, 82, 151)';
+ const sideIcon=page.locator('.side-row',{has:page.getByRole('button',{name:'태그 '+old+' 옵션',exact:true})}).locator('.side-icon');
+ await page.waitForFunction(([name,color])=>[...document.querySelectorAll('.side-row')].some(r=>r.textContent?.includes(name)&&getComputedStyle(r.querySelector('.side-icon')!).color===color),[old,pink]);
+ assert.equal(await sideIcon.evaluate(el=>getComputedStyle(el).color),pink);
+ const chip=page.locator('.tag-editor .tag-chip',{hasText:old}).first();
+ assert.equal(await chip.evaluate(el=>getComputedStyle(el,'::before').backgroundColor),pink);
+ assert.equal((await rpc('tags')).find(x=>x.name===old).color,'#e05297');
+ if(shots)await page.screenshot({path:shots+'/tag-color-sidebar-editor.png'});
+ await page.getByRole('button',{name:'태그 '+old+' 옵션',exact:true}).click();
  await page.getByRole('menuitem',{name:'이름 변경',exact:true}).click();
  await page.getByLabel('태그 이름',{exact:true}).fill(target);
  await page.getByRole('button',{name:'변경',exact:true}).click();
@@ -50,6 +66,7 @@ try{
  assert.equal(saved.content,'동시입력 '+html,'all source bytes survive the metadata revision rebase');assert.ok(bodySaves>0);
  assert.deepEqual(saved.tags,[target]);assert.ok(saved.content.includes('동시입력'));
  assert.deepEqual((await rpc('get',{id:b.id})).tags,[target]);
+ assert.equal((await rpc('tags')).find(x=>x.name===target).color,'#e05297','merge into an uncolored tag carries the color');
  await page.getByRole('button',{name:'태그 '+target+' 옵션',exact:true}).click();
  await page.getByRole('menuitem',{name:'태그 제거',exact:true}).click();
  await dialog.getByRole('button',{name:'확인한 태그 변경 적용',exact:true}).click();
@@ -58,6 +75,8 @@ try{
  assert.deepEqual((await rpc('get',{id:a.id})).tags,[]);
  assert.equal((await rpc('get',{id:a.id})).content,saved.content);
  assert.deepEqual((await rpc('get',{id:b.id})).tags,[]);
+ await rpc('save',{note:{title:title+' 다시',content:'<p>x</p>',text:'x',tags:[target]}});
+ assert.equal((await rpc('tags')).find(x=>x.name===target).color,null,'removing a tag drops its color');
  assert.deepEqual(errors,[]);
  console.log('PASS: merge/remove tags across live and trashed notes; typing during delayed metadata acknowledgement remains saved');
 }finally{await browser.close();}

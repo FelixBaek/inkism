@@ -1,5 +1,6 @@
 // Read-only checks for the synthetic native WebView2 large clipboard fixture.
 import assert from 'node:assert/strict';
+import {assertBlockBytes} from '../../frontend/scripts/block-identity-bytes.ts';
 import fs from 'node:fs';
 import * as ime from './verify-windows-windowed-ime.ts';
 
@@ -22,7 +23,7 @@ function main() {
   assert.ok(note.revision > expected.revision, '네이티브 편집 리비전 미증가');
   let query: string;
   if (mode === 'pasted') {
-    assert.ok(note.content === FOLLOW, '큰 서식 clipboard/후속 키 원문 불일치');
+    assertBlockBytes(note.content, FOLLOW, {added: 1, message: 'native clipboard and follow-up typing'});
     query = 'NATIVE_PASTE_MARKER';
   } else if (mode === 'original') {
     assert.ok(note.content === expected.content, '원문 10000문단 복원 불일치');
@@ -32,7 +33,7 @@ function main() {
       console.log('STATE=original');
       return;
     }
-    assert.ok(note.content === PASTE, '첫 undo가 정확 원문 또는 후속 입력 전 paste가 아님');
+    assertBlockBytes(note.content, PASTE, {added: 1, message: 'native clipboard after undoing follow-up typing'});
     console.log('STATE=paste');
     return;
   } else {

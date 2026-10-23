@@ -11,7 +11,7 @@ try {
   await page.getByLabel('서버 주소',{exact:true}).fill('http://127.0.0.1:1');
   await page.getByLabel('접속 토큰',{exact:true}).fill('ui-test-token-not-a-secret-at-least-32-chars');
   await page.getByRole('button',{name:'첫 기기용 키 만들기',exact:true}).click();
-  await page.waitForFunction(()=>document.querySelectorAll<any>('.sync-settings input[type="password"]')[1]?.value.length>0);
+  await page.waitForFunction(()=>document.querySelectorAll<any>('.sync-settings--sync input[type="password"]')[1]?.value.length>0);
   await page.getByRole('button',{name:'동기화 연결',exact:true}).click();
  }
  if((await rpc('sync_status')).paused)await page.getByRole('button',{name:'동기화 다시 시작',exact:true}).click();

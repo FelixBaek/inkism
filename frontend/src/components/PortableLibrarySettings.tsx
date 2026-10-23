@@ -150,18 +150,41 @@ export function PortableLibrarySettings({
   return (
     <div className="portable-library-settings">
       <section className="portable-column" aria-labelledby="portable-folder-title">
-        <h3 id="portable-folder-title">{t("외부 편집 폴더")}</h3>
-        <div className="portable-actions">
-          <button className="btn" disabled={busy} onClick={() => void exportFolder()}>
-            {t("외부 편집 폴더 ZIP 내보내기")}
-          </button>
-        </div>
+        <div className="portable-setting-card">
+          <div className="portable-setting-text">
+            <strong id="portable-folder-title">{t("외부 편집 폴더")}</strong>
         <p className="portable-note">
           {t("노트를 Markdown 파일(머리말에 제목·태그·속성 포함)과 첨부파일로 내보냅니다. Markdown으로 보존할 수 없는 노트는 HTML·텍스트 원본으로 내보냅니다. 잠긴 노트와 지운 노트는 제외됩니다.")}
         </p>
-        <div className="portable-actions">
-          <button className="btn" disabled={busy} onClick={() => void connect()}>
-            {t("외부 편집 폴더 선택")}
+
+          </div>
+          <div className="portable-setting-controls">        <div className="portable-actions">
+          <button className="btn" aria-label={t("외부 편집 폴더 ZIP 내보내기")} disabled={busy} onClick={() => void exportFolder()}>
+            {t("폴더 ZIP 내보내기")}
+          </button>
+        </div>
+</div>
+        </div>
+        <div className="portable-setting-card">
+          <div className="portable-setting-text">
+            <strong>{t("편집한 폴더 반영")}</strong>
+          <div className="portable-note">
+            <p>
+              {t(
+                "본문·새 파일·이름 변경·삭제·첨부파일·제목·태그·폴더 변경을 확인하고 선택합니다. 삭제한 노트는 앱의 지운 노트로 옮기며 외부 파일은 지우지 않습니다.",
+              )}
+            </p>
+            <p>
+              {t(
+                "이름과 본문을 동시에 바꾸면 새 파일과 삭제로 표시됩니다. 문서 ID를 유지하려면 이름만 먼저 변경하세요.",
+              )}
+            </p>
+          </div>
+
+          </div>
+          <div className="portable-setting-controls">        <div className="portable-actions">
+          <button className="btn" aria-label={t("외부 편집 폴더 선택")} disabled={busy} onClick={() => void connect()}>
+            {t("폴더 선택")}
           </button>
           {folder && (
             <button
@@ -199,7 +222,22 @@ export function PortableLibrarySettings({
             {folder.name} · {busy ? t("외부 편집 폴더 작업 중") : connectedLabel}
           </output></p>
         )}
-        <label className="portable-switch">
+</div>
+        </div>
+        <div className="portable-setting-card">
+          <div className="portable-setting-text">
+            <strong>{t("폴더 변경 자동 감지")}</strong>
+        <div className="portable-note">
+          <p>
+            {t(
+              "외부 편집 폴더를 5초마다 확인합니다. 설정을 닫아도 계속 작동합니다. 충돌이나 권한 오류 시 자동 반영을 멈춥니다. 앱을 다시 열면 외부 편집 폴더를 다시 선택하세요.",
+            )}
+          </p>
+          <p>{t("메타데이터는 .inkism-portable.json의 metadata에서 제목·태그·폴더만 편집할 수 있습니다.")}</p>
+        </div>
+
+          </div>
+          <div className="portable-setting-controls">        <label className="portable-switch">
           <span>{t("자동 감지")}</span>
           <input
             type="checkbox"
@@ -248,16 +286,10 @@ export function PortableLibrarySettings({
             </button>
           </div>
         )}
-        <div className="portable-note">
-          <p>
-            {t(
-              "외부 편집 폴더를 5초마다 확인합니다. 설정을 닫아도 계속 작동합니다. 충돌이나 권한 오류 시 자동 반영을 멈춥니다. 앱을 다시 열면 외부 편집 폴더를 다시 선택하세요.",
-            )}
-          </p>
-          <p>{t("메타데이터는 .inkism-portable.json의 metadata에서 제목·태그·폴더만 편집할 수 있습니다.")}</p>
+</div>
         </div>
       </section>
-      <section className="portable-column" aria-labelledby="portable-plan-title">
+      {(plan || message) && <section className="portable-column" aria-labelledby="portable-plan-title">
         <h3 id="portable-plan-title">{t("변경 비교 · 선택 {count}개", { count: selected.size })}</h3>
         {plan ? (
           <div className="portable-plan">
@@ -348,20 +380,7 @@ export function PortableLibrarySettings({
               )}
             </div>
           </div>
-        ) : (
-          <div className="portable-note">
-            <p>
-              {t(
-                "본문·새 파일·이름 변경·삭제·첨부파일·제목·태그·폴더 변경을 확인하고 선택합니다. 삭제한 노트는 앱의 지운 노트로 옮기며 외부 파일은 지우지 않습니다.",
-              )}
-            </p>
-            <p>
-              {t(
-                "이름과 본문을 동시에 바꾸면 새 파일과 삭제로 표시됩니다. 문서 ID를 유지하려면 이름만 먼저 변경하세요.",
-              )}
-            </p>
-          </div>
-        )}
+        ) : null}
         {!folder && (
           <p className="portable-note">
             {t("외부 편집 폴더 연결을 지원하지 않는 환경에서는 ‘외부 편집 폴더 선택’으로 직접 다시 확인하세요.")}
@@ -372,7 +391,7 @@ export function PortableLibrarySettings({
             {message}
           </output></p>
         )}
-      </section>
+      </section>}
     </div>
   );
 }

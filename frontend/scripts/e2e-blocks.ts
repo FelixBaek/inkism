@@ -36,6 +36,13 @@ try{
  await action('블록 삭제');assert.equal(await root.locator('strong').count(),1);await undo();assert.equal(await root.locator('strong').count(),2);await undo();assert.equal(await root.locator('strong').count(),1);
  await root.locator('summary').click();await action('아래로 이동');let order=await texts();assert.ok(order.findIndex(x=>x.includes('한글 셀'))<order.findIndex(x=>x.includes('접기 제목')));assert.ok(await root.locator('[data-type="detailsContent"]').textContent()==='접기 안쪽 본문');await undo();
  await root.locator('td').click();await action('위로 이동');order=await texts();assert.ok(order.findIndex(x=>x.includes('한글 셀'))<order.findIndex(x=>x.includes('접기 제목')));await undo();
+ // [+]는 빈 문단을 먼저 넣는다(Alt면 위). 아무것도 안 고르고 닫으면 지우고, 고른 뒤 되돌리기 한 번이면 원래대로.
+ {const before=await texts(),at=before.indexOf('둘째 문단');const plus=page.getByRole('button',{name:'블록 넣기',exact:true});
+  await root.getByText('둘째 문단',{exact:true}).click();await hoverBlock();await plus.click();await frame();let now=await texts();assert.equal(now.length,before.length+1);assert.equal(now[at+1],'');
+  await page.keyboard.press('Escape');await frame();assert.deepEqual(await texts(),before);
+  await root.getByText('둘째 문단',{exact:true}).click();await hoverBlock();await plus.click({modifiers:['Alt']});await frame();now=await texts();assert.equal(now[at],'');assert.equal(now[at+1],'둘째 문단');
+  await page.getByRole('option',{name:'블록 삽입: 제목 1',exact:true}).click();await frame();assert.equal(await root.locator(':scope > *').nth(at).evaluate(el=>el.tagName),'H1');
+  await undo();assert.deepEqual(await texts(),before);assert.equal(await root.locator('h1').count(),0);}
  await root.locator(':scope > p').last().click();await action('아래에 문단 추가');await page.keyboard.insertText('새 한글 블록');await frame();assert.equal((await texts()).at(-1),'새 한글 블록');await saved();
  await page.reload();await openRich(title);await root.waitFor();assert.equal((await texts()).at(-1),'새 한글 블록');assert.equal(await root.locator('strong').textContent(),'첫 문단');assert.equal(await root.locator('td').textContent(),'한글 셀');
  // A real pointer drag via the official handle, not a mocked transaction.
@@ -43,7 +50,7 @@ try{
  const from=await handle.boundingBox(),to=await root.locator(':scope > p').last().boundingBox();assert.ok(from&&to);await page.mouse.move(from.x+from.width/2,from.y+from.height/2);await page.mouse.down();await page.mouse.move(from.x+from.width/2+10,from.y+from.height/2+10,{steps:5});await page.mouse.move(to.x+40,to.y+to.height-1,{steps:25});await page.mouse.up();await frame();assert.notEqual((await texts())[0],'첫 문단');assert.equal(await root.locator('strong').count(),1);await undo();assert.equal((await texts())[0],'첫 문단');await historyKey(page,'redo');await frame();assert.notEqual((await texts())[0],'첫 문단');await saved();
  const stored=await rpc('get',{id:note.id});assert.ok(stored.content.includes('<strong>첫 문단</strong>'));assert.ok(stored.content.includes('한글 셀'));assert.ok(stored.content.includes('접기 안쪽 본문'));
  // Multi-block selections must not silently act on only their first block.
- await root.click();await page.keyboard.press('Control+a');const whole=await texts();
+ await root.focus();await page.keyboard.press('Control+a');const whole=await texts();
  for(const key of ['Alt+Shift+ArrowUp','Alt+Shift+ArrowDown','Control+d']){await page.keyboard.press(key);await frame();assert.deepEqual(await texts(),whole,key);}
  // Deleting the only paragraph keeps a valid, editable document, and undo recovers its marks.
  const onlyTitle='하나뿐인 블록 '+Date.now();await rpc('save',{note:{title:onlyTitle,content:'<p><strong>보존할 한글</strong></p>',text:'보존할 한글',tags:[]}});

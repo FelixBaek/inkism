@@ -13,6 +13,8 @@ export interface MenuItemSpec {
   checked?: boolean;
   /** 하위 메뉴. 있으면 onSelect 대신 오른쪽으로 펼친다. */
   items?: MenuItemSpec[];
+  /** 하위 메뉴를 글자 없이 아이콘 격자로 그린다(색·아이콘 고르기). 이름은 화면 낭독기용 aria-label로만 남는다. */
+  grid?: boolean;
   /** 이 항목 앞에 구분선을 그린다. */
   separatorBefore?: boolean;
   /** 오른쪽에 보이는 단축키(예: "Del"). 표시만 하고, 키 처리는 부른 쪽이 한다. */
@@ -20,6 +22,7 @@ export interface MenuItemSpec {
 }
 
 const ITEM = ':scope > [role^="menuitem"]:not(:disabled)';
+const GRID_COLUMNS = 8;
 
 /** 키보드로 다룰 수 있는 메뉴 목록. 하위 메뉴도 같은 컴포넌트로 그린다. */
 function MenuList({
@@ -32,8 +35,11 @@ function MenuList({
   onBack,
   onTab,
   label,
+  anchor,
+  grid = false,
 }: Readonly<{
   items: MenuItemSpec[];
+  grid?: boolean;
   id?: string;
   className?: string;
   style?: React.CSSProperties;
@@ -44,10 +50,12 @@ function MenuList({
   onBack?: () => void;
   onTab?: () => void;
   label?: string;
+  /** 하위 메뉴를 연 항목의 화면 위치. */
+  anchor?: DOMRect;
 }>) {
   const ref = useRef<HTMLDivElement>(null);
   const [sub, setSub] = useState<number | null>(null);
-  const [subTop, setSubTop] = useState(0);
+  const [subAnchor, setSubAnchor] = useState<DOMRect>();
   const [subFocus, setSubFocus] = useState(false);
   const enabled = () => Array.from(ref.current?.querySelectorAll<HTMLButtonElement>(ITEM) ?? []);
   useEffect(() => {
@@ -55,18 +63,14 @@ function MenuList({
     const list = enabled();
     (focus === "last" ? list.at(-1) : list[0])?.focus();
   }, []);
-  // 화면 밖으로 나가는 하위 메뉴는 반대쪽으로 펼치고 위로 올린다.
+  // 하위 메뉴는 화면 기준(fixed)으로 띄워 스크롤 영역(사이드바 등)에 잘리지 않게 하고,
+  // 화면 밖으로 나가면 반대쪽으로 펼치고 위로 올린다.
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || !onBack) return;
+    if (!el || !onBack || !anchor) return;
     const rect = el.getBoundingClientRect();
-    if (rect.right > innerWidth - 4) el.classList.add("flip");
-    const placed = el.getBoundingClientRect();
-    if (placed.left < 8) {
-      el.style.right = "auto";
-      el.style.left = `${el.offsetLeft + 8 - placed.left}px`;
-    }
-    if (rect.bottom > innerHeight - 4) el.style.top = `${el.offsetTop - (rect.bottom - innerHeight + 8)}px`;
+    if (rect.right > innerWidth - 4) el.style.left = `${Math.max(8, anchor.left - rect.width + 2)}px`;
+    if (rect.bottom > innerHeight - 4) el.style.top = `${Math.max(8, innerHeight - rect.height - 8)}px`;
   }, []);
   const openSub = (index: number, button: HTMLElement, focusSub: boolean) => {
     if (sub === index) {
@@ -76,7 +80,7 @@ function MenuList({
           ?.focus();
       return;
     }
-    setSubTop(button.offsetTop - 5);
+    setSubAnchor(button.getBoundingClientRect());
     setSubFocus(focusSub);
     setSub(index);
   };
@@ -92,7 +96,7 @@ function MenuList({
       tabIndex={-1}
       id={id}
       aria-label={label}
-      className={`menu-popup ${className}`}
+      className={`menu-popup ${grid ? "menu-grid" : ""} ${className}`}
       style={style}
       onKeyDown={(event) => {
         // 하위 메뉴의 키 입력이 바깥 메뉴로 번지지 않게 한다.
@@ -101,7 +105,12 @@ function MenuList({
         const index = list.indexOf(document.activeElement as HTMLButtonElement);
         const current = list[index];
         let next: number | undefined;
-        if (event.key === "ArrowDown") next = (index + 1) % list.length;
+        // 격자는 좌우로 한 칸, 위아래로 한 줄(GRID_COLUMNS칸). 맨 왼쪽에서 ←는 바깥 메뉴로 돌아간다.
+        if (grid && event.key === "ArrowRight") next = Math.min(index + 1, list.length - 1);
+        else if (grid && event.key === "ArrowLeft" && index % GRID_COLUMNS) next = index - 1;
+        else if (grid && event.key === "ArrowDown") next = Math.min(index + GRID_COLUMNS, list.length - 1);
+        else if (grid && event.key === "ArrowUp") next = Math.max(index - GRID_COLUMNS, 0);
+        else if (event.key === "ArrowDown") next = (index + 1) % list.length;
         else if (event.key === "ArrowUp") next = (index + list.length - 1) % list.length;
         else if (event.key === "Home") next = 0;
         else if (event.key === "End") next = list.length - 1;
@@ -126,6 +135,7 @@ function MenuList({
             type="button"
             role={item.checked === undefined ? "menuitem" : "menuitemcheckbox"}
             aria-checked={item.checked}
+            aria-label={grid ? item.label : undefined}
             aria-keyshortcuts={item.shortcut === "Del" ? "Delete" : item.shortcut}
             aria-haspopup={item.items ? "menu" : undefined}
             aria-expanded={item.items ? sub === i : undefined}
@@ -147,9 +157,9 @@ function MenuList({
             }}
           >
             {item.icon && <span className="menu-item-icon">{item.icon}</span>}
-            <span className="menu-item-label">{item.label}</span>
+            {!grid && <span className="menu-item-label">{item.label}</span>}
             {item.shortcut && <kbd className="menu-item-end menu-item-kbd">{item.shortcut}</kbd>}
-            {item.checked && <Check size={14} className="menu-item-end" aria-hidden />}
+            {item.checked && !grid && <Check size={14} className="menu-item-end" aria-hidden />}
             {item.items && <ChevronRight size={13} className="menu-item-end" aria-hidden />}
           </button>
           {item.items && sub === i && (
@@ -157,7 +167,9 @@ function MenuList({
               items={item.items}
               label={item.label}
               className="menu-sub"
-              style={{ top: subTop }}
+              grid={item.grid}
+              style={subAnchor && { position: "fixed", top: subAnchor.top - 5, left: subAnchor.right - 2 }}
+              anchor={subAnchor}
               focus={subFocus ? "first" : "none"}
               onDone={onDone}
               onBack={back}
@@ -256,12 +268,14 @@ export function ContextMenu({
   items,
   label,
   onClose,
+  className = "",
 }: Readonly<{
   x: number;
   y: number;
   items: MenuItemSpec[];
   label: string;
   onClose: () => void;
+  className?: string;
 }>) {
   const ref = useRef<HTMLDivElement>(null);
   const opener = useRef<Element | null>(null);
@@ -306,7 +320,7 @@ export function ContextMenu({
     };
   }, []);
   return (
-    <div ref={ref} className="context-menu" style={pos} onContextMenu={(e) => e.preventDefault()}>
+    <div ref={ref} className={`context-menu ${className}`} style={pos} onContextMenu={(e) => e.preventDefault()}>
       <MenuList items={items} label={label} onDone={() => close()} onTab={() => close()} />
     </div>
   );

@@ -37,51 +37,6 @@ export const knowledge = {
 export function displayProperty(value: NoteProperty['value'] | undefined): string {
   return value === undefined ? '' : Array.isArray(value) ? value.join(', ') : String(value);
 }
-export function propertyValue(note: KnowledgeItem, name: string): NoteProperty['value'] | undefined {
-  if (name === '$title') return note.title;
-  if (name === '$tag') return note.tags;
-  if (name === '$updated') return note.updated_at;
-  return note.properties.find(p => p.name === name)?.value;
-}
-export function filterView(notes: KnowledgeItem[], view: SavedView): KnowledgeItem[] {
-  const matches = (note: KnowledgeItem, {property, operator, value}: SavedView["filter"]) => {
-    if (!property) return true;
-    const actual = propertyValue(note, property);
-    if (operator === 'exists') return actual !== undefined;
-    if (actual === undefined) return false;
-    if (operator === 'gt' || operator === 'lt') {
-      if (typeof actual !== 'number' || value.trim() === '' || !Number.isFinite(Number(value))) return false;
-      return operator === 'gt' ? actual > Number(value) : actual < Number(value);
-    }
-    const normalized = value.toLocaleLowerCase();
-    if (operator === 'equals') return Array.isArray(actual)
-      ? actual.some(x => x.toLocaleLowerCase() === normalized)
-      : String(actual).toLocaleLowerCase() === normalized;
-    return displayProperty(actual).toLocaleLowerCase().includes(normalized);
-  };
-  const filters=[view.filter,...(view.filters??[])].filter(f=>f.property);
-  const result=notes.filter(note=>!filters.length||(view.filter_mode==='any'?filters.some(f=>matches(note,f)):filters.every(f=>matches(note,f))));
-  return result.sort((a,b) => {
-    const x = propertyValue(a, view.sort.property), y = propertyValue(b, view.sort.property);
-    // Missing values stay at the end, in either direction.
-    if (x === undefined || y === undefined) return x === y ? a.id.localeCompare(b.id) : x === undefined ? 1 : -1;
-    const n = typeof x === 'number' && typeof y === 'number' ? x-y : displayProperty(x).localeCompare(displayProperty(y), undefined, {numeric:true});
-    return n * (view.sort.direction === 'asc' ? 1 : -1) || a.id.localeCompare(b.id);
-  });
-}
-/** Each note occurs in one lane; multi-value properties use a combined group. */
-export function groupView(notes: KnowledgeItem[], property: string): {key:string; label:string; items:KnowledgeItem[]}[] {
-  if (!property) return [{key:'all',label:'',items:notes}];
-  const groups=new Map<string,{key:string;label:string;items:KnowledgeItem[]}>();
-  for(const note of notes){
-    const value=propertyValue(note,property);
-    const normalized=Array.isArray(value)?[...value].sort((a,b)=>String(a)<String(b)?-1:String(a)>String(b)?1:0):value;
-    const key=normalized===undefined||normalized===''||(Array.isArray(normalized)&&!normalized.length)?'missing':JSON.stringify(normalized);
-    if(!groups.has(key))groups.set(key,{key,label:displayProperty(normalized),items:[]});
-    groups.get(key)!.items.push(note);
-  }
-  return [...groups.values()].sort((a,b)=>a.key==='missing'?1:b.key==='missing'?-1:a.label.localeCompare(b.label));
-}
 export const arrayProperty = (type: PropertyType) => ['list','multiselect','person','relation'].includes(type);
 export const initialPropertyValue = (type: PropertyType): NoteProperty['value'] => type==='number'?0:type==='checkbox'?false:arrayProperty(type)?[]:'';
 export function graphNeighborhood(data: GraphData, root: string, depth: number): Set<string> {

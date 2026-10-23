@@ -116,7 +116,7 @@ fn read_bounded(path: &std::path::Path) -> io::Result<Vec<u8>> {
 #[tauri::command]
 pub fn ai_key(window: WebviewWindow, store: State<KeyStore>, action: String, origin: String, key: String) -> Result<String, String> {
     let key = Zeroizing::new(key);
-    if !crate::web_viewer::trusted(&window) {
+    if !crate::window_trust::trusted(&window) {
         return Err("untrusted key caller".into());
     }
     match action.as_str() {

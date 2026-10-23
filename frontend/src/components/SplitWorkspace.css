@@ -1,11 +1,13 @@
 .split-workspace {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   overflow: hidden;
 }
+/* 창 자리는 분할 나무가 정해 inline left/top/width/height(%)로 준다. */
 .split-primary {
-  flex: 1;
+  position: absolute;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -43,14 +45,12 @@
 }
 /* 오른쪽 창 순서 (Figma 05): 탭 → 도구줄(분할 동작 · 서식 도구) → 경고 → 제목 → 태그 → 본문 */
 .split-secondary {
-  flex: 1;
+  position: absolute;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--border);
   background: var(--canvas);
   overflow: hidden;
-  position: relative;
 }
 .split-secondary > * {
   order: 6;
@@ -157,19 +157,10 @@
   opacity: 0.45;
   cursor: default;
 }
-.split-workspace > [role="alert"] {
+.split-primary > [role="alert"] {
   padding: 12px 20px;
   background: var(--warning-soft);
   color: var(--warning);
-}
-@media (max-width: 900px) {
-  .split-workspace.is-split {
-    flex-direction: column;
-  }
-  .split-secondary {
-    border-left: 0;
-    border-top: 1px solid var(--border);
-  }
 }
 .split-tabs {
   display: flex;
@@ -253,4 +244,61 @@
   display: flex;
   justify-content: flex-end;
   padding: 4px 8px 0;
+}
+/* 탭을 끌어 편집기 오른쪽 절반에 올리면 분할로 열릴 자리를 보여 준다 */
+.split-drop-zone {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--accent-text);
+  background: color-mix(in srgb, var(--accent-text) 10%, transparent);
+  color: var(--accent-text);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  pointer-events: none;
+}
+.split-tabs.is-drop-target {
+  outline: 2px dashed var(--accent-text);
+  outline-offset: -2px;
+}
+/* 창 사이 1px 선; 잡는 자리는 양쪽 3px씩 넓혀 끌어서 크기를 바꾼다 */
+.split-divider {
+  position: absolute;
+  z-index: 30;
+  touch-action: none;
+}
+.split-divider.is-row {
+  margin-left: -3px;
+  padding: 0 3px;
+  cursor: col-resize;
+}
+.split-divider.is-column {
+  margin-top: -3px;
+  padding: 3px 0;
+  cursor: row-resize;
+}
+.split-divider::after {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 1px;
+  min-height: 1px;
+  background: var(--border);
+}
+.split-divider:is(:hover, :focus-visible)::after {
+  background: var(--accent-text);
+}
+.split-divider:focus-visible {
+  outline: none;
+}
+.split-controls .split-pane-close {
+  flex: none;
+  width: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }

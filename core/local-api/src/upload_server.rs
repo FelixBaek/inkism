@@ -113,7 +113,7 @@ async fn serve(req: hyper::Request<Incoming>, host: &str, token: &str, forward: 
         if header("access-control-request-method") != "POST" {
             return cors(Response::fail(405, "POST required"));
         }
-        let preflight = Response { status: 204, headers: Vec::new(), body: Vec::new() };
+        let preflight = Response { file: None, status: 204, headers: Vec::new(), body: Vec::new() };
         return cors(preflight).with_header("access-control-allow-methods", "POST").with_header("access-control-allow-headers", "Authorization, Content-Type");
     }
     if req.method() != hyper::Method::POST {

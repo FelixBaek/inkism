@@ -42,7 +42,7 @@ export function AgentApiSettings() {
       <div className="settings-card">
         <div className="settings-card__text">
           <strong>{t('외부 AI 연결 (Agent API)')}</strong>
-          <p>{t('Claude, Codex 같은 외부 AI 도구가 이 컴퓨터에서 노트를 읽을 수 있게 합니다. 읽기만 가능하며 잠긴 노트와 휴지통·보관함의 노트는 보이지 않습니다.')}</p>
+          <p>{t('Claude, Codex 같은 외부 AI 도구가 이 컴퓨터에서 노트를 읽을 수 있게 합니다. 읽기만 가능하며 잠긴 노트·지운 노트·보관함의 노트는 보이지 않습니다.')}</p>
         </div>
         <label><input type="checkbox" className="toggle" checked={status.enabled} disabled={busy} onChange={e => void run({action: e.target.checked ? 'enable' : 'disable'})}/>{t('Agent API 켜기')}</label>
         {status.url && <p>{t('주소')}: <code>{status.url}</code></p>}

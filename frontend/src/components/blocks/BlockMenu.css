@@ -364,3 +364,174 @@
 .block-style-presets__row > button:first-child { flex:1; min-width:0; }
 .block-style-presets__row > button:last-child { color:var(--text); background:transparent; border:0; padding:6px; }
 .block-style-presets [role=alert] { font-size:12px; overflow-wrap:anywhere; }
+
+/* 항목 미리보기 카드: 넣으면 어떻게 보이는지 견본 + 설명 */
+.block-preview {
+  position: absolute;
+  left: calc(100% + 6px);
+  width: 220px;
+  padding: 8px;
+  pointer-events: none;
+}
+.block-preview:empty {
+  display: none;
+}
+.block-preview.is-flipped {
+  left: auto;
+  right: calc(100% + 6px);
+}
+.bp-sample {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  height: 104px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md, 6px);
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text);
+}
+.bp-text {
+  margin: 8px 2px 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.bp-text strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--text);
+  font-weight: 600;
+}
+.bp-line {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+}
+.bp-h { line-height: 1.2; }
+.bp-h1 { font-size: 20px; }
+.bp-h2 { font-size: 16px; }
+.bp-h3 { font-size: 13px; }
+.bp-li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bp-li em {
+  width: 14px;
+  font-style: normal;
+  color: var(--muted);
+}
+.bp-li .bp-line { flex: none; }
+.bp-quote {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 10px;
+  border-left: 3px solid var(--text);
+}
+.bp-code {
+  padding: 8px;
+  border-radius: 4px;
+  background: var(--hover);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.bp-hr {
+  margin: 2px 0;
+  border: 0;
+  border-top: 1px solid var(--muted);
+}
+.bp-callout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 6px;
+  background: var(--hover);
+}
+.bp-callout .bp-line { flex: none; }
+.bp-table {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--border);
+}
+.bp-table i {
+  height: 20px;
+  border: 1px solid var(--border);
+}
+.bp-table i:nth-child(-n + 3) { background: var(--hover); }
+.bp-math {
+  align-self: center;
+  font-size: 20px;
+  font-family: var(--font-serif, serif);
+}
+.bp-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.bp-diagram i {
+  width: 34px;
+  height: 22px;
+  border: 1.5px solid var(--muted);
+  border-radius: 4px;
+}
+.bp-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--hover);
+}
+.bp-media svg {
+  color: var(--muted);
+}
+
+/* "/" 메뉴 (Figma Editor popover/Slash menu 195:29962): 우클릭 메뉴와 같은 둥근 판(10)·항목(6),
+ * 이름 아래 짧은 설명, 고른 줄은 배경만 바뀐다(강조색 글자 없음). */
+.slash-menu-root .block-menu {
+  border-radius: 10px;
+}
+.slash-menu-root .block-menu__section {
+  padding-top: 6px;
+}
+.slash-menu-root .block-menu__item {
+  height: auto;
+  min-height: 32px;
+  padding-block: 5px;
+  border-radius: 6px;
+}
+.slash-menu-root .block-menu__item + .block-menu__item {
+  margin-top: 2px;
+}
+.slash-menu-root .block-menu__item.is-active,
+.slash-menu-root .block-menu__item.is-active .block-menu__icon {
+  background: var(--active);
+  color: var(--text);
+}
+.slash-menu-root .block-menu__item.is-active .block-menu__icon {
+  background: none;
+}
+.block-menu__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+.block-menu__desc {
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--faint);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
