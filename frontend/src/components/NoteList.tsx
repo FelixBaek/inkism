@@ -252,12 +252,12 @@ export function NoteList() {
             title={t("음성 메모")}
             onClick={() => {
               requestVoiceMemo();
-              void s.newNote();
+              s.newNote();
             }}
           >
             <Microphone size={18} aria-hidden />
           </button>
-          <button type="button" className="list-fab-new" aria-label={t("새 노트 만들기")} onClick={() => void s.newNote()}>
+          <button type="button" className="list-fab-new" aria-label={t("새 노트 만들기")} onClick={() => s.newNote()}>
             <Plus size={24} aria-hidden />
           </button>
         </div>
