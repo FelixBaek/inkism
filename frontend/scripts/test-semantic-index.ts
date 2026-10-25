@@ -115,3 +115,24 @@ console.log('PASS semantic identity: server, path, model and dimension isolation
  }finally{stop();delete (globalThis as any).__indexTest;}
 }
 console.log('PASS semantic settings notification waits for old writes and restarts in the new server namespace');
+
+// Related-note results must never cross configuration or cancellation boundaries.
+for(const change of ['settings','cancel'] as const){
+ const entered=deferred(),release=deferred(),controller=new AbortController();
+ const fixture=(globalThis as any).__indexTest={config,version:0,api:{semanticRelated:async(model:string,id:string,revision:number,limit:number,signal:AbortSignal)=>{
+  assert.ok(model.startsWith('semantic-v1:'));assert.equal(id,'source');assert.equal(revision,7);assert.equal(limit,10);assert.equal(signal,controller.signal);
+  entered.resolve();await release.promise;return {ready:true,items:[{note:{id:'old'}}]};
+ }}};
+ const index=fresh(),pending=index.semanticRelated('source',7,controller.signal);await entered.promise;
+ const rejected=assert.rejects(pending,{name:'AbortError'});
+ if(change==='settings')fixture.version++;else controller.abort();
+ release.resolve();await rejected;
+}
+{
+ (globalThis as any).__indexTest={config,api:{semanticRelated:async()=>({ready:false,items:[]})}};
+ assert.deepEqual(await fresh().semanticRelated('source',7),{ready:false,items:[]});
+ (globalThis as any).__indexTest.api.semanticRelated=async()=>{throw new Error('visible failure');};
+ await assert.rejects(fresh().semanticRelated('source',7),/visible failure/);
+ delete (globalThis as any).__indexTest;
+}
+console.log('PASS related-note requests preserve index readiness, expose failures, and reject cancelled or previous-configuration results');

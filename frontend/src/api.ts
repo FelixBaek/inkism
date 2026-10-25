@@ -159,6 +159,7 @@ export type SemanticStatus = { indexed: number; pending: number };
 export const api = {
   semanticPending: (model: string, limit: number) => rpc<{ items: SemanticPending[] }>("semantic_pending", { model, limit }),
   semanticPut: (note_id: string, revision: number, model: string, offset: number, vectors: number[][]) => rpc<{ stored: number; done: boolean }>("semantic_put", { note_id, revision, model, offset, vectors }),
+  semanticRelated: (model: string, note_id: string, revision: number, limit: number, signal?: AbortSignal) => rpc<{ ready: boolean; items: SemanticHit[] }>("semantic_related", { model, note_id, revision, limit }, { signal }),
   semanticSearch: (model: string, vector: number[], limit: number, signal?: AbortSignal) => rpc<{ items: SemanticHit[] }>("semantic_search", { model, vector, limit }, { signal }),
   semanticStatus: (model: string) => rpc<SemanticStatus>("semantic_status", { model }),
   semanticReset: () => rpc<object>("semantic_reset"),
