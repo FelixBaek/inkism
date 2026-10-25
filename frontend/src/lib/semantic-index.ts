@@ -116,3 +116,20 @@ export async function semanticHits(question:string,signal?:AbortSignal,limit=20)
   return result.items;
  }catch{return [];}
 }
+
+/** Compare stored note vectors locally. Configuration errors remain visible to the caller. */
+export async function semanticRelated(noteId:string,revision:number,signal?:AbortSignal){
+ if(!embeddingsReady())throw new Error(t('AI 연결이 아직 설정되지 않았습니다. 연결이 준비되면 이 메뉴에서 바로 쓸 수 있습니다.'));
+ const config={...aiConfig()},version=aiConfigVersion();
+ assertCurrent(signal,version);
+ if(dimensionsCache?.version!==version){
+  const [probe]=await embedTexts(['Inkism semantic index'],signal,config);
+  assertCurrent(signal,version);
+  dimensionsCache={version,dimensions:probe.length};
+ }
+ const model=await semanticSpace(config,dimensionsCache.dimensions);
+ assertCurrent(signal,version);
+ const result=await api.semanticRelated(model,noteId,revision,10,signal);
+ assertCurrent(signal,version);
+ return result;
+}

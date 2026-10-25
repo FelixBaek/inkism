@@ -2588,5 +2588,11 @@
   "할 일 모아보기는 노트당 8MB까지 읽습니다.": "Task overview reads up to 8 MB per note.",
   "할 일 5,000개까지 표시합니다. 나머지는 원문에서 확인해 주세요.": "Showing up to 5,000 tasks. Open your notes to view the rest.",
   "표시할 할 일이 없습니다.": "No tasks to display.",
-  "내용 없는 할 일": "Untitled task"
+  "내용 없는 할 일": "Untitled task",
+  "비슷한 노트": "Similar notes",
+  "비슷한 노트 찾기": "Find similar notes",
+  "설정이 바뀌었습니다. 다시 찾아 주세요.": "Settings changed. Search again.",
+  "비슷한 노트를 찾지 못했습니다.": "No similar notes found.",
+  "이 노트의 의미 색인이 아직 준비되지 않았습니다. 잠시 후 다시 찾아 주세요.": "This note’s semantic index is not ready. Try again shortly.",
+  "저장된 의미 색인에서 관련 구절을 찾습니다. 추천은 자동으로 노트를 연결하거나 수정하지 않습니다.": "Find related passages in the stored semantic index. Suggestions do not automatically link or edit notes."
 }
