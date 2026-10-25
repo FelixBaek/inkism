@@ -27,6 +27,7 @@ export function parseAiChat(raw: string | undefined): AiTurn[] {
       .slice(-MAX_TURNS)
       .map((m) => ({ role: m.role, text: m.text.slice(0, MAX_TEXT) }));
   } catch {
+    // Imported malformed chat metadata must not prevent the document from opening.
     return [];
   }
 }
@@ -95,6 +96,7 @@ async function blockMarkdown(node: PMNode): Promise<string> {
     const { htmlToMarkdown } = await import("../../lib/markdown");
     return htmlToMarkdown(box.innerHTML);
   } catch {
+    // Preserve the block text when the optional Markdown conversion is unavailable.
     return node.textBetween(0, node.content.size, "\n");
   }
 }
@@ -209,7 +211,7 @@ function AiBlockView({ node, editor, getPos }: ReactNodeViewProps) {
     const at = current();
     if (!at) return;
     const list = at.node.attrs.chat as AiTurn[];
-    const last = list[list.length - 1];
+    const last = list.at(-1);
     if (last?.role === "user") {
       editor.view.dispatch(editor.state.tr.setNodeMarkup(at.pos, undefined, { ...at.node.attrs, chat: list.slice(0, -1) }));
       setDraft(last.text);
@@ -241,7 +243,6 @@ function AiBlockView({ node, editor, getPos }: ReactNodeViewProps) {
   };
 
   const aiTurns = chat.filter((m) => m.role === "ai").length;
-  const shown = status !== "empty";
   const done = status === "done";
   const lastAi = chat.length - 1 - [...chat].reverse().findIndex((m) => m.role === "ai");
 
@@ -283,10 +284,10 @@ function AiBlockView({ node, editor, getPos }: ReactNodeViewProps) {
             </div>
           ))}
           {busy && (
-            <div className="ai-msg is-ai" role="status">
+            <div className="ai-msg is-ai">
               <span className="ai-who">AI</span>
               <div className="ai-busy">
-                <span className="ai-text is-muted">{t("쓰는 중…")}</span>
+                <output className="ai-text is-muted">{t("쓰는 중…")}</output>
                 <button type="button" className="ai-btn is-outline" onClick={stop}>
                   {t("멈추기")}
                 </button>

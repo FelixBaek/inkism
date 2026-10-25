@@ -436,6 +436,7 @@ function SplitPane({
           <div
             className={"split-tabs" + (stripDrop ? " is-drop-target" : "")}
             role="tablist"
+            tabIndex={-1}
             aria-label={t("분할 노트 탭")}
             // 위쪽 탭 줄의 탭을 여기 놓으면 분할 창으로 옮긴다(위쪽 탭은 NoteTabs가 닫는다).
             onDragOver={(event) => {
@@ -684,7 +685,7 @@ function removeLeaf(node: PaneNode, key: string): PaneNode | null {
 function setRatio(node: PaneNode, path: string, ratio: number): PaneNode {
   if (typeof node === "string") return node;
   if (!path) return { ...node, ratio };
-  return path[0] === "a" ? { ...node, a: setRatio(node.a, path.slice(1), ratio) } : { ...node, b: setRatio(node.b, path.slice(1), ratio) };
+  return path.startsWith("a") ? { ...node, a: setRatio(node.a, path.slice(1), ratio) } : { ...node, b: setRatio(node.b, path.slice(1), ratio) };
 }
 /** Reads the saved tree whose leaves are 0 (main) and 1.. (split panes in order); null when it does not fit. */
 function readTree(raw: unknown, keys: string[], depth = 0): PaneNode | null {
@@ -824,7 +825,7 @@ export function SplitWorkspace({
       fx = (px - r.x) / r.w,
       fy = (py - r.y) / r.h;
     const distance: Record<Side, number> = { left: fx, right: 1 - fx, top: fy, bottom: 1 - fy };
-    const side = (Object.keys(distance) as Side[]).reduce((a, b) => (distance[b] < distance[a] ? b : a));
+    const side = (Object.keys(distance) as Side[]).reduce((a, b) => (distance[b] < distance[a] ? b : a), "left");
     const half = {
       left: { ...r, w: r.w / 2 },
       right: { ...r, x: r.x + r.w / 2, w: r.w / 2 },

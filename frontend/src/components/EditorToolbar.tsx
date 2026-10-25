@@ -46,7 +46,7 @@ import "./blocks/BlockMenu.css";
 import { IconButton } from "./IconButton";
 import { Popover } from "./toolbar/Popover";
 import { FormatPreview } from "./toolbar/FormatPreview";
-import { BLOCK_ITEMS, TURN_INTO, blockKind, canConvertBlock, convertBlock } from "../extensions/block-items";
+import { TURN_INTO, blockKind, canConvertBlock, convertBlock } from "../extensions/block-items";
 import {
   AiMenu,
   AiResultView,
@@ -98,7 +98,7 @@ function ColorSwatchIcon({ color, children }: Readonly<{ color: string; children
   );
 }
 const TextGlyph = () => (
-  <svg width={13} height={13} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width={13} height={13} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 14 8 2l5 12M4.9 9.5h6.2" />
   </svg>
 );
@@ -188,7 +188,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
   const paraValue = editor?.isActive("heading") ? String(editor.getAttributes("heading").level) : "paragraph";
   const fontFamily = String(editor?.getAttributes("textStyle").fontFamily ?? "");
   const $from = editor?.state.selection.$from;
-  const turnNode = $from && $from.depth ? $from.node(1) : null;
+  const turnNode = $from?.depth ? $from.node(1) : null;
   const turnPos = $from && turnNode && canConvertBlock(turnNode) ? $from.before(1) : null;
   const kind = blockKind(turnNode);
   const fontName = [...registeredFonts, ...pluginFonts].find(font=>font.family.toLowerCase()===fontFamily.replace(/^["']|["']$/g,"").toLowerCase())?.label ?? fontNameOf(fontFamily);
@@ -338,6 +338,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
       const el = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
       return Math.round(Number.parseFloat(getComputedStyle(el!).fontSize)) || 16;
     } catch {
+      // A detached selection has no computed font; keep the default preview size.
       return 16;
     }
   })();
@@ -712,6 +713,12 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
             setTip(null);
             if (!(event.target as HTMLElement).closest("input,select,textarea")) event.preventDefault();
           }}
+          onFocus={(event) => {
+            const item = (event.target as HTMLElement).closest<HTMLElement>("[data-preview]");
+            window.clearTimeout(tipTimer.current);
+            setTip(item ? {id: item.dataset.preview!, label: item.dataset.previewLabel ?? item.getAttribute("aria-label") ?? item.textContent!.trim(), item} : null);
+          }}
+          onBlur={() => {window.clearTimeout(tipTimer.current);setTip(null);}}
           onMouseOver={(event) => {
             const item = (event.target as HTMLElement).closest<HTMLElement>("[data-preview]");
             if (!item || item === tip?.item) return;
@@ -899,7 +906,7 @@ export function EditorToolbar({ editor, readOnly = false }: Readonly<Props>) {
                   <i key={i} />
                 ))}
               </span>
-              <svg className="tb-ai-stars" width="16" height="16" viewBox="0 0 16 16">
+              <svg aria-hidden="true" className="tb-ai-stars" width="16" height="16" viewBox="0 0 16 16">
                 <path d="M6 3.4C6.448 6.685 8.315 8.552 11.6 9 8.315 9.448 6.448 11.315 6 14.6 5.552 11.315 3.685 9.448.4 9 3.685 8.552 5.552 6.685 6 3.4Z" />
                 <path d="M12.2 1.5c.232 1.701 1.199 2.668 2.9 2.9-1.701.232-2.668 1.199-2.9 2.9-.232-1.701-1.199-2.668-2.9-2.9 1.701-.232 2.668-1.199 2.9-2.9Z" />
                 <path d="M12.2 9.7c.232 1.701 1.199 2.668 2.9 2.9-1.701.232-2.668 1.199-2.9 2.9-.232-1.701-1.199-2.668-2.9-2.9 1.701-.232 2.668-1.199 2.9-2.9Z" />

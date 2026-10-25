@@ -17,6 +17,7 @@
   display: none;
 }
 .note-tabs .note-tab {
+  position: relative;
   display: flex;
   flex: 0 0 auto;
   width: 180px;
@@ -75,7 +76,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: inherit;
+  color: var(--muted);
   cursor: pointer;
 }
 .note-tabs .note-tab-close:hover:not(:disabled) {
@@ -93,9 +94,6 @@
   font-style: italic;
 }
 /* 끌어서 순서 바꾸기: 놓일 자리에 세로 표시선 */
-.note-tabs .note-tab {
-  position: relative;
-}
 .note-tabs .note-tab:is(.is-drop-before, .is-drop-after)::before {
   content: "";
   position: absolute;
@@ -115,9 +113,6 @@
   .note-tabs .note-tab:not(.is-selected, :hover, :focus-within) .note-tab-close {
     opacity: 0;
   }
-}
-.note-tabs .note-tab-close {
-  color: var(--muted);
 }
 .note-tabs .note-tab > [role="tab"] span.is-untitled {
   color: var(--muted);
