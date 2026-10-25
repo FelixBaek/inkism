@@ -242,8 +242,6 @@
 }
 .inspector-times dt {
   color: var(--muted);
-}
-.inspector-times dt {
   flex: none;
 }
 .inspector-times dd {

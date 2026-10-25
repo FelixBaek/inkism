@@ -944,7 +944,7 @@
 .tiptap-prose mark[data-color]::selection,
 .tiptap-prose mark[data-color] *::selection {
   background: rgba(29, 78, 158, 0.35);
-  color: #232221;
+  color: #232221; /* NOSONAR: selection overlays the user-selected highlight background, not the theme canvas. */
 }
 .tiptap-prose [style*="color"]:not(mark)::selection {
   background: rgba(127, 166, 232, 0.3);
@@ -1210,11 +1210,9 @@
   flex-shrink: 0;
   color: var(--muted);
 }
-.fm-ai {
-  color: var(--green);
-}
 /* 반짝임은 줄 전체에: 빛·테두리는 줄 크기, 반짝이는 60×60 좌표를 줄 너비 비율로 편다 */
 .fm-ai {
+  color: var(--green);
   position: relative;
   isolation: isolate;
 }
@@ -1344,8 +1342,8 @@
 .fp-underline { text-decoration: underline; }
 .fp-strike { text-decoration: line-through; }
 .fp-color {
-  color: #e53935;
-  background: color-mix(in srgb, #fff176 60%, transparent);
+  color: #8b1715;
+  background: #fff176;
 }
 .fp-link {
   color: var(--accent-text);

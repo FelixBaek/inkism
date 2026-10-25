@@ -38,7 +38,9 @@ export function DocumentTools({data,open:panelOpen,onOpenChange}:Readonly<{data:
  // 저장 대기 중에는 다시 불러온 값으로 덮지 않는다(방금 고른 값이 잠깐 되돌아가 보이지 않게).
  useEffect(()=>{if(timer.current===undefined){const next=data.metadata?.document??{};latest.current=next;setStyle(next);}},[data.metadata]);
  const [config,setConfig]=useState<KnowledgeSettings|null>(null),[presetId,setPresetId]=useState(''),[presetName,setPresetName]=useState(''),[menu,setMenu]=useState(false),[naming,setNaming]=useState(false);
- const menuRef=useRef<HTMLDivElement>(null);
+ const menuRef=useRef<HTMLDivElement>(null),nameRef=useRef<HTMLInputElement>(null);
+ useEffect(()=>{if(menu)menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();},[menu]);
+ useEffect(()=>{if(naming)nameRef.current?.focus();},[naming]);
  useEffect(()=>{let live=true;knowledge.settings().then(c=>{if(live)setConfig(c);}).catch(e=>data.setError(errorText(e)));return()=>{live=false;};},[]);
  useEffect(()=>{if(!menu)return;const away=(e:PointerEvent)=>{if(!menuRef.current?.contains(e.target as Node))setMenu(false);};document.addEventListener('pointerdown',away);return()=>document.removeEventListener('pointerdown',away);},[menu]);
  const presetAction=async(action:'save'|'remove')=>{
@@ -101,11 +103,11 @@ export function DocumentTools({data,open:panelOpen,onOpenChange}:Readonly<{data:
      <Segmented label={t('문서 너비')} caption={t('너비')} value={style.width??'standard'} options={[['standard','기본'],['wide','넓게'],['full','전체 너비']] as const} onChange={width=>change({width})}/>
      <Segmented label={t('문단 간격')} caption={t('문단 간격')} value={style.spacing??'normal'} options={[['compact','좁게'],['normal','기본'],['relaxed','여유롭게']] as const} onChange={spacing=>change({spacing})}/>
      <Segmented label={t('문서 배경')} caption={t('배경')} value={style.tone??'default'} options={[['default','기본'],['paper','종이'],['soft','부드럽게']] as const} onChange={tone=>change({tone})}/>
-     <div className="document-subgroup" role="group" aria-label={t('하위 페이지 카드')}>
+     <fieldset className="document-subgroup plain-fieldset" aria-label={t('하위 페이지 카드')}>
       <h4 aria-hidden="true">{t('하위 페이지 카드')}</h4>
       <Segmented label={t('카드 크기')} caption={t('크기')} value={style.card_size??'medium'} options={[['small','작게'],['medium','기본'],['large','크게']] as const} onChange={card_size=>change({card_size})}/>
       <label className="document-switch"><span>{t('그림자')}</span><input type="checkbox" aria-label={t('카드 그림자')} checked={style.card_shadow??false} onChange={e=>change({card_shadow:e.target.checked})}/></label>
-     </div>
+     </fieldset>
     </section>
     <section className="document-group" aria-label={t('페이지 관계')}>
      <h3>{t('페이지 관계')}</h3>
@@ -121,13 +123,13 @@ export function DocumentTools({data,open:panelOpen,onOpenChange}:Readonly<{data:
      <div className="document-inline" ref={menuRef}>
       <SelectBox><select aria-label={t('저장한 문서 스타일')} value={presetId} onChange={e=>{const preset=config?.style_presets?.find(p=>p.id===e.target.value);setPresetId(e.target.value);setPresetName(preset?.name??'');setNaming(false);if(preset)change({...preset.style,parent_id:latest.current.parent_id});}}><option value="">{t('새 문서 스타일')}</option>{config?.style_presets?.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></SelectBox>
       <button type="button" className="document-square" aria-label={t('스타일 메뉴')} title={t('스타일 메뉴')} aria-haspopup="menu" aria-expanded={menu} disabled={!config||busy} onClick={()=>setMenu(!menu)}><DotsThree size={16} aria-hidden/></button>
-      {menu&&<div className="document-style-menu" role="menu" aria-label={t('스타일 메뉴')} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setMenu(false);}}}>
-       <button type="button" role="menuitem" autoFocus onClick={()=>{setMenu(false);setNaming(true);}}>{t('현재 스타일 저장')}</button>
+      {menu&&<div className="document-style-menu" role="menu" tabIndex={-1} aria-label={t('스타일 메뉴')} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setMenu(false);}}}>
+       <button type="button" role="menuitem" onClick={()=>{setMenu(false);setNaming(true);}}>{t('현재 스타일 저장')}</button>
        <button type="button" role="menuitem" className="document-danger" disabled={!presetId} onClick={()=>void presetAction('remove')}>{t('문서 스타일 삭제')}</button>
       </div>}
      </div>
      {naming&&<form className="document-inline" onSubmit={e=>{e.preventDefault();if(presetName.trim())void presetAction('save');}}>
-      <input autoFocus aria-label={t('문서 스타일 이름')} placeholder={t('문서 스타일 이름')} value={presetName} maxLength={128} onChange={e=>setPresetName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setNaming(false);}}}/>
+      <input ref={nameRef} aria-label={t('문서 스타일 이름')} placeholder={t('문서 스타일 이름')} value={presetName} maxLength={128} onChange={e=>setPresetName(e.target.value)} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setNaming(false);}}}/>
       <button type="submit" className="btn" disabled={busy||!presetName.trim()}>{t('저장')}</button>
      </form>}
     </section>

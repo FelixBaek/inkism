@@ -223,6 +223,7 @@ export function NoteTabs() {
     <div
       className="note-tabs"
       role="tablist"
+            tabIndex={-1}
       aria-label={t("열린 노트")}
       data-tauri-drag-region="false"
       // 세로 휠로도 탭 줄을 가로로 넘긴다(스크롤바를 숨겼으므로).

@@ -13,6 +13,12 @@ try{
  await rpc('workspace_set',{ids:[parent.id],active:parent.id,locations:{}});await page.goto(base);await page.locator('.tiptap').waitFor();
  await page.getByRole('button',{name:'문서 설정',exact:true}).click();await page.getByRole('radiogroup',{name:'문서 너비',exact:true}).getByRole('radio',{name:'전체 너비',exact:true}).check();await page.getByRole('radiogroup',{name:'문단 간격',exact:true}).getByRole('radio',{name:'여유롭게',exact:true}).check();await page.getByRole('radiogroup',{name:'문서 배경',exact:true}).getByRole('radio',{name:'부드럽게',exact:true}).check();
  await page.locator('.editor-pane[data-document-width="full"]').waitFor();assert.equal((await rpc('get',{id:parent.id})).content,parent.content);assert.equal(await page.locator('.rich-editor').evaluate(el=>getComputedStyle(el).maxWidth),'none');
+ await page.getByRole('button',{name:'스타일 메뉴',exact:true}).click();
+ await page.waitForFunction(()=>document.activeElement?.getAttribute('role')==='menuitem');
+ await page.keyboard.press('Enter');
+ await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='문서 스타일 이름');
+ await page.getByRole('textbox',{name:'문서 스타일 이름',exact:true}).fill('Keyboard style');await page.keyboard.press('Enter');
+ await waitForAsync(page,async({base})=>{const e=await(await fetch(base+'/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'knowledge_settings_get'})})).json();return e.data.style_presets.some((p:any)=>p.name==='Keyboard style');},{base});
  await page.getByRole('textbox',{name:'하위 페이지 제목',exact:true}).fill('Child page');await page.getByRole('button',{name:'하위 페이지 만들기',exact:true}).click();await page.getByRole('navigation',{name:'하위 페이지',exact:true}).getByRole('button',{name:'Child page',exact:true}).waitFor();
  const child=(await rpc('knowledge_list')).items.find((n:any)=>n.title==='Child page');assert.equal(child.document.parent_id,parent.id);
  await page.getByRole('navigation',{name:'하위 페이지',exact:true}).getByRole('button',{name:'Child page',exact:true}).click();await page.getByRole('navigation',{name:'상위 페이지 경로',exact:true}).getByRole('button',{name:'Document design /',exact:true}).waitFor();

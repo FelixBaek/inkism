@@ -52,6 +52,32 @@ pub async fn save_export(window: WebviewWindow, request: Request<'_>) -> Result<
     }).await.map_err(|e| e.to_string())?
 }
 
+/// A backup never crosses the JS bridge as bytes. The trusted handler applies
+/// the same library/session gates, then the verified spool is atomically copied.
+#[tauri::command]
+pub async fn save_backup(
+    window: WebviewWindow,
+    handler: tauri::State<'_, std::sync::Arc<local_api::Handler>>,
+    name: String,
+) -> Result<bool, String> {
+    if !crate::window_trust::trusted(&window) { return Err("untrusted export caller".into()); }
+    let encoded: String = url::form_urlencoded::byte_serialize(name.as_bytes()).collect();
+    let name = suggested_name(&encoded)?;
+    let handler = handler.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(path) = rfd::FileDialog::new().set_parent(&window).set_title("다른 이름으로 저장").set_file_name(&name).add_filter("ZIP", &["zip"]).save_file() else { return Ok(false); };
+        let request = local_api::Request {method:"GET".into(),path:"/api/backup".into(),query:None,headers:vec![],host:handler.host.clone(),body:vec![]};
+        let response = handler.handle(&request);
+        if response.status != 200 {
+            let message=serde_json::from_slice::<serde_json::Value>(&response.body).ok().and_then(|v| v["error"].as_str().map(String::from));
+            return Err(message.unwrap_or_else(|| String::from_utf8_lossy(&response.body).into_owned()));
+        }
+        let mut file = response.file.ok_or("Backup file was not produced")?;
+        write_export_from(&path, file.as_file_mut()).map_err(|e| format!("파일을 저장하지 못했습니다: {e}"))?;
+        Ok(true)
+    }).await.map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -92,30 +118,4 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
     }
-}
-
-/// A backup never crosses the JS bridge as bytes. The trusted handler applies
-/// the same library/session gates, then the verified spool is atomically copied.
-#[tauri::command]
-pub async fn save_backup(
-    window: WebviewWindow,
-    handler: tauri::State<'_, std::sync::Arc<local_api::Handler>>,
-    name: String,
-) -> Result<bool, String> {
-    if !crate::window_trust::trusted(&window) { return Err("untrusted export caller".into()); }
-    let encoded: String = url::form_urlencoded::byte_serialize(name.as_bytes()).collect();
-    let name = suggested_name(&encoded)?;
-    let handler = handler.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let Some(path) = rfd::FileDialog::new().set_parent(&window).set_title("다른 이름으로 저장").set_file_name(&name).add_filter("ZIP", &["zip"]).save_file() else { return Ok(false); };
-        let request = local_api::Request {method:"GET".into(),path:"/api/backup".into(),query:None,headers:vec![],host:handler.host.clone(),body:vec![]};
-        let response = handler.handle(&request);
-        if response.status != 200 {
-            let message=serde_json::from_slice::<serde_json::Value>(&response.body).ok().and_then(|v| v["error"].as_str().map(String::from));
-            return Err(message.unwrap_or_else(|| String::from_utf8_lossy(&response.body).into_owned()));
-        }
-        let mut file = response.file.ok_or("Backup file was not produced")?;
-        write_export_from(&path, file.as_file_mut()).map_err(|e| format!("파일을 저장하지 못했습니다: {e}"))?;
-        Ok(true)
-    }).await.map_err(|e| e.to_string())?
 }
