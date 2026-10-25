@@ -37,6 +37,7 @@
     $restoreButton = $null
     $window = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
     foreach ($candidate in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $restoreCondition)) {
+        if ($candidate.Current.ControlType -ne [System.Windows.Automation.ControlType]::Button) { continue }
         $ancestor = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($candidate)
         for ($depth = 0; $depth -lt 20 -and $null -ne $ancestor; $depth++) {
             if ($ancestor.Current.Name -eq '설정') { $restoreButton = $candidate; break }
@@ -49,7 +50,16 @@
     if ($restoreButton.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$scroll)) { $scroll.ScrollIntoView() }
     [InkismInput]::ActivateWindow($app.MainWindowHandle)
     $restoreButton.SetFocus()
-    if (-not [System.Windows.Automation.Automation]::Compare([System.Windows.Automation.AutomationElement]::FocusedElement, $restoreButton)) { throw 'Restore button did not receive keyboard focus' }
+    # WebView2 publishes UIA focus asynchronously. Observe the exact button
+    # before sending Enter; do not accept the identically named text/empty view.
+    $focusDeadline = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
+        $restoreFocused = $null -ne $focused -and [System.Windows.Automation.Automation]::Compare($focused, $restoreButton)
+        if ($restoreFocused) { break }
+        Start-Sleep -Milliseconds 50
+    } while ([DateTime]::UtcNow -lt $focusDeadline)
+    if (-not $restoreFocused) { throw "Restore button did not receive keyboard focus; actual: $($focused.Current.ControlType.ProgrammaticName) $($focused.Current.Name)" }
     if ([InkismInput]::GetForegroundWindow() -ne $app.MainWindowHandle) { throw 'Restore app lost foreground before Enter' }
     [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
     Select-NativeFile $backupPath ''
