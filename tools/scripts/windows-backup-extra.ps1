@@ -75,4 +75,5 @@
     if ($cases.Count -gt 0) { Verify-SourceData }
     Verify-NativeBackup 'verify'
     $db = $sourceDb
-    Write-Output 'PASS: native ZIP restore into fresh encrypted library, source bytes, attachment bytes and restart persistence'
+    $restoreStorage = if ($env:INKISM_TEST_ENCRYPTED -eq '1') { 'encrypted' } else { 'plaintext' }
+    Write-Output "PASS: native ZIP restore into fresh $restoreStorage library, source bytes, attachment bytes and restart persistence"

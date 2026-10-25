@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 const [mode,engine,db]=process.argv.slice(2);
 assert.ok(['seed','verify'].includes(mode)&&engine&&db);
+// Match Open-Inkism: the default Windows test opts into plaintext explicitly.
+const encrypted=process.env.INKISM_TEST_ENCRYPTED==='1';
 const bytes=Buffer.from(Array.from({length:600017},(_,i)=>i%251));
 const title='Native backup attachment';
 const originals=[
@@ -21,11 +23,11 @@ if(mode==='seed'){
  const asset=JSON.parse(call(['--attachment-import','--attachment-name','백업 검증.bin'],bytes).toString());
  rpc({op:'save',note:{title,content:`<p>첨부 원본</p><a href="/api/attachments/${asset.id}">백업 검증.bin</a>`,content_format:'html'}});
 }else{
- assert.equal(rpc({op:'storage_status'}).encrypted,true,'restored target must remain encrypted');
+ assert.equal(rpc({op:'storage_status'}).encrypted,encrypted,`restored target must remain ${encrypted?'encrypted':'plaintext'}`);
  for(const expected of originals){const rows=rpc({op:'list',view:'all'}).items.filter((n:any)=>n.title===expected.title);assert.equal(rows.length,1);const saved=rpc({op:'get',id:rows[0].id});for(const key of ['content','content_format'] as const)assert.equal(saved[key],expected[key]);}
  const matches=rpc({op:'list',view:'all'}).items.filter((n:any)=>n.title===title);assert.equal(matches.length,1);
  const note=rpc({op:'get',id:matches[0].id});const id=note.content.match(/\/api\/attachments\/([a-f0-9-]+)/)?.[1];assert.ok(id);
  assert.equal(note.content,`<p>첨부 원본</p><a href="/api/attachments/${id}">백업 검증.bin</a>`);
  assert.deepEqual(call(['--attachment-export',id]),bytes);
 }
-console.log(`PASS native backup ${mode}: referenced binary attachment and encrypted restore`);
+console.log(`PASS native backup ${mode}: referenced binary attachment and ${encrypted?'encrypted':'plaintext'} restore`);
