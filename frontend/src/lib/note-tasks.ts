@@ -36,7 +36,7 @@ export function noteTasks(source: string, format: ContentFormat, limit = Infinit
   const template = document.createElement('template');
   template.innerHTML = source;
   for (const node of template.content.querySelectorAll('script,style,textarea,title,pre,code,template')) node.remove();
-  for (const item of template.content.querySelectorAll('li[data-type="taskItem"]')) {
+  for (const item of template.content.querySelectorAll<HTMLLIElement>('li[data-type="taskItem"]')) {
     if (tasks.length >= limit) break;
     // Walk only this item's label. Cloning each subtree would be quadratic
     // for deeply nested lists, and child tasks have their own rows.
@@ -48,7 +48,7 @@ export function noteTasks(source: string, format: ContentFormat, limit = Infinit
       if (child.nodeType === Node.TEXT_NODE) text += child.textContent ?? '';
       else if (child instanceof Element && child.matches('p,div,br')) text += '\n';
     }
-    tasks.push({ ordinal: tasks.length, text: text.trim(), checked: item.getAttribute('data-checked') === 'true' });
+    tasks.push({ ordinal: tasks.length, text: text.trim(), checked: item.dataset.checked === 'true' });
   }
   return tasks;
 }
