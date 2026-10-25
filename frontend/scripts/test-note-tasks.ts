@@ -16,6 +16,8 @@ try {
  assert.deepEqual(await scan(md,'markdown'),[{ordinal:0,text:'Parent',checked:false},{ordinal:1,text:'Child',checked:true},{ordinal:2,text:'Done',checked:true}]);
  assert.deepEqual(await scan('- [ ] literal\n'+li('literal'),'text'),[]);
  assert.deepEqual(await scan('plain paragraph','markdown'),[]);
+ assert.equal(await page.evaluate(()=>(window as any).tasks.noteTasks('- [ ] One\n- [ ] Two','markdown',1).length),1);
+ assert.equal(await page.evaluate(()=>(window as any).tasks.noteTasks('<ul>'+('<li data-type="taskItem"><p>One</p></li>'.repeat(100))+'</ul>','html',2).length),2);
  assert.equal(await page.evaluate(()=>{try{(window as any).tasks.noteTasks('한'.repeat(3*1024*1024),'html');return '';}catch(e){return (e as Error).message;}}),'TASK_SCAN_TOO_LARGE');
  console.log('PASS note task projection: HTML/Markdown, nested/duplicate/Unicode tasks, code/comment exclusion, inert content, plain-text preservation and byte limit');
 } finally {await browser.close();}
