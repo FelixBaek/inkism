@@ -33,7 +33,7 @@ const RENDERER_OPS: &[&str] = &[
     "restore_notebook",
     "trashed_notebooks",
     "knowledge_get", "knowledge_set", "knowledge_list", "knowledge_settings_get", "knowledge_settings_set", "merge_notes", "merge_preview", "merge_apply", "merge_undo", "merge_changes", "wiki_sources", "wiki_check", "wiki_propose_record", "wiki_apply", "wiki_reject", "wiki_undo", "wiki_changes",
-    "semantic_pending", "semantic_put", "semantic_search", "semantic_status", "semantic_reset",
+    "semantic_pending", "semantic_put", "semantic_search", "semantic_related", "semantic_status", "semantic_reset",
     "link_resolve", "graph_get", "relations", "daily_note", "template_create", "type_preset_apply", "page_create",
     "defaults_get",
     "defaults_set",

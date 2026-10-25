@@ -309,18 +309,91 @@ pub fn search(c: &Connection, args: &Value) -> Result<Value> {
     let limit = args.get("limit").and_then(Value::as_u64).unwrap_or(20).clamp(1, MAX_RESULTS) as usize;
     let tx = c.unchecked_transaction()?;
     let hits = rank(&tx, model, &query, limit)?;
+    let items = hit_items(&tx, &hits)?;
+    tx.commit()?;
+    Ok(json!({ "items": items }))
+}
+
+fn hit_items(c: &Connection, hits: &[Hit]) -> Result<Vec<Value>> {
     let ids: Vec<&str> = hits.iter().map(|h| h.id.as_str()).collect();
-    let notes = crate::ops_notes::summaries(&tx, &ids)?;
-    let mut body = tx.prepare(&format!("SELECT {BODY} FROM notes_meta m JOIN notes_body b ON b.note_id=m.id WHERE m.id=?1"))?;
+    let notes = crate::ops_notes::summaries(c, &ids)?;
+    let mut body = c.prepare(&format!("SELECT {BODY} FROM notes_meta m JOIN notes_body b ON b.note_id=m.id WHERE m.id=?1"))?;
     let mut items = Vec::new();
-    for h in &hits {
+    for h in hits {
         let (Some(note), Some(text)) = (notes.get(&h.id), body.query_row([&h.id], |r| plain(r, 0)).optional()?) else { continue };
         let snippet = utf16_slice(&text, h.start as usize, h.end as usize);
         items.push(json!({"note":note,"start":h.start,"end":h.end,"score":h.score,"snippet":snippet}));
     }
-    drop(body);
+    Ok(items)
+}
+
+/// Average normalized chunks of the current complete index, never a prefix of
+/// the source note. O(dimensions) working memory even for multi-page notes.
+fn note_vector(c: &Connection, id: &str, revision: i64, model: &str) -> Result<Vec<f32>> {
+    let mut stmt = c.prepare("SELECT dim,vector FROM semantic_chunks WHERE note_id=?1 AND revision=?2 AND model=?3 AND ordinal>=0 ORDER BY ordinal")?;
+    let mut rows = stmt.query(params![id, revision, model])?;
+    let mut sum: Vec<f64> = Vec::new();
+    while let Some(row) = rows.next()? {
+        let dimension: i64 = row.get(0)?;
+        if !(1..=MAX_DIM as i64).contains(&dimension) { return Err(EngineError::invalid("invalid indexed vector")); }
+        let dimension = dimension as usize;
+        let blob: Vec<u8> = row.get(1)?;
+        if blob.len() != dimension * 4 || (!sum.is_empty() && sum.len() != dimension) {
+            return Err(EngineError::invalid("invalid indexed vector"));
+        }
+        let values: Vec<f64> = blob.chunks_exact(4).map(|b| f32::from_le_bytes(b.try_into().unwrap()) as f64).collect();
+        if values.iter().any(|x| !x.is_finite()) { return Err(EngineError::invalid("invalid indexed vector")); }
+        if sum.is_empty() { sum.resize(dimension, 0.0); }
+        let norm = values.iter().map(|x| x*x).sum::<f64>().sqrt();
+        if norm > 0.0 { for (total, value) in sum.iter_mut().zip(values) { *total += value / norm; } }
+    }
+    let norm = sum.iter().map(|x| x*x).sum::<f64>().sqrt();
+    if norm == 0.0 { return Ok(Vec::new()); }
+    Ok(sum.into_iter().map(|x| (x / norm) as f32).collect())
+}
+
+/// Keep the strongest evidence per distinct note, with at most K retained
+/// notes. Repeated chunks of one note cannot crowd other notes out of results.
+fn rank_notes(c: &Connection, model: &str, source: &str, query: &[f32], limit: usize) -> Result<Vec<Hit>> {
+    if query.is_empty() || limit == 0 { return Ok(Vec::new()); }
+    let norm = query.iter().map(|x| x*x).sum::<f32>().sqrt();
+    let mut stmt = c.prepare(&format!("SELECT s.note_id,s.start,s.end,s.vector FROM semantic_chunks s JOIN notes_meta m ON m.id=s.note_id AND m.revision=s.revision WHERE {ELIGIBLE} AND m.archived=0 AND s.model=?1 AND s.dim=?2 AND s.note_id!=?3 AND s.ordinal>=0"))?;
+    let mut rows = stmt.query(params![model, query.len() as i64, source])?;
+    let mut hits: Vec<Hit> = Vec::with_capacity(limit);
+    while let Some(row) = rows.next()? {
+        let score = cosine(query, norm, &row.get::<_, Vec<u8>>(3)?);
+        if !score.is_finite() || score <= 0.0 { continue; }
+        let id: String = row.get(0)?;
+        if let Some(index) = hits.iter().position(|hit| hit.id == id) {
+            if score <= hits[index].score { continue; }
+            hits.remove(index);
+        } else if hits.len() == limit {
+            let worst = hits.last().unwrap();
+            if score < worst.score || (score == worst.score && id >= worst.id) { continue; }
+            hits.pop();
+        }
+        hits.push(Hit { score, id, start: row.get(1)?, end: row.get(2)? });
+        hits.sort_by(|a,b| b.score.total_cmp(&a.score).then_with(|| a.id.cmp(&b.id)));
+    }
+    Ok(hits)
+}
+
+pub fn related(c: &Connection, args: &Value) -> Result<Value> {
+    setup(c)?;
+    let model = model(args)?;
+    let id = args.get("note_id").and_then(Value::as_str).ok_or_else(|| EngineError::invalid("missing note_id"))?;
+    let revision = args.get("revision").and_then(Value::as_i64).ok_or_else(|| EngineError::invalid("missing revision"))?;
+    let limit = args.get("limit").and_then(Value::as_u64).unwrap_or(10).clamp(1, MAX_RESULTS) as usize;
+    let tx = c.unchecked_transaction()?;
+    let source: Option<(i64, bool, bool, bool)> = tx.query_row(&format!("SELECT m.revision,m.locked,m.trashed,{DONE} FROM notes_meta m WHERE m.id=?2"), params![model,id], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))).optional()?;
+    let (current, locked, trashed, ready) = source.ok_or_else(|| EngineError::NotFound(id.into()))?;
+    if current != revision || locked || trashed { return Err(EngineError::Conflict("note changed or is not indexable".into())); }
+    if !ready { return Ok(json!({"ready":false,"items":[]})); }
+    let query = note_vector(&tx, id, revision, model)?;
+    let hits = rank_notes(&tx, model, id, &query, limit)?;
+    let items = hit_items(&tx, &hits)?;
     tx.commit()?;
-    Ok(json!({ "items": items }))
+    Ok(json!({"ready":true,"items":items}))
 }
 
 pub fn status(c: &Connection, args: &Value) -> Result<Value> {
@@ -340,6 +413,104 @@ pub fn reset(c: &Connection) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn indexed_note(e: &crate::Engine, title: &str, content: &str, vector: Value) -> Value {
+        let note = run(e, json!({"op":"save","note":{"title":title,"content":content,"content_format":"text"}}));
+        loop {
+            let pending = run(e, json!({"op":"semantic_pending","model":"m","limit":16}));
+            let page = pending["items"].as_array().unwrap().iter().find(|p| p["id"] == note["id"]);
+            let Some(page) = page else { break };
+            let vectors = vec![vector.clone();page["chunks"].as_array().unwrap().len()];
+            run(e, json!({"op":"semantic_put","model":"m","note_id":note["id"],"revision":note["revision"],"offset":page["offset"],"vectors":vectors}));
+        }
+        note
+    }
+
+    #[test]
+    fn related_notes_deduplicate_evidence_and_reject_hidden_stale_sources() {
+        let (root, e) = fixture();
+        let source = indexed_note(&e, "source", "source text", json!([1.0,0.0]));
+        let repeated = indexed_note(&e, "repeated", &"related sentence. ".repeat(300), json!([1.0,0.0]));
+        let other = indexed_note(&e, "other", "other evidence", json!([0.8,0.2]));
+        indexed_note(&e, "orthogonal", "not related", json!([0.0,1.0]));
+        let query = json!({"op":"semantic_related","model":"m","note_id":source["id"],"revision":source["revision"],"limit":2});
+        let result = run(&e, query.clone());
+        assert_eq!(result["ready"],true);
+        assert_eq!(result["items"].as_array().unwrap().len(),2);
+        assert_eq!(result["items"][0]["note"]["id"], repeated["id"]);
+        assert_eq!(result["items"][1]["note"]["id"], other["id"]);
+        assert_eq!(result["items"][1]["snippet"],"other evidence");
+        let mut wrong_model = query.clone();wrong_model["model"] = json!("different-server-space");
+        assert_eq!(run(&e,wrong_model)["ready"],false);
+        run(&e,json!({"op":"patch","id":other["id"],"changes":{"trashed":true}}));
+        e.connection().execute("UPDATE notes_meta SET locked=1 WHERE id=?1",[repeated["id"].as_str().unwrap()]).unwrap();
+        assert!(run(&e,query.clone())["items"].as_array().unwrap().is_empty());
+        e.connection().execute("UPDATE notes_meta SET locked=1 WHERE id=?1",[source["id"].as_str().unwrap()]).unwrap();
+        assert_eq!(e.execute(query.clone())["ok"],false);
+        e.connection().execute("UPDATE notes_meta SET locked=0,revision=revision+1 WHERE id=?1",[source["id"].as_str().unwrap()]).unwrap();
+        assert_eq!(e.execute(query)["ok"],false);
+        drop(e);std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn related_source_waits_for_all_pages_and_includes_the_tail() {
+        let (root,e) = fixture();
+        let source = long_note(&e,None,"꼬리 문단");
+        let query=json!({"op":"semantic_related","model":"m","note_id":source["id"],"revision":source["revision"]});
+        let first=next_page(&e);
+        assert!(first["total"].as_u64().unwrap()>PAGE as u64);
+        assert_eq!(put_page(&e,&first,&source["revision"],0)["ok"],true);
+        assert_eq!(run(&e,query.clone())["ready"],false);
+        while status(&e)["pending"].as_i64().unwrap()>0 {
+            let page=next_page(&e);
+            assert_eq!(put_page(&e,&page,&source["revision"],page["offset"].as_u64().unwrap() as usize)["ok"],true);
+        }
+        assert_eq!(run(&e,query)["ready"],true);
+        let vector=note_vector(e.connection(),source["id"].as_str().unwrap(),source["revision"].as_i64().unwrap(),"m").unwrap();
+        assert_eq!(vector.len(),2);assert!(vector[0]>0.0 && vector[1]>0.0,"the final page contributes to the source vector");
+        drop(e);std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn related_ranking_matches_distinct_note_oracle() {
+        let (root, engine) = fixture();
+        let c = engine.connection();
+        setup(c).unwrap();
+        let mut expected = Vec::new();
+        for i in 0..120 {
+            let id = format!("related-{i:04}");
+            let hidden = i % 17;
+            c.execute("INSERT INTO notes_meta(id,title,created_at,updated_at,locked,trashed,archived) VALUES(?1,'',0,0,?2,?3,?4)", params![id,hidden==1,hidden==2,hidden==3]).unwrap();
+            let mut best = 0f32;
+            for ordinal in 0..5 {
+                let vector = [((i*13+ordinal*7)%23) as f32-11.0,1.0f32];
+                let score = vector[0]/(vector[0]*vector[0]+1.0).sqrt();
+                best = best.max(score);
+                let blob: Vec<u8> = vector.iter().flat_map(|v|v.to_le_bytes()).collect();
+                c.execute("INSERT INTO semantic_chunks VALUES(?1,?2,?3,?4,0,1,'',2,?5)", params![id,if hidden==4 {0} else {1},if hidden==5 {"other"} else {"m"},ordinal,blob]).unwrap();
+            }
+            if !(1..=5).contains(&hidden) && i!=0 && best>0.0 { expected.push((id,best)); }
+        }
+        expected.sort_by(|a,b|b.1.total_cmp(&a.1).then_with(||a.0.cmp(&b.0)));
+        for limit in [1,2,10,50,150] {
+            let actual = rank_notes(c,"m","related-0000",&[1.0,0.0],limit).unwrap();
+            assert_eq!(actual.iter().map(|h|(h.id.clone(),h.score)).collect::<Vec<_>>(),expected.iter().take(limit).cloned().collect::<Vec<_>>());
+        }
+        assert!(rank_notes(c,"m","related-0000",&[],10).unwrap().is_empty());
+        drop(engine);std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn related_zero_vector_returns_no_suggestions_and_preserves_source() {
+        let (root,e) = fixture();
+        let source = indexed_note(&e,"zero","original text",json!([0.0,0.0]));
+        indexed_note(&e,"other","other text",json!([1.0,0.0]));
+        let before = run(&e,json!({"op":"get","id":source["id"]}));
+        let result = run(&e,json!({"op":"semantic_related","model":"m","note_id":source["id"],"revision":source["revision"]}));
+        assert_eq!(result,json!({"ready":true,"items":[]}));
+        assert_eq!(run(&e,json!({"op":"get","id":source["id"]})),before);
+        drop(e);std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn chunks_cover_text_with_bounded_size_and_utf16_offsets() {
         let para = "가나다 라마바사 아자차카 타파하. ".repeat(30);

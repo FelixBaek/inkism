@@ -198,6 +198,7 @@ impl Engine {
             "merge_changes" => crate::merge_changes::list(conn)?,
             "semantic_pending" => crate::semantic::pending(conn, &req)?,
             "semantic_search" => crate::semantic::search(conn, &req)?,
+            "semantic_related" => crate::semantic::related(conn, &req)?,
             "semantic_status" => crate::semantic::status(conn, &req)?,
             "semantic_put" => {let v=crate::semantic::put(conn,&req)?;self.wakeup.notify();v},
             "semantic_reset" => {let v=crate::semantic::reset(conn)?;self.wakeup.notify();v},
