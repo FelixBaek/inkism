@@ -17,13 +17,15 @@ function inlineText(node: JSONContent): string {
 }
 
 /** Rich checklists and Markdown tasks; plain text is never reinterpreted as markup. */
-export function noteTasks(source: string, format: ContentFormat): NoteTask[] {
+export function noteTasks(source: string, format: ContentFormat, limit = Infinity): NoteTask[] {
+  if (limit !== Infinity && (!Number.isSafeInteger(limit) || limit < 1)) throw new Error('Invalid task limit');
   if (new TextEncoder().encode(source).length > TASK_SCAN_BYTES) throw new Error('TASK_SCAN_TOO_LARGE');
   if (format === 'text') return [];
   const tasks: NoteTask[] = [];
   if (format === 'markdown') {
     markdown ??= new MarkdownManager({ extensions: contentExtensions() });
     const visit = (node: JSONContent) => {
+      if (tasks.length >= limit) return;
       if (node.type === 'taskItem') tasks.push({ ordinal: tasks.length, text: inlineText(node).trim(), checked: node.attrs?.checked === true });
       for (const child of node.content ?? []) visit(child);
     };
@@ -35,11 +37,18 @@ export function noteTasks(source: string, format: ContentFormat): NoteTask[] {
   template.innerHTML = source;
   for (const node of template.content.querySelectorAll('script,style,textarea,title,pre,code,template')) node.remove();
   for (const item of template.content.querySelectorAll('li[data-type="taskItem"]')) {
-    const copy = item.cloneNode(true) as HTMLElement;
-    for (const nested of copy.querySelectorAll('ul,ol,label,input,button')) nested.remove();
-    for (const br of copy.querySelectorAll('br')) br.replaceWith('\n');
-    for (const block of copy.querySelectorAll('p,div')) block.append('\n');
-    tasks.push({ ordinal: tasks.length, text: (copy.textContent ?? '').trim(), checked: item.getAttribute('data-checked') === 'true' });
+    if (tasks.length >= limit) break;
+    // Walk only this item's label. Cloning each subtree would be quadratic
+    // for deeply nested lists, and child tasks have their own rows.
+    const walker = document.createTreeWalker(item, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode: node => node instanceof Element && node.matches('ul,ol,li,label,input,button') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+    });
+    let text = '', child: Node | null;
+    while ((child = walker.nextNode())) {
+      if (child.nodeType === Node.TEXT_NODE) text += child.textContent ?? '';
+      else if (child instanceof Element && child.matches('p,div,br')) text += '\n';
+    }
+    tasks.push({ ordinal: tasks.length, text: text.trim(), checked: item.getAttribute('data-checked') === 'true' });
   }
   return tasks;
 }

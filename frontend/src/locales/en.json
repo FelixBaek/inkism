@@ -2574,5 +2574,19 @@
   "닫아도 입력은 앱을 종료할 때까지 남아 있습니다.": "Closing keeps your input until you quit the app.",
   "저장하고 열기": "Save and open",
   "저장 후 속성과 노트 연결 열기": "Open properties and note connections after saving",
-  "저장 공간이 부족합니다. 저장소가 있는 드라이브의 공간을 확보한 뒤 다시 시도해 주세요.": "Storage is full. Free up space on the drive containing your library, then try again."
+  "저장 공간이 부족합니다. 저장소가 있는 드라이브의 공간을 확보한 뒤 다시 시도해 주세요.": "Storage is full. Free up space on the drive containing your library, then try again.",
+  "할 일 모아보기": "All tasks",
+  "노트의 체크리스트를 모아 봅니다. 노트를 열어 수정하세요.": "Checklists from your notes. Open a note to edit its tasks.",
+  "완료 상태": "Completion status",
+  "미완료": "Incomplete",
+  "모든 상태": "All statuses",
+  "할 일 검색": "Search tasks",
+  "확인한 노트: {count}": "Notes scanned: {count}",
+  "할 일: {count}": "Tasks: {count}",
+  "중단됨": "Stopped",
+  "읽지 못한 노트: {count}. 큰 문서는 원문에서 확인해 주세요.": "Unread notes: {count}. Open large notes directly to check their tasks.",
+  "할 일 모아보기는 노트당 8MB까지 읽습니다.": "Task overview reads up to 8 MB per note.",
+  "할 일 5,000개까지 표시합니다. 나머지는 원문에서 확인해 주세요.": "Showing up to 5,000 tasks. Open your notes to view the rest.",
+  "표시할 할 일이 없습니다.": "No tasks to display.",
+  "내용 없는 할 일": "Untitled task"
 }

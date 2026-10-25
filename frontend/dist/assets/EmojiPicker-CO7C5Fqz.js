@@ -1,4 +1,4 @@
-import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./jsx-runtime-BShSzW0e.js";import{a as r}from"./i18n-DwjuSLpA.js";import"./icons-DjsEWvb5.js";import{M as i,j as a}from"./index-BtOGQBkm.js";var o=e(t(),1),s=e=>e.trim().split(`
+import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{n as t,t as n}from"./jsx-runtime-BShSzW0e.js";import{a as r}from"./i18n-BgUA92Oy.js";import"./icons-DjsEWvb5.js";import{M as i,j as a}from"./index-DMa-s7e8.js";var o=e(t(),1),s=e=>e.trim().split(`
 `).map(e=>{let[t,n,r,i=``]=e.trim().split(`|`);return{char:t,name:n,code:r,keywords:i}}),c=[{id:`face`,label:r(`표정`),icon:`😀`,items:s(`
 😀|웃는 얼굴|grinning|웃음 미소 기쁨 smile 활짝 웃는 얼굴 스마일 grinning face
 😃|크게 웃는 얼굴|smiley|웃음 기쁨 smile 눈을 크게 뜨고 웃는 얼굴 미소 스마일 입 벌리고 grinning face with big eyes
