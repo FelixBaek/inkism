@@ -11,13 +11,15 @@ import {
   StickyNote,
   PencilOff,
   Archive,
+  Microphone,
 } from "../icons";
-import { useStore, viewTitle, PAGE_SIZE } from "../store";
+import { requestVoiceMemo } from "../lib/voice-memo";
+import { useStore, viewTitle } from "../store";
 import { formatRelative } from "../lib/date";
 import type { TrashDays } from "../api";
 import type { Notebook, Summary, View } from "../types";
 import { IconButton } from "./IconButton";
-import { NoteContextMenu, type NoteMenuTarget } from "./NoteContextMenu";
+import { NoteContextMenu, renameNoteDialog, type NoteMenuTarget } from "./NoteContextMenu";
 import { ReminderEditor } from "./Reminders";
 import { NoteShareDialog } from "./NoteShareDialog";
 import { CoverBanner } from "./NotebookCover";
@@ -34,21 +36,19 @@ import {
 } from "./TrashTools";
 import "./NoteList.css";
 import { t } from "../i18n";
+import { NotebookGlyph, tagColor } from "./LibraryStyle";
 
 function trashRowLabel(at: number | undefined, archived: boolean, retention: TrashDays) {
   return trashLabel(at, archived ? null : retention);
 }
 
-function pageCount(total: number | undefined, hasNext: boolean, page: number) {
-  if (total !== undefined) return Math.max(1, Math.ceil(total / PAGE_SIZE));
-  return hasNext ? null : page;
+function countLabel(count: number) {
+  return count < 0 ? t("{count}개 이상", { count: -count }) : t("{count}개", { count });
 }
-function listInfo(search: string, hasNext: boolean, page: number, length: number, order: string, count: number | null) {
-  if (search)
-    return t(hasNext ? "{count}개 이상 검색 결과" : "{count}개 검색 결과", { count: (page - 1) * PAGE_SIZE + length });
+function listInfo(search: string, hasNext: boolean, length: number, order: string, count: number | null) {
+  if (search) return t(hasNext ? "{count}개 이상 검색 결과" : "{count}개 검색 결과", { count: length });
   if (count === null) return order;
-  const amount = count < 0 ? t("{count}개 이상", { count: -count }) : t("{count}개", { count });
-  return order + " · " + amount;
+  return order + " · " + countLabel(count);
 }
 function ListStatus({
   error,
@@ -112,8 +112,19 @@ export function NoteList() {
   };
   // 전체 노트는 총 개수를 알고, 다른 보기는 마지막 쪽에 닿아야 정확한 수를 안다(음수 = "이상").
   const total = s.view.type === "all" && !s.search ? s.stats?.notes : undefined;
-  const count = !s.pageData ? null : (total ?? knownNoteCount(s.pageData.nextCursor, s.page, items.length));
-  const pages = pageCount(total, hasNext, s.page);
+  const count = !s.pageData ? null : (total ?? (hasNext ? -items.length : items.length));
+  // 목록 끝이 보이면 다음 쪽을 읽는다.
+  const sentinel = React.useRef<HTMLDivElement>(null);
+  const loadMore = s.loadMore;
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || !hasNext) return;
+    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && loadMore(), {
+      rootMargin: "200px",
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasNext, loadMore]);
   const trash = s.view.type === "trash";
   const shelf = trash || s.view.type === "archive";
   useTrashPurge();
@@ -164,7 +175,7 @@ export function NoteList() {
           id="note-search"
           type="search"
           className="search-field"
-          placeholder={notebook ? t("{name}에서 검색", { name: notebook.name }) : ""}
+          placeholder={notebook ? t("{name}에서 검색", { name: notebook.name }) : t("제목·본문·태그 검색")}
           aria-label={t("노트 검색")}
           value={s.searchInput}
           onChange={(e) => s.setSearchInput(e.target.value)}
@@ -184,7 +195,7 @@ export function NoteList() {
         </div>
       )}
       <p className="list-info">
-        {listInfo(s.search, hasNext, s.page, items.length, order, count)}
+        {listInfo(s.search, hasNext, items.length, order, count)}
         {trash && picked.size > 0 && (
           <>
             {" · "}
@@ -223,32 +234,33 @@ export function NoteList() {
               ))}
             </React.Fragment>
           ))}
+        {hasNext && <div ref={sentinel} className="list-sentinel" aria-hidden />}
       </div>
 
-      {(items.length > 0 || s.page > 1) && (
-        <nav className="list-pager" aria-label={t("노트 목록")}>
+      {items.length > 0 && count !== null && (
+        <p className="list-more" aria-live="polite">
+          {hasNext ? t("{count} · 스크롤해서 더 보기", { count: countLabel(count) }) : countLabel(count)}
+        </p>
+      )}
+      {/* 좁은 화면(Figma 65:8875): 오른쪽 아래 새 노트와 그 위 음성 메모. 넓은 화면에서는 CSS로 숨긴다. */}
+      {!shelf && (
+        <div className="list-fab">
           <button
             type="button"
-            className="pager-btn"
-            aria-label={t("이전 페이지")}
-            disabled={s.page <= 1 || s.listLoading}
-            onClick={() => s.goToPage(s.page - 1)}
+            className="list-fab-voice"
+            aria-label={t("음성 메모")}
+            title={t("음성 메모")}
+            onClick={() => {
+              requestVoiceMemo();
+              s.newNote();
+            }}
           >
-            {t("이전")}
+            <Microphone size={18} aria-hidden />
           </button>
-          <span className="pager-info" aria-live="polite">
-            {s.page} / {pages ?? "…"}
-          </span>
-          <button
-            type="button"
-            className="pager-btn"
-            aria-label={t("다음 페이지")}
-            disabled={!hasNext || s.listLoading}
-            onClick={() => s.goToPage(s.page + 1)}
-          >
-            {t("다음")}
+          <button type="button" className="list-fab-new" aria-label={t("새 노트 만들기")} onClick={() => s.newNote()}>
+            <Plus size={24} aria-hidden />
           </button>
-        </nav>
+        </div>
       )}
       {cleanup && (
         <TrashSelectionDialog
@@ -288,11 +300,6 @@ export function NoteList() {
       {action?.kind === "publish" && <NoteShareDialog noteID={action.item.id} onClose={() => setAction(null)} />}
     </section>
   );
-}
-
-/** 마지막 쪽이면 정확한 노트 수, 아니면 "이상"을 뜻하는 음수. */
-function knownNoteCount(nextCursor: unknown, page: number, shown: number): number {
-  return nextCursor === null ? (page - 1) * PAGE_SIZE + shown : -page * PAGE_SIZE;
 }
 
 /** 폴더 머리말: 표지, 상위 폴더 경로, 설명. 이름·개수·버튼은 목록 머리에 있다. */
@@ -366,6 +373,8 @@ function EmptyList({ view, search }: Readonly<{ view: View; search: string }>) {
   );
 }
 
+const RECOVERY_SUFFIX = /\((분할 )?자동 복구\)$/;
+
 function NoteRow({
   item,
   onMenu,
@@ -385,10 +394,15 @@ function NoteRow({
   const selected = s.selectedId === item.id;
   const trashMode = s.view.type === "trash";
   // 날짜 옆 자리: 태그 보기면 그 태그, 아니면 폴더 이름, 폴더가 없으면 첫 태그.
-  const notebookName = s.notebooks.find((n) => n.id === item.notebook_id)?.name;
+  const notebook = s.notebooks.find((n) => n.id === item.notebook_id);
+  const notebookName = notebook?.name;
   const tag = s.view.type === "tag" ? s.view.name : item.tags[0];
   const tagLabel = tag ? `# ${tag}` : "";
   const place = s.view.type !== "tag" && notebookName ? notebookName : tagLabel;
+  // 자동 복구 사본은 제목 끝 접미사를 배지로 떼어, 긴 제목이 잘려도 사본임이 보이게 한다.
+  const suffix = RECOVERY_SUFFIX.exec(item.title);
+  const shownTitle = suffix ? item.title.slice(0, suffix.index).trimEnd() : item.title;
+  const recovery = suffix && (suffix[1] ? t("분할 자동 복구") : t("자동 복구"));
 
   return (
     <article
@@ -419,7 +433,12 @@ function NoteRow({
           if (e.key === "Delete" && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
             e.preventDefault();
             if (item.trashed) void s.quickDelete(item.id);
-            else void s.patchNoteById(item.id, { trashed: true }, item.revision);
+            else void s.trashNote(item.id, item.title, item.revision);
+            return;
+          }
+          if (e.key === "F2" && !item.trashed && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+            e.preventDefault();
+            void renameNoteDialog(s, item.id, item.title, item.revision);
             return;
           }
           if (e.key !== "ContextMenu" && !(e.shiftKey && e.key === "F10")) return;
@@ -431,8 +450,9 @@ function NoteRow({
       >
         <div className="note-row-top">
           {item.color && <span className="note-row-color" style={{ background: item.color }} aria-hidden />}
-          <h3 className="note-row-title">{item.title || t("제목 없음")}</h3>
+          <h3 className={`note-row-title${shownTitle ? "" : " is-untitled"}`}>{shownTitle || t("제목 없음")}</h3>
           <span className="note-row-flags">
+            {recovery && <span className="note-row-badge">{recovery}</span>}
             {item.readonly && <PencilOff size={12} aria-label={t("읽기 전용")} />}
             {item.archived && s.view.type !== "archive" && <Archive size={12} aria-label={t("보관됨")} />}
             {item.pinned && <Pin size={12} aria-label={t("고정됨")} />}
@@ -440,7 +460,26 @@ function NoteRow({
           </span>
         </div>
         <p className={`note-row-preview${item.preview ? "" : " is-empty"}`}>{item.preview || t("내용 없음")}</p>
-        <p className="note-row-meta">{meta || [formatRelative(item.updated_at), place].filter(Boolean).join(" · ")}</p>
+        <p className="note-row-meta">
+          {meta || (
+            <>
+              {formatRelative(item.updated_at)}
+              {place && " · "}
+              {place && place === tagLabel ? (
+                <>
+                  <span style={{ color: tagColor(s.tags, tag!) }}>#</span> {tag}
+                </>
+              ) : (
+                place && (
+                  <span className="note-row-place">
+                    <NotebookGlyph nb={notebook} size={12} />
+                    {place}
+                  </span>
+                )
+              )}
+            </>
+          )}
+        </p>
       </button>
       {trashMode && (
         <div className="note-row-actions">

@@ -10,9 +10,14 @@
   padding: 0 4px;
   overflow-x: auto;
   background: var(--surface);
-  scrollbar-width: thin;
+  /* 탭이 많아도 스크롤바(화살표 포함)는 숨기고 휠·끌기로 넘긴다 */
+  scrollbar-width: none;
+}
+.note-tabs::-webkit-scrollbar {
+  display: none;
 }
 .note-tabs .note-tab {
+  position: relative;
   display: flex;
   flex: 0 0 auto;
   width: 180px;
@@ -32,7 +37,7 @@
   display: flex;
   flex: 1;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 6px;
   min-width: 0;
   height: 28px;
@@ -71,7 +76,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: inherit;
+  color: var(--muted);
   cursor: pointer;
 }
 .note-tabs .note-tab-close:hover:not(:disabled) {
@@ -87,4 +92,28 @@
 }
 .note-tabs .note-tab.is-preview > [role="tab"] span {
   font-style: italic;
+}
+/* 끌어서 순서 바꾸기: 놓일 자리에 세로 표시선 */
+.note-tabs .note-tab:is(.is-drop-before, .is-drop-after)::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: -5px;
+  width: 2px;
+  background: var(--accent-text);
+  pointer-events: none;
+}
+.note-tabs .note-tab.is-drop-after::before {
+  left: auto;
+  right: -5px;
+}
+/* Figma Nocturne/Note tab (190:28221): 제목은 왼쪽 정렬, 닫기는 선택·가리킴·초점일 때만. 자리는 남겨 제목이 흔들리지 않는다. */
+@media (hover: hover) {
+  .note-tabs .note-tab:not(.is-selected, :hover, :focus-within) .note-tab-close {
+    opacity: 0;
+  }
+}
+.note-tabs .note-tab > [role="tab"] span.is-untitled {
+  color: var(--muted);
 }

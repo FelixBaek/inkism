@@ -84,6 +84,7 @@ struct WireResponse {
 }
 impl From<Response> for WireResponse {
     fn from(response: Response) -> Self {
+        let response = buffered_response(response);
         Self {
             status: response.status,
             headers: response.headers,
@@ -158,7 +159,17 @@ async fn mobile_api(
     .await
     .map_err(|e| e.to_string())
 }
+// Mobile IPC/custom protocols retain their existing 64 MiB response ceiling.
+// A file spool must never become a successful empty ZIP on these adapters.
+fn buffered_response(response: Response) -> Response {
+    match response.into_buffered(MAX_BODY) {
+        Ok(response)=>response,
+        Err(e) if e.kind()==std::io::ErrorKind::InvalidData=>Response::fail(413,"모바일 응답은 64MB까지 지원합니다."),
+        Err(e)=>Response::fail(500,e),
+    }
+}
 fn response(response: Response) -> tauri::http::Response<Vec<u8>> {
+    let response=buffered_response(response);
     let mut builder = tauri::http::Response::builder().status(response.status);
     for (name, value) in response.headers {
         builder = builder.header(name, value);
@@ -201,10 +212,11 @@ pub fn run() {
                         Response::fail(503, "storage is starting")
                     }
                 } else if handler.is_none() {
-                    Response { status: 200, headers: vec![("content-type".into(), "text/html; charset=utf-8".into()), ("cache-control".into(), "no-store".into())], body: include_bytes!("mobile-storage-recovery.html").to_vec() }
+                    Response { file: None, status: 200, headers: vec![("content-type".into(), "text/html; charset=utf-8".into()), ("cache-control".into(), "no-store".into())], body: include_bytes!("mobile-storage-recovery.html").to_vec() }
                 } else {
                     match app.asset_resolver().get(path.to_owned()) {
                         Some(asset) => Response {
+                            file: None,
                             status: 200,
                             headers: vec![("content-type".into(), asset.mime_type)],
                             body: asset.bytes,

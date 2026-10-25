@@ -47,7 +47,7 @@ function localizeDetail(message: string): string {
     case "note revision changed": return t("문서가 변경되었습니다. 다시 시도해 주세요.");
     case "version name changed": return t("버전 이름이 변경되었습니다. 목록을 다시 불러와 주세요.");
     case "note is not editable":
-    case "note is no longer editable": return t("노트가 잠김·읽기 전용·휴지통 상태인지 확인해 주세요. 현재는 편집할 수 없습니다.");
+    case "note is no longer editable": return t("노트가 잠김·읽기 전용·지운 노트 상태인지 확인해 주세요. 현재는 편집할 수 없습니다.");
     case "note was deleted": return t("노트가 삭제되었습니다.");
     case "source changed": return t("원문이 변경되었습니다. 다시 불러온 뒤 시도해 주세요.");
     case "note is locked": return t("잠긴 노트입니다. 금고를 연 뒤 다시 시도해 주세요.");
@@ -89,6 +89,12 @@ function localizeDetail(message: string): string {
 }
 
 export function localizeBackendError(message: string, depth = 0): string {
+  // Match the observed engine diagnostic, not arbitrary text mentioning a full disk.
+  // Preserve raw protocol classification in RpcError for retry/conflict decisions.
+  if (depth === 0 && backendErrorCode(message) === "internal" &&
+      backendErrorDetail(message) === "sqlite: database or disk is full") {
+    return t("저장 공간이 부족합니다. 저장소가 있는 드라이브의 공간을 확보한 뒤 다시 시도해 주세요.");
+  }
   const part = depth < 8 ? splitPrefix(message) : null;
   return part ? prefixes[part[0]](localizeBackendError(part[1], depth + 1)) : localizeDetail(message);
 }

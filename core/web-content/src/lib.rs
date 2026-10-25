@@ -550,23 +550,6 @@ fn atoi(s: &str) -> Option<i64> {
     s.parse().ok()
 }
 
-/// Extract a static reading view; no subresources or scripts are loaded.
-pub fn reader(source: &str, plain: bool) -> Result<(String, Cleaned), Error> {
-    if source.len() > MAX_BYTES { return Err(Error::new("page exceeds 2 MB")); }
-    if plain {
-        let escaped = source.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
-        return Ok((String::new(), clean(&format!("<pre>{escaped}</pre>"))?));
-    }
-    let document = Html::parse_document(source);
-    let selector = |s| scraper::Selector::parse(s).expect("static selector");
-    let title = document.select(&selector("title")).next().map(|n| n.text().collect::<String>().chars().take(240).collect()).unwrap_or_default();
-    let root = document.select(&selector("article")).next()
-        .or_else(|| document.select(&selector("main")).next())
-        .or_else(|| document.select(&selector("body")).next());
-    let html = root.map(|n|n.inner_html()).unwrap_or_else(||source.to_string());
-    Ok((title, clean(&html)?))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

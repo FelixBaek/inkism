@@ -1,0 +1,6 @@
+.dialog.capture-layer { position: fixed; inset: 0; margin: auto; inline-size: min(32rem, calc(100vw - 2rem)); max-block-size: calc(100dvh - 2rem); overflow-y: auto; }
+.capture-layer::backdrop { background: var(--scrim); }
+.capture-form { display: grid; gap: var(--space-2, .5rem); inline-size: 100%; }
+.capture-form .text-field { inline-size: 100%; min-inline-size: 0; }
+.capture-form textarea { resize: vertical; min-block-size: 8rem; }
+.capture-option { display: flex; align-items: center; gap: .5rem; }

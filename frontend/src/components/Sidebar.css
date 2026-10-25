@@ -22,3 +22,9 @@
   outline: var(--focus-ring);
   outline-offset: -2px;
 }
+/* 폴더·태그 줄의 ⋮ 메뉴는 Figma 02(34:4)처럼 선택·가리킴·초점일 때만 보인다. 자리는 남겨 개수가 흔들리지 않는다. */
+@media (hover: hover) {
+  .side-row:not(.is-active, :hover, :focus-within) > .menu-root {
+    opacity: 0;
+  }
+}

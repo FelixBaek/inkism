@@ -84,7 +84,7 @@ try{
  await page.getByLabel("탐색 열기").click();assert.ok(await page.locator(".sidebar").isVisible());
  await page.getByRole("button",{name:"설정 열기",exact:true}).click();
  await page.getByRole("dialog",{name:"설정"}).locator(".settings-nav").getByRole("button",{name:"동기화",exact:true}).click();
- assert.ok(await page.locator(".sync-settings").isVisible());
+ assert.ok(await page.locator(".sync-settings--sync").isVisible());
  assert.deepEqual(errors,[]);
  console.log("PASS: real storage, Korean search, reopen, save failure preservation, metadata revision, history, 100k-line virtualization, mobile navigation");
 } finally {await browser.close();}

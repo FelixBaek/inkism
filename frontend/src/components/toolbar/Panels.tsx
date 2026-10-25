@@ -8,7 +8,7 @@ import {
   ListDashes,
   Longer,
   MagicWand,
-  NoColor,
+  Prohibit,
   Palette,
   Pencil,
   Pin,
@@ -124,14 +124,27 @@ export function ColorPalette({ kind, current, pinned, onPick, onPin, onClose }: 
     return () => input.removeEventListener("change", change);
   }, [key]);
   const title = kind === "highlight" ? t("배경색") : t("글자색");
-  const swatches: [string, string][] = [...new Map([
+  const base: [string, string][] = [...new Map([
     ...(kind === "highlight" ? HIGHLIGHT_COLORS : TEXT_COLORS),
-    ...custom.map((c): [string, string] => [t("직접 고른 색 {color}", { color: c }), c]),
     ...registeredColors.map(c=>[c.label,c.value] as [string,string]),
     ...activePluginColors().filter(c => !c.kind || c.kind === kind).map(c=>[c.label,c.value] as [string,string]),
   ].map(([name,color])=>[color.toLowerCase(),[name,color] as [string,string]])).values()];
+  const swatch = ([name, color]: [string, string]) => (
+    <button
+      key={color}
+      type="button"
+      className={`tb-swatch${active === color ? " is-active" : ""}`}
+      style={kind === "highlight" ? { background: color } : { color }}
+      aria-label={name}
+      title={name}
+      aria-pressed={active === color}
+      onClick={() => onPick(color)}
+    >
+      {t("가")}
+    </button>
+  );
   return (
-    <div className="tb-palette">
+    <div className={`tb-palette is-${kind}`}>
       <div className="tb-palette-head">
         <h3>{title}</h3>
         <button
@@ -154,46 +167,44 @@ export function ColorPalette({ kind, current, pinned, onPick, onPin, onClose }: 
           <X size={16} aria-hidden />
         </button>
       </div>
-      <div className="tb-swatches">
-        <button
-          type="button"
-          className="tb-swatch tb-swatch-action"
-          aria-label={t("색 없음")}
-          title={t("색 없음")}
-          onClick={() => onPick(null)}
-        >
-          <NoColor size={16} aria-hidden />
+      <div className="tb-palette-tools">
+        <button type="button" className="tb-palette-tool" onClick={() => onPick(null)}>
+          <Prohibit size={16} aria-hidden />
+          {t("색 없음")}
         </button>
-        <button
-          type="button"
-          className="tb-swatch tb-swatch-action"
-          aria-label={t("직접 고른 색 지우기")}
-          title={t("직접 고른 색 지우기")}
-          disabled={!custom.length}
-          onClick={() => {
-            setCustom([]);
-            store.set(key, []);
-          }}
-        >
-          <Trash2 size={16} aria-hidden />
-        </button>
-        <label className="tb-swatch tb-swatch-action" title={t("직접 고르기")}>
+        <label className="tb-palette-tool">
           <Palette size={16} aria-hidden />
+          {t("직접 고르기")}
           <input ref={picker} type="color" aria-label={t("직접 고르기")} defaultValue={active ?? "#ffffff"} />
         </label>
-        {swatches.map(([name, color]) => (
-          <button
-            key={color}
-            type="button"
-            className={`tb-swatch${active === color ? " is-active" : ""}`}
-            style={{ background: color }}
-            aria-label={name}
-            title={name}
-            aria-pressed={active === color}
-            onClick={() => onPick(color)}
-          />
-        ))}
       </div>
+      <div className="tb-palette-section">
+        <span className="tb-palette-label">{t("기본 색")}</span>
+        <div className="tb-swatches">{base.map(swatch)}</div>
+      </div>
+      {(
+        <div className="tb-palette-section">
+          <div className="tb-palette-section-head">
+            <span className="tb-palette-label">{t("직접 고른 색 · 최근 7개")}</span>
+            <button
+              type="button"
+              className="icon-btn"
+              disabled={custom.length === 0}
+              aria-label={t("직접 고른 색 지우기")}
+              title={t("직접 고른 색 지우기")}
+              onClick={() => {
+                setCustom([]);
+                store.set(key, []);
+              }}
+            >
+              <Trash2 size={16} aria-hidden />
+            </button>
+          </div>
+          <div className="tb-swatches">
+            {custom.map((c) => swatch([t("직접 고른 색 {color}", { color: c }), c]))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

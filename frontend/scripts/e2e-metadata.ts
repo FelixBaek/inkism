@@ -20,7 +20,7 @@ try {
  await page.waitForFunction(()=>document.querySelector('.status-save')?.classList.contains('ok'));
  assert.equal(workers.some(url=>url.includes('plaintext.worker')),false);
  let local=await rpc('get',{id:note.id});assert.ok(local.content.includes('이어쓰기'));assert.equal(local.favorite,true);
- assert.match(await page.locator('.status-words').textContent(),/^[\d,]+ words$/);
+ assert.match(await page.locator('.status-words').textContent(),/^단어 [\d,]+개$/);
  // Title-only edits must not resend or rederive the stored body.
  const titlePatch=page.waitForResponse(r=>r.url().endsWith('/api/rpc')&&r.request().postDataJSON().op==='patch');
  await page.getByLabel('노트 제목').fill(title+' 수정');await page.keyboard.press('Control+s');

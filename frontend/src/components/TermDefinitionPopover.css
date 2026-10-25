@@ -3,7 +3,26 @@
 .term-definition-popover header{margin-bottom:10px}.term-definition-word{font-size:18px;font-weight:600;margin-bottom:12px;overflow-wrap:anywhere}
 .term-definition-popover button{padding:5px 9px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer}.term-definition-popover button:disabled{opacity:.5;cursor:default}
 .term-definition-popover textarea,.term-definition-popover select,.term-definition-popover input:not([type=checkbox]){box-sizing:border-box;width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--canvas);color:var(--text);font:inherit}.term-definition-popover textarea{resize:vertical;min-height:94px;max-height:220px}
-.term-definition-label{display:block;margin:8px 0}.term-definition-popover details{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}.term-definition-popover details label{display:block;margin-top:8px}.term-definition-popover summary{cursor:pointer}.term-definition-hint{display:block;font-size:12px;opacity:.7}.term-definition-preview{white-space:pre-wrap;overflow-wrap:anywhere}.term-definition-popover .term-definition-save{background:var(--green);color:var(--canvas)}.term-definition-result{display:block;width:100%;text-align:left;margin:3px 0}
+.term-definition-label{display:block;margin:8px 0}.term-definition-popover details{margin-top:10px;padding-top:0;border-top:0}.term-definition-popover details label{display:block;margin-top:8px}.term-definition-popover summary{cursor:pointer;color:var(--muted);font-size:12px}.term-definition-hint{display:block;font-size:12px;opacity:.7}.term-definition-preview{white-space:pre-wrap;overflow-wrap:anywhere}.term-definition-popover .term-definition-save{background:var(--green);color:var(--on-accent)}.term-definition-result{display:block;width:100%;text-align:left;margin:3px 0}
 .tiptap-prose [data-term-id]{text-decoration:underline dotted;text-underline-offset:4px;cursor:help}.tiptap-prose [data-term-id]:focus{outline:2px solid var(--green);outline-offset:2px}
 
 .term-definition-popover select{min-width:0;max-width:100%}.term-definition-popover option{background:var(--canvas);color:var(--text)}
+/* 저장된 용어에 마우스를 올리면 뜨는 작은 카드: 용어 + 설명, 오른쪽 위에 수정·지우기 아이콘 */
+.term-definition-popover.is-preview{width:auto;max-width:min(280px,calc(100vw - 24px));min-width:160px;padding:8px 10px;border-radius:8px;box-shadow:var(--shadow)}
+.term-definition-popover.is-preview .term-definition-word{display:block;font-size:13px;margin:0 0 2px}.term-definition-tools~.term-definition-word{margin-right:52px}
+.term-definition-popover.is-preview .term-definition-preview{margin:0;color:var(--muted)}
+.term-definition-popover.is-preview a{display:inline-block;margin-top:4px;font-size:12px}
+.term-definition-tools{position:absolute;top:4px;right:4px;display:flex;gap:2px}
+.term-definition-popover .term-definition-tools button{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted)}
+.term-definition-popover .term-definition-tools button:hover{background:var(--hover);color:var(--text)}
+/* 간소화: 용어를 제목으로, 라벨·안내문 없이 입력 → AI·글자 수 → 연결(접힘) → 버튼 한 줄 */
+.term-definition-popover:not(.is-preview) header .term-definition-word{margin:0;flex:1;min-width:0}
+.term-definition-popover .term-definition-close{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;background:transparent;color:var(--muted)}
+.term-definition-popover .term-definition-close:hover{background:var(--hover);color:var(--text)}
+.term-definition-popover:not(.is-preview) textarea{min-height:72px}
+.term-definition-ai{margin-top:8px}
+.term-definition-ai button{display:inline-flex;align-items:center;gap:6px}
+.term-definition-ai small{color:var(--faint)}
+.term-definition-popover footer{margin-top:14px}
+.term-definition-popover footer>span{flex:1}
+.term-definition-popover .term-definition-remove{border-color:transparent;background:transparent;color:var(--danger,var(--red))}

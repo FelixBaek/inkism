@@ -33,10 +33,12 @@ const RENDERER_OPS: &[&str] = &[
     "restore_notebook",
     "trashed_notebooks",
     "knowledge_get", "knowledge_set", "knowledge_list", "knowledge_settings_get", "knowledge_settings_set", "merge_notes", "merge_preview", "merge_apply", "merge_undo", "merge_changes", "wiki_sources", "wiki_check", "wiki_propose_record", "wiki_apply", "wiki_reject", "wiki_undo", "wiki_changes",
-    "semantic_pending", "semantic_put", "semantic_search", "semantic_status", "semantic_reset",
+    "semantic_pending", "semantic_put", "semantic_search", "semantic_related", "semantic_status", "semantic_reset",
     "link_resolve", "graph_get", "relations", "daily_note", "template_create", "type_preset_apply", "page_create",
     "defaults_get",
     "defaults_set",
+    "tag_color_set",
+    "notebook_icon_set",
     "vault_status",
     "vault_create",
     "vault_unlock",
@@ -130,6 +132,7 @@ pub(crate) fn forward(h: &Handler, raw: &[u8], deadline: Deadline) -> Response {
             Ok(body) => {
                 let status = if crate::success(&body) { 200 } else { 400 };
                 Response {
+                    file: None,
                     status,
                     headers: vec![("content-type".into(), "application/json".into())],
                     body,

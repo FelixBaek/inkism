@@ -29,6 +29,7 @@ export type BlockAction = "up" | "down" | "duplicate" | "delete" | "insert";
 export type DocumentBlockAction = (action: BlockAction, index: number, execute: boolean, anchored?: boolean) => boolean;
 export type DocumentBlockDrag = (index: number, event: DragEvent) => void;
 type Target = { node: PMNode; pos: number };
+const isEmptyParagraph = (node: PMNode) => node.type.name === "paragraph" && node.content.size === 0;
 
 // A list, table or details section moves as one top-level block. A selection
 // spanning multiple such blocks must never silently act on its first block.
@@ -139,6 +140,7 @@ export function BlockTools({
     target: Target;
     selection: Selection;
     style: React.CSSProperties;
+    above?: boolean;
   } | null>(null);
   const store = useStore();
   const { prompt, showError } = store;
@@ -235,6 +237,11 @@ export function BlockTools({
     const dom = editor.view.dom;
     const key = (event: KeyboardEvent) => {
       if (event.isComposing || event.key === "Process" || editor.view.composing) return;
+      // 손잡이는 키를 누르면 숨는다. Alt만 눌렀을 때는 남겨야 Alt+클릭(위에 추가)을 할 수 있다.
+      if (event.key === "Alt") {
+        event.stopImmediatePropagation();
+        return;
+      }
       const action = shortcutAction(event);
       if (!action) return;
       event.preventDefault();
@@ -254,12 +261,15 @@ export function BlockTools({
       const current = editor.state.doc.nodeAt(target.pos);
       return current && current.type === target.node.type;
     })());
-  const openMenu = (menu: "insert" | "action") => {
-    const target = hover.current;
-    if (open?.menu === menu) {
+  // [+]로 미리 넣은 빈 문단 위치. 기록(되돌리기)에 남기지 않고, 닫을 때 지운다.
+  const placeholder = useRef<number | null>(null);
+  const openMenu = (menu: "insert" | "action", above = false) => {
+    if (open) {
+      // 열린 메뉴(와 미리 넣은 빈 문단)를 먼저 정리한다. 같은 버튼이면 닫기만.
       close();
-      return;
+      if (open.menu === menu) return;
     }
+    const target = hover.current;
     if (!valid(target) || !handle.current) return;
     const selection = editor.state.selection;
     if (menu === "action") {
@@ -270,15 +280,25 @@ export function BlockTools({
       if (!inTable)
         editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, target.pos)));
     }
+    const style = popoverStyle(handle.current.getBoundingClientRect(), menu === "insert" ? 881 : 520);
     lock(true);
-    setOpen({
-      menu,
-      target,
-      selection,
-      style: popoverStyle(handle.current.getBoundingClientRect(), menu === "insert" ? 881 : 520),
-    });
+    // [+]는 먼저 빈 문단을 넣고 커서를 둔다(빈 문단 손잡이는 그 자리). 큰 문서는 원문 단위 삽입이라 건너뛴다.
+    if (menu === "insert" && !documentAction && (above || !isEmptyParagraph(target.node))) {
+      const at = above ? target.pos : target.pos + target.node.nodeSize;
+      const tr = editor.state.tr.insert(at, editor.schema.nodes.paragraph.create());
+      editor.view.dispatch(tr.setSelection(TextSelection.create(tr.doc, at + 1)).setMeta("addToHistory", false));
+      placeholder.current = at;
+    }
+    setOpen({ menu, target, selection, style, above });
   };
   const close = (refocus = false) => {
+    const at = placeholder.current;
+    placeholder.current = null;
+    if (at !== null && !editor.isDestroyed) {
+      const node = editor.state.doc.nodeAt(at);
+      if (node && isEmptyParagraph(node))
+        editor.view.dispatch(editor.state.tr.delete(at, at + node.nodeSize).setMeta("addToHistory", false));
+    }
     setOpen(null);
     lock(false);
     if (refocus && !editor.isDestroyed) editor.view.focus();
@@ -308,22 +328,24 @@ export function BlockTools({
     [],
   );
 
-  /** [+]: 손잡이 블록 아래에 빈 문단을 만들고(빈 문단이면 그 자리) 고른 블록으로 바꾼다. */
+  /** [+]: 손잡이 블록 아래(Alt면 위)에 빈 문단을 만들고(빈 문단이면 그 자리) 고른 블록으로 바꾼다.
+   * 미리 넣은 빈 문단은 close()가 기록 없이 지우고, 여기서 기록에 남는 한 묶음으로 다시 넣는다(되돌리기 한 번). */
   const insert = (item: BlockItem, options?: RunOptions) => {
     const target = open?.target ?? null;
+    const above = Boolean(open?.above);
     close();
     if (!valid(target) || !item.available(editor)) return;
     const { node, pos } = target;
-    const empty = node.type.name === "paragraph" && node.content.size === 0;
+    const empty = !above && isEmptyParagraph(node);
     // 큰 문서에서 "본문"은 예전 "아래에 문단 추가"처럼 원문 단위 삽입을 쓴다.
-    if (documentAction && item.id === "paragraph" && !empty) {
+    if (documentAction && item.id === "paragraph" && !empty && !above) {
       documentAction("insert", editor.state.doc.resolve(pos).index(0), true);
       return;
     }
     const tr = closeHistory(editor.state.tr);
     if (empty) tr.setSelection(TextSelection.create(tr.doc, pos + 1));
     else {
-      const at = pos + node.nodeSize;
+      const at = above ? pos : pos + node.nodeSize;
       tr.insert(at, editor.schema.nodes.paragraph.create());
       tr.setSelection(TextSelection.create(tr.doc, at + 1));
     }
@@ -376,11 +398,11 @@ export function BlockTools({
             type="button"
             className="block-handle__add"
             aria-label={t("블록 넣기")}
-            title={t("아래에 블록 넣기")}
+            title={t("클릭: 아래에 추가 · Alt+클릭: 위에 추가")}
             draggable={false}
             aria-haspopup="listbox"
             aria-expanded={open?.menu === "insert"}
-            onClick={() => openMenu("insert")}
+            onClick={(event) => openMenu("insert", event.altKey)}
           >
             <Plus size={14} aria-hidden />
           </button>

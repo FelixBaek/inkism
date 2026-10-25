@@ -189,7 +189,7 @@ try{
  assert.equal(protectedNote.html,'<p>원본</p>');assert.equal(protectedNote.editable,false);
  assert.equal(protectedNote.selection.anchor,1);assert.equal(protectedNote.selection.head,3);
  assert.equal((await state()).deliveries.length,protectedBefore);
- assert.equal(await page.getByRole('toolbar',{name:'서식 도구 모음'}).count(),1);
+ assert.equal(await page.locator('[data-editor-tools]').count(),1);
  // The find button left the editor top; Ctrl+F (store) raises this event. Find stays usable, replace stays disabled.
  await page.evaluate(()=>window.dispatchEvent(new Event('inkism-find-in-note')));await page.getByLabel('문서에서 찾을 내용',{exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'모두 바꾸기',exact:true}).isDisabled(),true);await page.getByRole('button',{name:'문서 검색 닫기',exact:true}).click();

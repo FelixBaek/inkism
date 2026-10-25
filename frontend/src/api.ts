@@ -84,12 +84,12 @@ export async function rpc<T>(
 }
 
 /** 셸 전용 JSON 경로(/api/...): {ok,data}|{ok:false,error}. */
-async function shellJSON<T>(path: string, body?: unknown): Promise<T> {
+export async function shellJSON<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const res = await fetch(
     path,
     body === undefined
-      ? undefined
-      : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+      ? { signal }
+      : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal },
   );
   let env: RpcEnvelope<T> | null = null;
   try {
@@ -159,6 +159,7 @@ export type SemanticStatus = { indexed: number; pending: number };
 export const api = {
   semanticPending: (model: string, limit: number) => rpc<{ items: SemanticPending[] }>("semantic_pending", { model, limit }),
   semanticPut: (note_id: string, revision: number, model: string, offset: number, vectors: number[][]) => rpc<{ stored: number; done: boolean }>("semantic_put", { note_id, revision, model, offset, vectors }),
+  semanticRelated: (model: string, note_id: string, revision: number, limit: number, signal?: AbortSignal) => rpc<{ ready: boolean; items: SemanticHit[] }>("semantic_related", { model, note_id, revision, limit }, { signal }),
   semanticSearch: (model: string, vector: number[], limit: number, signal?: AbortSignal) => rpc<{ items: SemanticHit[] }>("semantic_search", { model, vector, limit }, { signal }),
   semanticStatus: (model: string) => rpc<SemanticStatus>("semantic_status", { model }),
   semanticReset: () => rpc<object>("semantic_reset"),
@@ -305,6 +306,8 @@ export const api = {
 
   defaults: () => rpc<Defaults>("defaults_get"),
   setDefaults: (changes: Partial<Defaults>) => rpc<Defaults>("defaults_set", changes),
+  setTagColor: (name: string, color: string | null) => rpc<unknown>("tag_color_set", { name, color }),
+  setNotebookIcon: (id: string, icon: string | null) => rpc<unknown>("notebook_icon_set", { id, icon }),
   deleteNotebook: (id: string, current_id?: string, current_revision?: number) =>
     rpc<{ deleted: boolean; current: Summary | null }>("delete_notebook", { id, current_id, current_revision }),
 

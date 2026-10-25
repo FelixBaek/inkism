@@ -77,7 +77,7 @@ async function openSync(page: Page, lang: Lang) {
   // The settings dialog listens only once the app shell has mounted.
   await page.locator('.status-connection').first().waitFor();
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('inkism-open-settings', {detail: 'sync'})));
-  await page.locator('.sync-settings').waitFor();
+  await page.locator('.sync-settings--sync').waitFor();
 }
 
 const browser = await chromium.launch({executablePath: process.env.CHROMIUM_PATH, args: ['--no-sandbox']});
@@ -123,14 +123,14 @@ try {
     const notice = page.locator('.sync-held');
     await notice.getByText(LANGS[lang].held).waitFor();
     await notice.getByText('Held note').waitFor();
-    if (shots) await page.locator('.sync-settings').screenshot({path: path.join(shots, `dev01-vault-wait-${lang}.png`)});
+    if (shots) await page.locator('.sync-settings--sync').screenshot({path: path.join(shots, `dev01-vault-wait-${lang}.png`)});
   }
   // The unlock entry point leads to the vault settings; unlocking applies the wait.
   await page.addInitScript(() => localStorage.setItem('inkism.lang', 'ko'));
   await page.goto(b.url);
   await openSync(page, 'ko');
   await page.locator('.sync-held').getByRole('button', {name: '금고 열기', exact: true}).click();
-  await page.locator('.sync-settings').waitFor({state: 'hidden'});
+  await page.locator('.sync-settings--sync').waitFor({state: 'hidden'});
   const password = page.getByLabel('금고 비밀번호', {exact: true});
   await password.fill('held-password');
   await page.getByRole('button', {name: '금고 열기', exact: true}).click();
@@ -148,7 +148,7 @@ try {
   await openSync(page, 'ko');
   await page.getByRole('region', {name: '동기화 상태', exact: true}).waitFor();
   assert.equal(await page.locator('.sync-held').count(), 0, 'wait notice still shown after unlock');
-  if (shots) await page.locator('.sync-settings').screenshot({path: path.join(shots, 'dev01-after-unlock-ko.png')});
+  if (shots) await page.locator('.sync-settings--sync').screenshot({path: path.join(shots, 'dev01-after-unlock-ko.png')});
 
   // ---- DEV-02: a sealed version left under a note that is no longer locked.
   const c = await preview('c');
@@ -213,7 +213,7 @@ try {
     if (shots) await notice.screenshot({path: path.join(shots, `dev03-newer-records-${lang}.png`)});
     if (lang === 'ko') {
       await notice.getByRole('button', {name: NEWER[lang][1], exact: true}).click();
-      await page.locator('.sync-settings').waitFor({state: 'hidden'});
+      await page.locator('.sync-settings--sync').waitFor({state: 'hidden'});
       await page.getByRole('region', {name: '정보', exact: true}).waitFor();
     }
   }

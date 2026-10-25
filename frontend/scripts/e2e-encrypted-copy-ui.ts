@@ -24,8 +24,8 @@ try{
   await new Promise(r=>{release=r;});
   await route.fulfill({status:mode==='failure'?500:200,json:mode==='failure'?{ok:false,error:'복사 실패 시험: 원본 유지'}:{ok:true,data:{cancelled:mode==='cancel',path:mode==='cancel'?'':path}}});
  });
- // 이 기기의 저장 보호는 설정 화면의 '백업과 복원' 안에 펼쳐져 있다.
- const openSync=async()=>{await page.getByRole('button',{name:'설정 열기',exact:true}).click();await page.locator('.settings-nav').getByRole('button',{name:'백업과 복원',exact:true}).click();};
+ // 이 기기의 저장 보호는 설정 화면의 '동기화' 안에 펼쳐져 있다.
+ const openSync=async()=>{await page.getByRole('button',{name:'설정 열기',exact:true}).click();await page.locator('.settings-nav').getByRole('button',{name:'동기화',exact:true}).click();};
  const closeSync=async()=>{await page.getByRole('button',{name:'설정 닫기',exact:true}).click();};
  await page.addInitScript(()=>{if(window.top!==window||!/^https?:$/.test(location.protocol))return;localStorage.setItem('inkism.lang','ko');if(localStorage.getItem('inkism.inspector')===null)localStorage.setItem('inkism.inspector','false');});await page.goto(base);
  await page.getByRole('button',{name:'노트 열기: '+note.title,exact:true}).click();
@@ -39,7 +39,7 @@ try{
  await page.keyboard.press('Escape');await page.waitForTimeout(100);assert.equal(await page.locator('dialog.settings-dialog').evaluate((e:HTMLDialogElement)=>e.open),true,'copy in progress keeps settings open');
  assert.equal(calls,1);release();release=null;
  await page.getByText('암호화 사본을 만들었습니다.',{exact:false}).waitFor();
- assert.equal(await page.locator('.sync-settings').evaluate(e=>e.scrollWidth<=e.clientWidth),true,'long destination overflows');
+ assert.equal(await page.locator('.sync-settings--storage').evaluate(e=>e.scrollWidth<=e.clientWidth),true,'long destination overflows');
  await page.screenshot({path:process.env.INKISM_SCREENSHOT||'/tmp/inkism-copy-ui.png'});
  mode='cancel';await button.click();await waitHost();release();release=null;await page.getByText('폴더 선택을 취소했습니다.',{exact:true}).waitFor();
  mode='failure';await button.click();await waitHost();release();release=null;await page.getByText('복사 실패 시험: 원본 유지',{exact:true}).waitFor();

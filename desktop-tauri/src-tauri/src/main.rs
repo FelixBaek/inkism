@@ -3,6 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod ai_key;
+mod file_export;
 mod integrate;
 mod launch;
 #[cfg(any(windows, test))]
@@ -10,7 +11,7 @@ mod note_link;
 mod reminders;
 mod security;
 mod shell;
-mod web_viewer;
+mod window_trust;
 
 use launch::LaunchOptions;
 use local_api::Result;
