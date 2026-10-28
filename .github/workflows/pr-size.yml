@@ -25,6 +25,6 @@ jobs:
           esac
           echo "Reviewed source files: $count (maximum 299; generated frontend/dist excluded)" >> "$GITHUB_STEP_SUMMARY"
           if [ "$count" -ge 300 ]; then
-            echo "::error::This PR changes $count source files. Split it into pull requests with at most 299 files so CodeRabbit can review them."
+            echo "::error::This PR changes $count source files. Split it into pull requests with at most 299 files so they stay reviewable."
             exit 1
           fi
