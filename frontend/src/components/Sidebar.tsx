@@ -138,7 +138,6 @@ export function Sidebar({
       <button type="button" className="side-new-note" onClick={() => s.newNote()}>
         {t("새 노트")}
       </button>
-      <button type="button" className="side-search" onClick={() => window.dispatchEvent(new Event("inkism-quick-capture"))}>{t("빠른 기록")}</button>
       <div className="side-tabs">
         <div role="tablist" aria-label={t("탐색 구분")} className="side-tablist">
           {tabs.map((tag) => (
