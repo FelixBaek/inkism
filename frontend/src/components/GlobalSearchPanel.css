@@ -1,4 +1,4 @@
-.global-search-panel,.bookmark-panel{padding:12px;overflow:auto}
+.global-search-panel{padding:12px;overflow:auto}
 .global-search-form{display:flex;gap:8px;align-items:center;font-size:var(--fs-small);color:var(--muted)}
 .global-search-form label{display:flex;align-items:center;gap:6px;white-space:nowrap}
 .global-search-form input[type=search],.global-search-form>input{min-width:0;flex:1;min-height:32px;padding:0 14px;border:1px solid var(--border);border-radius:0;background:var(--hover);color:var(--text);font-size:var(--fs-caption)}

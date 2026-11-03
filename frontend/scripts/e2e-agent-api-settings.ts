@@ -3,7 +3,7 @@ const base=process.env.INKISM_URL!;const rpc=async(op:string,args:any={})=>{cons
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1440,height:1000},permissions:['clipboard-read','clipboard-write']}),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.addInitScript(()=>{localStorage.setItem('inkism.lang','ko');localStorage.setItem('inkism.inspector','false');});
 try{
  const shared=await rpc('save',{note:{title:'Shared agent note',content:'visible',content_format:'text',tags:['share']}});await rpc('save',{note:{title:'Private agent note',content:'hidden',content_format:'text',tags:['private']}});
- await page.goto(base);await page.getByRole('button',{name:'설정 열기',exact:true}).click();const dialog=page.getByRole('dialog',{name:'설정',exact:true});await dialog.getByRole('button',{name:'외부 AI 연결',exact:true}).click();
+ await page.goto(base);await page.getByRole('button',{name:'설정 열기',exact:true}).click();const dialog=page.getByRole('dialog',{name:'설정',exact:true});await dialog.getByRole('button',{name:'AI 연결',exact:true}).click();
  const toggle=dialog.getByLabel('Agent API 켜기',{exact:true});assert.equal(await toggle.isChecked(),false,'Agent API must be off by default');
  await toggle.click();await dialog.locator('code, [role=alert]').first().waitFor();const url=await dialog.locator('code').textContent().catch(()=>null);
  await dialog.getByLabel('토큰 이름',{exact:true}).fill('Claude');await dialog.getByLabel('고른 폴더와 태그만',{exact:true}).check();

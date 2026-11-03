@@ -5,7 +5,6 @@ import { DailyList, ReminderBanner, ReminderList, type ShellPanel } from "./comp
 import { localDate, localTime } from "./lib/writing-tools";
 import { defaultEditor } from "./lib/editor-settings";
 import {flushWorkspaceForClose} from "./lib/workspace";
-import {Whiteboard} from "./components/Whiteboard";
 import {LibraryMoreTools} from "./components/LibraryMoreTools";
 import {loadFontResources} from "./lib/font-resources";
 import {registerCommands,listenCommandShortcuts} from "./lib/app-commands";
@@ -37,8 +36,8 @@ import { t } from "./i18n";
 import { installPluginFontStyles, subscribePlugins } from "./lib/plugins";
 
 import { NoteLinkNavigation } from "./components/NoteLinkNavigation";
-import { KnowledgeTools } from "./components/KnowledgeTools";
-import { WritingTools } from "./components/WritingTools";
+import { KnowledgeTools, KNOWLEDGE_EVENT } from "./components/KnowledgeTools";
+import { WritingTools, WRITING_TOOL_EVENT } from "./components/WritingTools";
 import { WikiUpdate } from "./components/WikiUpdate";
 import "./mobile.css";
 
@@ -88,6 +87,16 @@ function Shell() {
     return ()=>{unsubscribe();stopSemantic();window.removeEventListener("inkism-sync-check",refreshFonts);};
   }, []);
   const [navigation, setNavigation] = useState(false);
+  // 좁은 화면에서 탐색을 연 채로 도구 창을 열면 본문 영역과 함께 창이 가려진다.
+  useEffect(() => {
+    const close = () => setNavigation(false);
+    window.addEventListener(KNOWLEDGE_EVENT, close);
+    window.addEventListener(WRITING_TOOL_EVENT, close);
+    return () => {
+      window.removeEventListener(KNOWLEDGE_EVENT, close);
+      window.removeEventListener(WRITING_TOOL_EVENT, close);
+    };
+  }, []);
   const [inspectorOpen, setInspectorOpen] = useState(() => {
     try {
       return innerWidth >= 1280 && localStorage.getItem("inkism.inspector") !== "false";
@@ -101,8 +110,6 @@ function Shell() {
   useEffect(()=>{if(s.selectedId)recentNotes.current=[s.selectedId,...recentNotes.current.filter(id=>id!==s.selectedId)].slice(0,20);},[s.selectedId]);
   useEffect(()=>registerCommands([
     {id:'app.new',label:t('새 노트'),run:()=>latest.current.newNote(),shortcut:'mod+n'},
-    {id:'note.timestamp',label:t('시간 코드 제목으로 새 노트'),run:()=>{const now=new Date(),pad=(v:number)=>String(v).padStart(2,'0');latest.current.newNote(`${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`,true);}},
-    {id:'note.random',label:t('무작위 노트 열기'),run:async()=>{if(!await latest.current.flushNow())return;const state=latest.current,v=state.view;const result=await api.randomNote({view:v.type==='tag'||v.type==='notebook'?'all':v.type,...(v.type==='tag'?{tag:v.name}:{}),...(v.type==='notebook'?{notebook_id:v.id}:{}),query:state.search,current_id:state.selectedId,recent_ids:recentNotes.current});if(result.id)await latest.current.selectNote(result.id);else await latest.current.showError(t('무작위 노트 열기'),t('열 수 있는 노트가 없습니다.'));}},
     {id:'app.save',label:t('지금 저장'),run:async()=>{if(await latest.current.flushNow())await flushWorkspaceForClose();},shortcut:'mod+s'},
     {id:'tags.history',label:t('태그 변경 기록'),run:()=>requestTagChange()},
     {id:'app.commands',label:t('명령창 열기'),run:()=>setCommandsOpen(true),shortcut:'mod+shift+p'},
@@ -275,7 +282,6 @@ function Shell() {
             <WikiUpdate />
             <KnowledgeTools />
             <LibraryMoreTools />
-            <Whiteboard />
           </div>
           <div className="app-content">
             <ShellNoteList panel={panel} />

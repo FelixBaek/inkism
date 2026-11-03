@@ -13,7 +13,7 @@ async function agentApi(body?: object): Promise<{data: unknown; status?: Status}
   return v;
 }
 
-/** 설정 › 외부 AI 연결: 읽기 전용 Agent API를 켜고 에이전트별 토큰을 만들고 회수한다 (docs/agent-api.md). */
+/** 설정 › AI 연결 › 외부 AI 연결: 읽기 전용 Agent API를 켜고 에이전트별 토큰을 만들고 회수한다 (docs/agent-api.md). */
 export function AgentApiSettings() {
   const {notebooks, tags} = useStore();
   const [status, setStatus] = useState<Status | null>(null), [error, setError] = useState('');

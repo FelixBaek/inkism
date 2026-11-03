@@ -5,7 +5,7 @@ import { CoverPicker, UnsplashKeySettings } from "./NotebookCover";
 import type { NotebookCover } from "../types";
 import { t } from "../i18n";
 
-/** 설정 › 사진 검색 (Figma 38): Unsplash 키 + 지금 연 노트의 표지 사진(문서 설정 document.cover). */
+/** 설정 › 모양 › 사진 검색 (Figma 38): Unsplash 키 + 지금 연 노트의 표지 사진(문서 설정 document.cover). */
 export function PhotoSettings() {
   const s = useStore();
   const note = s.note && s.draft?.id === s.note.id && !s.draft.isNew ? s.note : null;

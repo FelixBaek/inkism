@@ -6,7 +6,7 @@ import "./NotebookCover.css";
 import { t } from "../i18n";
 
 const UNSPLASH_HOME = "https://unsplash.com/?utm_source=inkism&utm_medium=referral";
-const NO_KEY = t("사진 검색을 쓰려면 설정 > 사진 검색에 Unsplash 키를 넣어 주세요");
+const NO_KEY = t("사진 검색을 쓰려면 설정 > 모양에 Unsplash 키를 넣어 주세요");
 /** /api/attachments GET은 ?preview=1일 때만 검사한 래스터 이미지를 인라인으로 보낸다. */
 const IMAGE_TYPES = "image/png,image/jpeg,image/gif,image/webp";
 const MAX_COVER_BYTES = 32 << 20;
@@ -275,7 +275,7 @@ function keyStateLabel(configured: boolean | null) {
   return configured ? t("키 있음") : t("키 없음");
 }
 
-/** 설정 > 사진 검색: 키는 셸로 한 번만 보내고, 돌려받는 것은 설정 여부뿐이다. */
+/** 설정 > 모양 > 사진 검색: 키는 셸로 한 번만 보내고, 돌려받는 것은 설정 여부뿐이다. */
 export function UnsplashKeySettings() {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [key, setKey] = useState("");
