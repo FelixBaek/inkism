@@ -10,7 +10,7 @@ type Row = NoteTask & {note: Summary};
 const MAX_TASKS = 5000;
 export function TaskOverview({onOpen}:Readonly<{onOpen:(id:string)=>void}>) {
  const [rows,setRows]=useState<Row[]>([]),[filter,setFilter]=useState('open'),[query,setQuery]=useState('');
- const [busy,setBusy]=useState(false),[progress,setProgress]=useState(0),[skipped,setSkipped]=useState(0);
+ const [busy,setBusy]=useState(true),[progress,setProgress]=useState(0),[skipped,setSkipped]=useState(0);
  const [cancelled,setCancelled]=useState(false),[limited,setLimited]=useState(false),[error,setError]=useState('');
  const active=useRef<AbortController|null>(null);
  const scan=async()=>{
