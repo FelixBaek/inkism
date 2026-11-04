@@ -23,7 +23,6 @@ import {
   Keyboard,
   FileText,
   Palette,
-  Image,
   LockKeyhole,
   Info,
   Sparkle,
@@ -39,7 +38,7 @@ import { PluginSettings } from "./PluginSettings";
 import { parseWrap } from "./EditorPane";
 import "./SettingsDialog.css";
 
-type Section = "ai" | "agent" | "general" | "editor" | "plugins" | "sync" | "backup" | "import" | "look" | "photo" | "lock" | "about";
+type Section = "ai" | "general" | "editor" | "plugins" | "sync" | "backup" | "import" | "look" | "lock" | "about";
 const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "ai", label: t("AI 연결"), icon: Sparkle },
   { id: "general", label: t("일반"), icon: SettingsIcon },
@@ -49,8 +48,6 @@ const SECTIONS: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "backup", label: t("백업과 복원"), icon: Download },
   { id: "import", label: t("가져오기"), icon: Upload },
   { id: "look", label: t("모양"), icon: Palette },
-  { id: "photo", label: t("사진 검색"), icon: Image },
-  { id: "agent", label: t("외부 AI 연결"), icon: Sparkle },
   { id: "lock", label: t("앱 잠금"), icon: LockKeyhole },
   { id: "about", label: t("정보"), icon: Info },
 ];
@@ -149,16 +146,6 @@ function DefaultSettings() {
         </label>
         <p>{t("새 노트를 만들 때 선택한 기본값을 사용합니다.")}</p>
       </div>
-      <div className="settings-card__action">
-        <button
-          type="button"
-          className="btn"
-          onClick={() => window.dispatchEvent(new Event(SHORTCUTS_EVENT))}
-          aria-label={t("단축키 안내 열기")}
-        >
-          {t("단축키 보기")}
-        </button>
-      </div>
     </div>
   );
 }
@@ -235,8 +222,7 @@ export function SettingsDialog() {
             </header>
             {/* 닫으면 내용을 내린다: 동기화 상태 확인 같은 주기 작업이 화면 밖에서 돌지 않게 */}
             {open && <div key={section} className="settings-content">
-            {section === "ai" && <AiSettings />}
-            {section === "agent" && <AgentApiSettings />}
+            {section === "ai" && <><AiSettings /><AgentApiSettings /></>}
             {section === "general" && <><GeneralSettings /><CommandSettings /><DefaultSettings /></>}
             {section === "editor" && <EditorSettings />}
             {section === "plugins" && <PluginSettings />}
@@ -286,8 +272,7 @@ export function SettingsDialog() {
                 <RecoveryImport />
               </Card>
             )}
-            {section === "look" && <><ThemeSettings /><CustomTheme /></>}
-            {section === "photo" && <PhotoSettings />}
+            {section === "look" && <><ThemeSettings /><CustomTheme /><PhotoSettings /></>}
             {section === "lock" && (
               <><LockSettings /><VaultSettings /></>
             )}

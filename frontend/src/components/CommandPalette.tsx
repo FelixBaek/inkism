@@ -22,15 +22,14 @@ const LABELS: Record<string, string> = {
   보관: "Archive",
   "폴더에 넣기": "Add to folder: Folders",
   "색 지정": "Assign color: Add color",
-  태그: "Tags: Assign to...",
+  "태그 지정": "Tags: Assign to...",
   인쇄: "Print",
   게시: "Publish",
-  "다른 형식으로 내보내기": "Export as",
   내보내기: "Export as",
   "다른 형식으로 복사": "Copy as",
   "링크 복사": "Copy link",
   복제: "Duplicate",
-  삭제: "Delete: Move to deleted notes",
+  지우기: "Delete: Move to deleted notes",
 };
 export function CommandPalette({ open, onClose }: Readonly<{ open: boolean; onClose: () => void }>) {
   const s = useStore(),

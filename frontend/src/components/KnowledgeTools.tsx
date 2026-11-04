@@ -110,27 +110,6 @@ export function KnowledgeTools() {
   }, []);
   return (
     <>
-      <div className="knowledge-actions">
-        <button
-          type="button"
-          className="icon-btn"
-          title={t("관계 그래프")}
-          aria-label={t("관계 그래프")}
-          onClick={() => setPanel("graph")}
-        >
-          <GraphIcon size={17} />
-        </button>
-        <button
-          type="button"
-          className="icon-btn"
-          title={t("속성과 노트 연결")}
-          aria-label={t("속성과 노트 연결")}
-          disabled={!s.note}
-          onClick={() => setPanel("note")}
-        >
-          <LinkIcon size={17} />
-        </button>
-      </div>
       <dialog ref={dialog} className="knowledge-dialog" aria-label={t("지식 도구")} onCancel={close}>
         <header>
           <nav aria-label={t("지식 도구")}>

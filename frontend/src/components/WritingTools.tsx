@@ -431,27 +431,6 @@ export function WritingTools() {
         <button
           type="button"
           className="btn btn-secondary"
-          onClick={daily}
-          disabled={busy}
-          aria-label={t("일일 노트")}
-          title={t("오늘의 노트")}
-        >
-          <CalendarDays size={16} />
-          <span>{t("일일 노트")}</span>
-        </button>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => setPanel("templates")}
-          disabled={busy}
-          aria-label={t("템플릿")}
-        >
-          <Files size={16} />
-          <span>{t("템플릿")}</span>
-        </button>
-        <button
-          type="button"
-          className="btn btn-secondary"
           onClick={() => setPanel("quick")}
           disabled={busy}
           aria-label={t("빠른 전환")}
@@ -459,16 +438,6 @@ export function WritingTools() {
         >
           <Search size={16} />
           <span>{t("빠른 전환")}</span>
-        </button>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => setPanel("outline")}
-          disabled={busy || !s.draft}
-          aria-label={t("목차")}
-        >
-          <List size={16} />
-          <span>{t("목차")}</span>
         </button>
         <button
           type="button"

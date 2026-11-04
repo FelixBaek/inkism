@@ -15,7 +15,23 @@ export async function openLibraryTools(page: Page) {
   return panel;
 }
 
+// 사이드바·편집기 머리줄에 이미 있는 도구는 라이브러리 도구 패널에 따로 두지 않는다.
+const elsewhere: Record<string, (page: Page) => Promise<void>> = {
+  '일일 노트': page => page.locator('nav.sidebar').getByRole('button', { name: '오늘의 노트', exact: true }).click(),
+  '템플릿': page => page.locator('nav.sidebar').getByRole('button', { name: '템플릿', exact: true }).click(),
+  '관계 그래프': page => page.locator('nav.sidebar').getByRole('button', { name: '관계 그래프', exact: true }).click(),
+  '목차': page => page.locator('.editor-doc-actions').getByRole('button', { name: '목차', exact: true }).click(),
+  // 노트 정보 패널의 [연결 목록과 언급 보기]가 보내는 요청과 같다.
+  '속성과 노트 연결': async page => {
+    // 앱이 다 뜨기 전에 보내면 받을 곳이 없다.
+    await page.locator('button[aria-label="노트 메뉴"]:visible').first().waitFor();
+    await page.evaluate(() => { window.dispatchEvent(new CustomEvent('inkism-open-knowledge', { detail: 'note' })); });
+    await page.getByRole('dialog', { name: '지식 도구', exact: true }).waitFor();
+  },
+};
+
 export async function libraryTool(page: Page, name: string) {
+  if (elsewhere[name]) return elsewhere[name](page);
   const panel = await openLibraryTools(page);
   await panel.getByRole('button', { name, exact: true }).click();
 }

@@ -8,10 +8,10 @@ try{
  const page=await browser.newPage();await page.addInitScript(()=>localStorage.setItem('inkism.lang','ko'));await page.goto(base);await page.locator('.tiptap').waitFor();
  const open=async()=>{await page.keyboard.press('Control+Shift+p');await page.getByRole('dialog',{name:'명령 검색',exact:true}).waitFor();};
  const dialog=page.getByRole('dialog',{name:'명령 검색',exact:true}),query=page.getByRole('combobox',{name:'명령 검색어'});
- await open();await query.fill('무작위 노트 열기');await dialog.getByRole('button',{name:'선택 명령 즐겨찾기',exact:true}).click();await query.press('Enter');await dialog.waitFor({state:'hidden'});
- await open();await dialog.getByRole('button',{name:'최근 실행',exact:true}).click();assert.equal(await dialog.getByRole('option').count(),1);assert((await dialog.getByRole('option').textContent())?.includes('무작위 노트 열기'));await dialog.getByRole('option').click();
+ await open();await query.fill('지금 저장');await dialog.getByRole('button',{name:'선택 명령 즐겨찾기',exact:true}).click();await query.press('Enter');await dialog.waitFor({state:'hidden'});
+ await open();await dialog.getByRole('button',{name:'최근 실행',exact:true}).click();assert.equal(await dialog.getByRole('option').count(),1);assert((await dialog.getByRole('option').textContent())?.includes('지금 저장'));await dialog.getByRole('option').click();
  await open();await dialog.getByRole('button',{name:'자주 실행',exact:true}).click();assert.equal(await dialog.getByRole('option').count(),1);await page.keyboard.press('Escape');
- const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('inkism.command-history.v1')!));assert.equal(saved.usage['note.random'].count,2);assert(saved.favorites.includes('note.random'));
+ const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('inkism.command-history.v1')!));assert.equal(saved.usage['app.save'].count,2);assert(saved.favorites.includes('app.save'));
  await page.reload();await page.locator('.tiptap').waitFor();await open();await dialog.getByRole('button',{name:'즐겨찾는 명령',exact:true}).click();assert.equal(await dialog.getByRole('option').count(),1);
  await dialog.getByRole('button',{name:'명령 사용 기록 지우기',exact:true}).click();await dialog.getByRole('button',{name:'최근 실행',exact:true}).click();assert.equal(await dialog.getByRole('option').count(),0);await dialog.getByRole('button',{name:'즐겨찾는 명령',exact:true}).click();assert.equal(await dialog.getByRole('option').count(),1);
  await dialog.getByRole('button',{name:'선택 명령 즐겨찾기',exact:true}).click();assert.equal(await dialog.getByRole('option').count(),0);await page.keyboard.press('Escape');

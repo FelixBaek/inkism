@@ -1,4 +1,4 @@
-.knowledge-actions,.knowledge-row {display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.knowledge-row {display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .knowledge-dialog {width:min(1100px,96vw);max-height:92dvh;padding:0;border:1px solid var(--border-strong);border-radius:0;background:var(--raised);color:var(--text);box-shadow:var(--shadow-modal);font-size:var(--fs-caption);line-height:1.5}
 .knowledge-dialog::backdrop {background:var(--scrim)}
 .knowledge-dialog>header {display:flex;gap:8px;align-items:center;justify-content:space-between;height:44px;padding:0 6px 0 8px;border-bottom:1px solid var(--border)}

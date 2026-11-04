@@ -218,7 +218,6 @@ export const api = {
       block_bytes: number;
     }>("document_locate", { id, revision, byte_offset, bias }),
 
-  randomNote: (args: Record<string,unknown> = {}) => rpc<{id:string|null}>("random_note",args),
   notePreview: (id: string) => rpc<{id:string;title:string;preview:string;revision:number}>("note_preview", {id}),
   get: (id: string, options?: {max_body_bytes: number}) => rpc<Note>("get", { id, ...options }),
 
@@ -310,14 +309,6 @@ export const api = {
   setNotebookIcon: (id: string, icon: string | null) => rpc<unknown>("notebook_icon_set", { id, icon }),
   deleteNotebook: (id: string, current_id?: string, current_revision?: number) =>
     rpc<{ deleted: boolean; current: Summary | null }>("delete_notebook", { id, current_id, current_revision }),
-
-  changeTag: (name: string, replacement: string | null, current_id?: string, current_revision?: number) =>
-    rpc<{ updated: number; current: Summary | null }>("change_tag", {
-      name,
-      replacement,
-      current_id,
-      current_revision,
-    }),
 
   tags: () => rpc<TagCount[]>("tags"),
 
